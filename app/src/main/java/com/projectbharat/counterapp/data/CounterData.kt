@@ -217,7 +217,7 @@ interface CounterDao {
     @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
     fun latestSessionFlow(categoryId: Long, lockStart: Long): Flow<BabySession?>
 
-    @Query("UPDATE baby_sessions SET movementCount=movementCount+1, timeToTenMs=CASE WHEN movementCount=9 AND trackingMode='TEN_MOVEMENTS' THEN :durationMs ELSE timeToTenMs END WHERE id=:sessionId")
+    @Query("UPDATE baby_sessions SET movementCount=movementCount+1, timeToTenMs=CASE WHEN movementCount=9 AND timeToTenMs IS NULL THEN :durationMs ELSE timeToTenMs END WHERE id=:sessionId")
     suspend fun incrementBabySession(sessionId: Long, durationMs: Long)
 
     @Query("UPDATE baby_sessions SET endedAt=:endedAt, strength=:strength WHERE id=:sessionId")
