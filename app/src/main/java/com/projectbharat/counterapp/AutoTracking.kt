@@ -372,32 +372,58 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             }
                         }
                     }
-                    Box {
-                        OutlinedButton(onClick = { presetMenu = true }, enabled = !running, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
-                            Text(if (english) "Choose mantra" else "मंत्र निवडा")
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                        }
-                        DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                            (chantPresets.map { if (language == "hi") it.devanagari else it.latin } + customMantras).distinct().forEach { mantra ->
-                                DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
-                                    target = mantra
-                                    prefs.edit().putString("target_$categoryId", target).apply()
-                                    onMantraChange(target)
-                                    presetMenu = false
-                                })
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        TextButton(
+                            onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
+                            enabled = !running,
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 5.dp)
+                        ) { Text(if (english) "+ Add" else "+ जोडा", style = MaterialTheme.typography.labelMedium) }
+                        Box {
+                            OutlinedButton(onClick = { presetMenu = true }, enabled = !running, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 9.dp, vertical = 8.dp)) {
+                                Text(if (english) "Choose" else "निवडा")
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                             }
-                            DropdownMenuItem(text = { Text(if (english) "+ Add mantra" else "+ नवीन मंत्र जोडा") }, onClick = {
-                                presetMenu = false
-                                newMantra = ""
-                                addMantraDialog = true
-                            })
+                            DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
+                                (chantPresets + customMantras).distinctBy { it.devanagari }.forEach { item ->
+                                    val mantra = if (language == "hi") item.devanagari else item.latin
+                                    DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
+                                        target = mantra
+                                        prefs.edit().putString("target_$categoryId", target).apply()
+                                        onMantraChange(target)
+                                        presetMenu = false
+                                    })
+                                }
+                            }
                         }
                     }
                 }
                 if (automatic) {
-                    Surface(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
+                    val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true))
+                    val micPulse = rememberInfiniteTransition(label = "offlineMicPulse")
+                    val micScale by micPulse.animateFloat(
+                        initialValue = 1f, targetValue = 1.18f,
+                        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                            animation = androidx.compose.animation.core.tween(650),
+                            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                        ), label = "micScale"
+                    )
+                    Surface(
+                        Modifier.fillMaxWidth().padding(top = 10.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (listeningOffline) Color(0xFFE4F5EA) else Color(0xFFF3EFF8)
+                    ) {
                         Column(Modifier.padding(12.dp)) {
-                            Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                if (listeningOffline) {
+                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF16834F),
+                                        modifier = Modifier.size(22.dp).graphicsLayer(scaleX = micScale, scaleY = micScale))
+                                    Text(if (english) "LISTENING OFFLINE" else "ऑफलाइन ऐकत आहे",
+                                        color = Color(0xFF16834F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख",
+                                        color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
                             if (status.contains("Preparing", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -405,7 +431,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                                 }
                             } else {
                                 Text(transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
-                                    color = if (matched) Color(0xFF16834F) else ink, fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (listeningOffline || matched) Color(0xFF16834F) else ink,
+                                    fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal,
                                     style = MaterialTheme.typography.bodyMedium)
                                 if (matched) Text(
                                     (if (english) "Mantra matched" else "मंत्र जुळला") + if (matchedCount > 0) " · +$matchedCount" else "",
@@ -430,19 +457,30 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
         AlertDialog(
             onDismissRequest = { addMantraDialog = false },
             title = { Text(if (english) "Add mantra" else "नवीन मंत्र") },
-            text = { OutlinedTextField(value = newMantra, onValueChange = { newMantra = it }, label = { Text(if (english) "Mantra text" else "मंत्र") }) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(value = newMantraMr, onValueChange = { newMantraMr = it },
+                        label = { Text("मंत्र (देवनागरी)") }, singleLine = false)
+                    OutlinedTextField(value = newMantraEn, onValueChange = { newMantraEn = it },
+                        label = { Text("Mantra (English)") }, singleLine = false)
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    val value = newMantra.trim()
-                    if (value.isNotBlank()) {
-                        customMantras = (customMantras + value).distinct()
-                        prefs.edit().putStringSet("custom_mantras_$categoryId", customMantras.toSet())
-                            .putString("target_$categoryId", value).apply()
-                        target = value
-                        onMantraChange(value)
+                    val devanagari = newMantraMr.trim()
+                    val latin = newMantraEn.trim()
+                    if (devanagari.isNotBlank() && latin.isNotBlank()) {
+                        val added = ChantPreset(latin, devanagari, latin)
+                        customMantras = (customMantras + added).distinctBy { it.devanagari }
+                        val saved = customMantras.map { it.devanagari + "\u001F" + it.latin }.toSet()
+                        val selectedText = if (language == "hi") devanagari else latin
+                        prefs.edit().putStringSet("custom_mantras_$categoryId", saved)
+                            .putString("target_$categoryId", selectedText).apply()
+                        target = selectedText
+                        onMantraChange(selectedText)
                     }
                     addMantraDialog = false
-                }, enabled = newMantra.isNotBlank()) { Text(if (english) "Add" else "जोडा") }
+                }, enabled = newMantraMr.isNotBlank() && newMantraEn.isNotBlank()) { Text(if (english) "Add" else "जोडा") }
             },
             dismissButton = { TextButton(onClick = { addMantraDialog = false }) { Text(if (english) "Cancel" else "रद्द") } }
         )
