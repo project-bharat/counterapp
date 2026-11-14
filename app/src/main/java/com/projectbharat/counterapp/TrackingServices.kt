@@ -393,7 +393,13 @@ class ChantRecognitionService : Service() {
         sendBroadcast(intent)
     }
     override fun onDestroy() {
-        stopRecognition(); scope.cancel(); super.onDestroy()
+        stopRequested = true
+        recording = false
+        try { audioRecord?.stop() } catch (_: Exception) { }
+        worker?.interrupt()
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+        scope.cancel()
+        super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder? = null
 
