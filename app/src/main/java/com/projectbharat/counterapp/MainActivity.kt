@@ -85,6 +85,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        stopService(Intent(this, StepTrackingService::class.java))
+        stopService(Intent(this, ChantRecognitionService::class.java))
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
+            .putBoolean("steps_running", false).putBoolean("steps_enabled", false).putBoolean("chant_enabled", false).apply()
         DailyReminderScheduler.rescheduleAll(this)
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
