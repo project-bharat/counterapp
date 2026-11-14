@@ -158,13 +158,14 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_categoryId ON baby_sessions(categoryId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_date ON baby_sessions(date)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_startedAt ON baby_sessions(startedAt)")
+                db.execSQL("ALTER TABLE baby_sessions ADD COLUMN timeToTenMs INTEGER")
                 db.execSQL("ALTER TABLE counter_logs ADD COLUMN sessionId INTEGER")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_counter_logs_sessionId ON counter_logs(sessionId)")
             }
         }
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE baby_sessions ADD COLUMN timeToTenMs INTEGER")
+                // Version 2 already contains timeToTenMs.
             }
         }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
