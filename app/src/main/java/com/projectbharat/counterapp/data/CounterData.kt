@@ -30,6 +30,15 @@ data class BabySession(
     val note: String? = null
 )
 
+@Entity(tableName = "baby_detections", indices = [Index("sessionId"), Index("timestamp")])
+data class BabyDetection(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sessionId: Long,
+    val timestamp: Long,
+    val magnitude: Float,
+    val status: String = "PENDING"
+)
+
 @Entity(tableName = "counter_logs", indices = [Index("categoryId"), Index("timestamp"), Index("sessionId")])
 data class CounterLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -77,6 +86,39 @@ interface CounterDao {
 
     @Insert
     suspend fun addLog(log: CounterLog): Long
+
+    @Insert
+    suspend fun addBabyDetection(detection: BabyDetection): Long
+
+    @Query("SELECT * FROM baby_detections WHERE sessionId=:sessionId ORDER BY timestamp DESC")
+    fun detectionsForSession(sessionId: Long): Flow<List<BabyDetection>>
+
+    @Query("SELECT * FROM baby_detections ORDER BY id")
+    suspend fun allBabyDetections(): List<BabyDetection>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBabyDetections(items: List<BabyDetection>)
+
+    @Query("DELETE FROM baby_detections")
+    suspend fun deleteAllBabyDetections()
+
+    @Query("UPDATE baby_detections SET status='DISMISSED' WHERE id=:id AND status='PENDING'")
+    suspend fun dismissDetection(id: Long)
+
+    @Transaction
+    suspend fun confirmDetection(id: Long, log: CounterLog, durationMs: Long): Boolean {
+        val candidate = pendingDetection(id) ?: return false
+        addLog(log.copy(timestamp = candidate.timestamp, sessionId = candidate.sessionId))
+        incrementBabySession(candidate.sessionId, durationMs)
+        markDetectionConfirmed(id)
+        return true
+    }
+
+    @Query("SELECT * FROM baby_detections WHERE id=:id AND status='PENDING' LIMIT 1")
+    suspend fun pendingDetection(id: Long): BabyDetection?
+
+    @Query("UPDATE baby_detections SET status='CONFIRMED' WHERE id=:id AND status='PENDING'")
+    suspend fun markDetectionConfirmed(id: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLogs(items: List<CounterLog>)
@@ -139,12 +181,14 @@ interface CounterDao {
     suspend fun deleteAllBabySessions()
 
     @Transaction
-    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>) {
+    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>, detections: List<BabyDetection>) {
         deleteAllLogs()
         deleteAllBabySessions()
+        deleteAllBabyDetections()
         deleteAllCategories()
         insertCategories(categories)
         if (sessions.isNotEmpty()) insertBabySessions(sessions)
+        if (detections.isNotEmpty()) insertBabyDetections(detections)
         if (logs.isNotEmpty()) insertLogs(logs)
     }
 
@@ -187,7 +231,7 @@ interface CounterDao {
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class], version = 3, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class], version = 4, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
@@ -208,9 +252,16 @@ abstract class CounterDatabase : RoomDatabase() {
                 // Version 2 already contains timeToTenMs.
             }
         }
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS baby_detections (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sessionId INTEGER NOT NULL, timestamp INTEGER NOT NULL, magnitude REAL NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING')")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_detections_sessionId ON baby_detections(sessionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_detections_timestamp ON baby_detections(timestamp)")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
         }
     }
 }
