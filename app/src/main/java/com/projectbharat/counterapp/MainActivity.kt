@@ -342,6 +342,7 @@ fun CounterApp(repo: CounterRepository) {
                         lockedSession = lockedSession,
                         remainingMs = remainingMs,
                         sessions = sessions,
+                        detections = detections,
                         historyDate = historyDate,
                         onPreviousDay = { historyDate = historyDate.minusDays(1) },
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
