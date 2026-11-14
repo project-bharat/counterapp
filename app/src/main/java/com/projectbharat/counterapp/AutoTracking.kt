@@ -350,7 +350,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         }
                     }
                     Box {
-                        OutlinedButton(onClick = { presetMenu = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
+                        OutlinedButton(onClick = { presetMenu = true }, enabled = !running, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(if (english) "Choose mantra" else "मंत्र निवडा")
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
