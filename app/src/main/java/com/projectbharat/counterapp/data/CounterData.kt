@@ -14,7 +14,20 @@ data class CounterCategory(
     val enabled: Boolean = true
 )
 
-@Entity(tableName = "counter_logs", indices = [Index("categoryId"), Index("timestamp")])
+@Entity(tableName = "baby_sessions", indices = [Index("categoryId"), Index("date"), Index("startedAt")])
+data class BabySession(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val categoryId: Long,
+    val date: String,
+    val startedAt: Long,
+    val endedAt: Long? = null,
+    val dayPeriod: String,
+    val movementCount: Int = 0,
+    val strength: String? = null,
+    val note: String? = null
+)
+
+@Entity(tableName = "counter_logs", indices = [Index("categoryId"), Index("timestamp"), Index("sessionId")])
 data class CounterLog(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
@@ -23,7 +36,8 @@ data class CounterLog(
     val count: Int = 1,
     val sessionDurationMs: Long? = null,
     val strength: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val sessionId: Long? = null
 )
 
 @Dao
@@ -60,18 +74,61 @@ interface CounterDao {
 
     @Query("SELECT AVG(sessionDurationMs) FROM counter_logs WHERE categoryId=:categoryId AND sessionDurationMs IS NOT NULL AND date BETWEEN :fromDate AND :toDate")
     fun averageSession(categoryId: Long, fromDate: String, toDate: String): Flow<Double?>
+
+    @Insert
+    suspend fun insertBabySession(session: BabySession): Long
+
+    @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND endedAt IS NULL AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
+    suspend fun activeBabySession(categoryId: Long, lockStart: Long): BabySession?
+
+    @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
+    suspend fun latestBabySession(categoryId: Long, lockStart: Long): BabySession?
+
+    @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND date=:date ORDER BY startedAt DESC")
+    fun babySessionsForDay(categoryId: Long, date: String): Flow<List<BabySession>>
+
+    @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
+    fun latestSessionFlow(categoryId: Long, lockStart: Long): Flow<BabySession?>
+
+    @Query("UPDATE baby_sessions SET movementCount=movementCount+1 WHERE id=:sessionId")
+    suspend fun incrementBabySession(sessionId: Long)
+
+    @Query("UPDATE baby_sessions SET endedAt=:endedAt, strength=:strength WHERE id=:sessionId")
+    suspend fun finishBabySession(sessionId: Long, endedAt: Long, strength: String?)
+
+    @Query("SELECT * FROM baby_sessions WHERE id=:id LIMIT 1")
+    suspend fun babySession(id: Long): BabySession?
+
+    @Query("SELECT * FROM counter_logs WHERE sessionId=:sessionId ORDER BY timestamp DESC LIMIT 1")
+    suspend fun latestSessionLog(sessionId: Long): CounterLog?
+
+    @Query("DELETE FROM counter_logs WHERE id=:id")
+    suspend fun deleteSessionLog(id: Long)
+
+    @Query("UPDATE baby_sessions SET movementCount=CASE WHEN movementCount>0 THEN movementCount-1 ELSE 0 END WHERE id=:sessionId")
+    suspend fun decrementBabySession(sessionId: Long)
 }
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class], version = 1, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class], version = 2, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
         @Volatile private var INSTANCE: CounterDatabase? = null
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS baby_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, categoryId INTEGER NOT NULL, date TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, dayPeriod TEXT NOT NULL, movementCount INTEGER NOT NULL DEFAULT 0, strength TEXT, note TEXT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_categoryId ON baby_sessions(categoryId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_date ON baby_sessions(date)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_startedAt ON baby_sessions(startedAt)")
+                db.execSQL("ALTER TABLE counter_logs ADD COLUMN sessionId INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_counter_logs_sessionId ON counter_logs(sessionId)")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .fallbackToDestructiveMigration().build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2).build().also { INSTANCE = it }
         }
     }
 }
