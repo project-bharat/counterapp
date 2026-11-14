@@ -434,6 +434,7 @@ fun CounterApp(repo: CounterRepository) {
         }
     }
 
+    }
     pendingRestoreUri?.let { uri ->
         AlertDialog(
             onDismissRequest = { pendingRestoreUri = null },
