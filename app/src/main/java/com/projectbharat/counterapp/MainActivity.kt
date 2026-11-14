@@ -122,7 +122,7 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun recordDetection(sessionId: Long, timestamp: Long, magnitude: Float) = repo.recordBabyDetection(sessionId, timestamp, magnitude)
     suspend fun confirmDetection(id: Long) = repo.confirmBabyDetection(id)
     suspend fun dismissDetection(id: Long) = repo.dismissBabyDetection(id)
-    suspend fun startSession(id: Long) = repo.startBabySession(id)
+    suspend fun startSession(id: Long, mode: String) = repo.startBabySession(id, mode)
     suspend fun addMovement(id: Long, sessionId: Long) = repo.addBabyMovement(id, sessionId, null)
     suspend fun undoMovement(sessionId: Long) = repo.undoBabyMovement(sessionId)
     suspend fun finishSession(sessionId: Long, strength: String?) = repo.finishBabySession(sessionId, strength)
@@ -222,13 +222,13 @@ fun CounterApp(repo: CounterRepository) {
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
     val latestSession by latestFlow.collectAsStateWithLifecycle(null)
-    LaunchedEffect(latestSession?.id, clock) { latestSession?.let { if (it.endedAt == null && clock >= it.startedAt + CounterRepository.TWO_HOURS_MS) vm.completeSession(it.id) } }
+    LaunchedEffect(latestSession?.id, clock) { latestSession?.let { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; if (it.endedAt == null && clock >= it.startedAt + limit) vm.completeSession(it.id) } }
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
     val isBaby = selected?.kind == "BABY"
-    val activeSession = latestSession?.takeIf { it.endedAt == null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
-    val resumableSession = latestSession?.takeIf { it.endedAt != null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
-    val lockedSession = latestSession?.takeIf { clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
-    val remainingMs = activeSession?.let { (it.startedAt + CounterRepository.TWO_HOURS_MS - clock).coerceAtLeast(0L) } ?: 0L
+    val activeSession = latestSession?.takeIf { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; it.endedAt == null && clock < it.startedAt + limit }
+    val resumableSession = latestSession?.takeIf { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; it.endedAt != null && !(it.trackingMode == "TEN_MOVEMENTS" && it.movementCount >= 10) && clock < it.startedAt + limit }
+    val lockedSession = latestSession?.takeIf { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; clock < it.startedAt + limit }
+    val remainingMs = activeSession?.let { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; (it.startedAt + limit - clock).coerceAtLeast(0L) } ?: 0L
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
@@ -356,7 +356,7 @@ fun CounterApp(repo: CounterRepository) {
                         historyDate = historyDate,
                         onPreviousDay = { historyDate = historyDate.minusDays(1) },
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
-                        onStart = { scope.launch { vm.startSession(selected.id) } },
+                        onStart = { mode -> scope.launch { vm.startSession(selected.id, mode) } },
                         onResume = { sessionId -> scope.launch { vm.resumeSession(sessionId) } },
                         onTap = { sessionId ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -448,14 +448,17 @@ fun CounterApp(repo: CounterRepository) {
 private fun BabyMovementScreen(
     english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
     resumableSession: BabySession?, lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, historyDate: LocalDate,
-    onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onResume: (Long) -> Unit, onTap: (Long) -> Unit,
+    onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: (String) -> Unit, onResume: (Long) -> Unit, onTap: (Long) -> Unit,
     onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long, Long, Float) -> Unit,
     onConfirmDetections: (List<Long>) -> Unit, onDismissDetections: (List<Long>) -> Unit
 ) {
+    val context = LocalContext.current
     val elapsed = activeSession?.let { (System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) } ?: 0L
-    val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
+    val sessionLimit = activeSession?.let { if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS } ?: CounterRepository.TWO_HOURS_MS
+    val progress = (elapsed.toFloat() / sessionLimit).coerceIn(0f, 1f)
     val tapScale = remember { Animatable(1f) }
     val tapScope = rememberCoroutineScope()
+    var selectedTrackingMode by remember { mutableStateOf("TEN_MOVEMENTS") }
     var autoDetect by remember(activeSession?.id) { mutableStateOf(false) }
     var autoStatus by remember(activeSession?.id) { mutableStateOf("") }
     val pending = detections.count { it.status == "PENDING" }
@@ -469,6 +472,7 @@ private fun BabyMovementScreen(
                 Column(Modifier.weight(1f)) {
                     Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(if (activeSession.trackingMode == "ONE_HOUR") { if (english) "1-hour movement count" else "१ तासातील हालचाली" } else { if (english) "Time to 10 movements" else "१० हालचालींसाठी लागणारा वेळ" }, color = Gold, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (english) "Auto detect" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall)
@@ -514,6 +518,14 @@ private fun BabyMovementScreen(
                         Text("%02d:%02d".format(remainingMs / 3600000, (remainingMs / 60000) % 60), color = Gold, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(6.dp).clip(CircleShape), color = Gold, trackColor = tapSurface)
+                    if (activeSession.trackingMode == "TEN_MOVEMENTS" && activeSession.timeToTenMs != null) {
+                        Surface(Modifier.fillMaxWidth().padding(top = 12.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFE8F4EC)) {
+                            Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(if (english) "10 MOVEMENTS REACHED" else "१० हालचाली पूर्ण", color = Color(0xFF246B48), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                Text(if (english) "Time: " + "%.1f min".format(activeSession.timeToTenMs / 60000.0) else "वेळ: " + "%.1f मिनिटे".format(activeSession.timeToTenMs / 60000.0), color = Color(0xFF246B48), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
                             Icon(Icons.Default.Undo, null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo" else "मागे")
@@ -533,7 +545,13 @@ private fun BabyMovementScreen(
                             Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Resume session" else "सत्र पुन्हा सुरू करा")
                         }
                     } else if (lockedSession == null) {
-                        Button(onClick = onStart, modifier = Modifier.height(46.dp)) {
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FilterChip(selected = selectedTrackingMode == "TEN_MOVEMENTS", onClick = { selectedTrackingMode = "TEN_MOVEMENTS" }, label = { Text(if (english) "Time to 10" else "१० हालचाली") })
+                            FilterChip(selected = selectedTrackingMode == "ONE_HOUR", onClick = { selectedTrackingMode = "ONE_HOUR" }, label = { Text(if (english) "1 hour" else "१ तास") })
+                        }
+                        Text(if (selectedTrackingMode == "ONE_HOUR") { if (english) "Count every movement for one hour." else "एका तासात जाणवणाऱ्या प्रत्येक हालचालीची नोंद करा." } else { if (english) "Count until 10 movements; the time is saved automatically." else "१० हालचाली होईपर्यंत मोजा; लागलेला वेळ आपोआप जतन होईल." }, color = ink.copy(alpha=.6f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
+                        Button(onClick = { onStart(selectedTrackingMode) }, modifier = Modifier.height(46.dp)) {
                             Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start session" else "सत्र सुरू करा")
                         }
                     }
@@ -590,12 +608,21 @@ private fun BabyMovementScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(periodLabel(session.dayPeriod, english) + " · " + sessionTime(session.startedAt), color = ink, fontWeight = FontWeight.Bold)
                                 val duration = ((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000
-                                Text(duration.toString() + " min", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                                Text(duration.toString() + " min · " + (if (session.trackingMode == "ONE_HOUR") { if (english) "1-hour count" else "१ तास" } else { if (english) "Count to 10" else "१० हालचाली" }), color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                                if (session.timeToTenMs != null) Text((if (english) "10 in " else "१० साठी ") + "%.1f min".format(session.timeToTenMs / 60000.0), color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                             Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                 }
+            }
+        }
+        Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
+            Column(Modifier.padding(13.dp)) {
+                Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Follow the counting method recommended by your maternity-care professional." else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे यांची नोंद करा. तुमच्या डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.", color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                Text(if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer." else "हालचाली नेहमीपेक्षा कमी किंवा वेगळ्या वाटल्यास वेळ संपण्याची वाट न पाहता त्वरित डॉक्टरांशी संपर्क साधा.", color = Color(0xFF9A5B36), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Know how · Cleveland Clinic" else "अधिक जाणून घ्या · Cleveland Clinic") }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -847,8 +874,8 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
 
     fun tableHeader(canvas: android.graphics.Canvas, top: Float): Float {
         canvas.drawRoundRect(android.graphics.RectF(36f, top, 559f, top + 28f), 7f, 7f, paint(navy, 9f, true))
-        val labels = if (english) listOf("DATE", "PERIOD", "START", "COUNT", "DURATION", "STRENGTH")
-                     else listOf("दिनांक", "वेळ", "सुरुवात", "संख्या", "कालावधी", "तीव्रता")
+        val labels = if (english) listOf("DATE", "PERIOD", "START", "METHOD", "MOVES", "TIME TO 10")
+                     else listOf("दिनांक", "वेळ", "सुरुवात", "पद्धत", "हालचाली", "१० साठी वेळ")
         labels.forEachIndexed { i, label -> canvas.drawText(label, xs[i] + 7f, top + 18f, headPaint) }
         return top + 28f
     }
@@ -915,15 +942,16 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         val dateLabel = runCatching { LocalDate.parse(session.date).format(DateTimeFormatter.ofPattern("dd MMM")) }.getOrDefault(session.date)
         val end = session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())
         val duration = (end - session.startedAt).coerceAtLeast(0L) / 60000L
+        val methodLabel = if (session.trackingMode == "ONE_HOUR") { if (english) "1-hour" else "१ तास" } else { if (english) "To 10" else "१० पर्यंत" }
+        val timeLabel = session.timeToTenMs?.let { "%.1f min".format(it / 60000.0) } ?: (duration.toString() + " min")
         val values = listOf(dateLabel, periodLabel(session.dayPeriod, english), sessionTime(session.startedAt),
-            session.movementCount.toString(), duration.toString() + " min",
-            session.strength?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "—")
+            methodLabel, session.movementCount.toString(), timeLabel)
         values.forEachIndexed { col, value ->
-            if (col == 3) {
+            if (col == 4) {
                 canvas.drawRoundRect(android.graphics.RectF(xs[col] + 5f, y + 4f, xs[col] + 49f, y + 21f), 6f, 6f, paint(android.graphics.Color.rgb(222, 237, 249), 8f))
                 canvas.drawText(value, xs[col] + 20f, y + 17f, paint(navy, 10f, true))
             } else {
-                canvas.drawText(value.take(if (col == 5) 22 else 14), xs[col] + 7f, y + 16f, bodyPaint)
+                canvas.drawText(value.take(if (col == 5) 11 else 14), xs[col] + 7f, y + 16f, bodyPaint)
             }
         }
         y += 27f

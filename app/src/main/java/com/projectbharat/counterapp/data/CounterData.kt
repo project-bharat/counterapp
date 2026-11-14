@@ -27,7 +27,8 @@ data class BabySession(
     val movementCount: Int = 0,
     val timeToTenMs: Long? = null,
     val strength: String? = null,
-    val note: String? = null
+    val note: String? = null,
+    val trackingMode: String = "TEN_MOVEMENTS"
 )
 
 @Entity(tableName = "baby_detections", indices = [Index("sessionId"), Index("timestamp")])
@@ -243,7 +244,7 @@ interface CounterDao {
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class], version = 4, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class], version = 5, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
@@ -271,9 +272,14 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_detections_timestamp ON baby_detections(timestamp)")
             }
         }
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE baby_sessions ADD COLUMN trackingMode TEXT NOT NULL DEFAULT 'TEN_MOVEMENTS'")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { INSTANCE = it }
         }
     }
 }

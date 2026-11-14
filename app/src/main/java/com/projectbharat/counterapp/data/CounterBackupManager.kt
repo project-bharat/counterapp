@@ -42,7 +42,7 @@ object CounterBackupManager {
                     .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt)
                     .put("dayPeriod", s.dayPeriod).put("movementCount", s.movementCount)
                     .putNullable("timeToTenMs", s.timeToTenMs).putNullable("strength", s.strength)
-                    .putNullable("note", s.note))
+                    .putNullable("note", s.note).put("trackingMode", s.trackingMode))
             }
         })
         context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(root.toString(2)) }
@@ -77,7 +77,7 @@ object CounterBackupManager {
             BabySession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"),
                 o.getLong("startedAt"), o.longOrNull("endedAt"), o.getString("dayPeriod"),
                 o.optInt("movementCount", 0), o.longOrNull("timeToTenMs"),
-                o.stringOrNull("strength"), o.stringOrNull("note"))
+                o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TEN_MOVEMENTS"))
         }
 
         val detections = (0 until detectionArray.length()).map { i ->
