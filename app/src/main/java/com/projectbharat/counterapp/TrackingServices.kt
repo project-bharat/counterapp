@@ -260,11 +260,9 @@ class ChantRecognitionService : Service() {
             if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
             record.startRecording()
             recording = true
-            sendState(true, "Listening offline")
+            sendState(true, "Offline model ready · listening offline")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             var lastPartial = ""
-            var lastCountedText = ""
-            var lastCountedAt = 0L
             while (recording && !Thread.currentThread().isInterrupted) {
                 val read = record.read(buffer, 0, buffer.size)
                 if (read < 0) throw IllegalStateException("Microphone read failed: " + read)
@@ -275,10 +273,7 @@ class ChantRecognitionService : Service() {
                         val matches = countPhrase(transcript, mantra)
                         val now = System.currentTimeMillis()
                         sendState(true, if (matches > 0) "Selected mantra matched" else "Listening offline", transcript, matches > 0)
-                        val duplicate = transcript.isNotBlank() && transcript == lastCountedText && now - lastCountedAt < 1500L
-                        if (matches > 0 && !duplicate) {
-                            lastCountedText = transcript
-                            lastCountedAt = now
+                        if (matches > 0) {
                             scope.launch {
                                 CounterDatabase.get(this@ChantRecognitionService).dao().addLog(
                                     CounterLog(date = LocalDate.now().toString(), timestamp = now,
