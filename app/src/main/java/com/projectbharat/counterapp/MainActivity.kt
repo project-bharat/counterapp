@@ -821,6 +821,8 @@ private fun MonthlyHistoryScreen(
             HistoryMetric(if (english) "Sessions" else "सत्रे", sessions.size.toString(), ink)
             HistoryMetric(if (english) "Movements" else "हालचाली", sessions.sumOf { it.movementCount }.toString(), ink)
             HistoryMetric(if (english) "Avg/session" else "प्रति सत्र सरासरी", if (sessions.isEmpty()) "—" else "%.1f".format(sessions.map { it.movementCount }.average()), ink)
+            val milestoneTimes = sessions.mapNotNull { it.timeToTenMs }
+            HistoryMetric(if (english) "Avg time to 10" else "१० साठी सरासरी वेळ", if (milestoneTimes.isEmpty()) "—" else "%.1f m".format(milestoneTimes.average() / 60000.0), ink)
         }
         Spacer(Modifier.height(8.dp))
         Text(if (english) "Daily movement pattern" else "दैनिक हालचालींचा आलेख", color = ink, style = MaterialTheme.typography.titleSmall)
