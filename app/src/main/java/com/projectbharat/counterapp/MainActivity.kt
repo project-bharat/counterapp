@@ -195,6 +195,7 @@ fun CounterApp(repo: CounterRepository) {
     val firstRunPermissions = remember {
         buildList {
             if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
     }
@@ -277,7 +278,7 @@ fun CounterApp(repo: CounterRepository) {
                     showPermissionIntro = false
                 },
                 title = { Text(if (english) "Set up device access" else "फोन परवानग्या सेट करा") },
-                text = { Text(if (english) "Steps: activity & notifications. Japa: microphone for Auto Count." else "पावले: हालचाल व सूचना. जप: Auto Count वर मायक्रोफोन.") },
+                text = { Text(if (english) "Steps: activity, location & notifications. Japa: microphone for Auto Count." else "पावले: हालचाल, लोकेशन व सूचना. जप: Auto Count वर मायक्रोफोन.") },
                 confirmButton = {
                     TextButton(onClick = { firstRunPermissionLauncher.launch(firstRunPermissions) }) {
                         Text(if (english) "Continue" else "पुढे")
