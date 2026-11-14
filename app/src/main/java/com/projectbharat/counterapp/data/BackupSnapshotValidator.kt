@@ -28,7 +28,7 @@ object BackupSnapshotValidator {
                 it.movementCount >= 0 &&
                 (it.endedAt == null || it.endedAt >= it.startedAt) &&
                 (it.timeToTenMs == null || it.timeToTenMs >= 0) &&
-                it.trackingMode in setOf("TEN_MOVEMENTS", "ONE_HOUR") &&
+                it.trackingMode in setOf("TWO_HOURS", "TEN_MOVEMENTS", "ONE_HOUR") &&
                 validDate(it.date)
         }) { "Backup contains invalid baby movement sessions" }
         val logIds = logs.map { it.id }
