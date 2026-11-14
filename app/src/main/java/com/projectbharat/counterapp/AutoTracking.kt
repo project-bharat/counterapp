@@ -47,6 +47,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -203,7 +204,7 @@ private val chantPresets = listOf(
 )
 
 @Composable
-fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onManualCount: () -> Unit) {
+fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onMantraChange: (String) -> Unit, onManualCount: (String) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम") }
@@ -215,6 +216,9 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var matched by remember { mutableStateOf(false) }
     var matchedCount by remember { mutableIntStateOf(0) }
     var presetMenu by remember { mutableStateOf(false) }
+    var addMantraDialog by remember { mutableStateOf(false) }
+    var newMantra by remember { mutableStateOf("") }
+    var customMantras by remember(categoryId) { mutableStateOf(prefs.getStringSet("custom_mantras_$categoryId", emptySet()).orEmpty().toList()) }
 
     val stopRecognition = {
         ChantRecognitionService.stop(context)
@@ -314,7 +318,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         .shadow(12.dp, CircleShape)
                         .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
                         .border(3.dp, circleAccent, CircleShape)
-                        .clickable(interactionSource = manualInteraction, indication = null, onClick = onManualCount),
+                        .clickable(interactionSource = manualInteraction, indication = null, onClick = { onManualCount(target) }),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -330,7 +334,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             Surface(onClick = {
                                 if (!running) {
                                     language = "hi"
-                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari }
+                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari; onMantraChange(target) }
                                 }
                             }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "hi") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "hi") MaterialTheme.colorScheme.onPrimary else ink) {
                                 Text("अ", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
@@ -338,7 +342,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             Surface(onClick = {
                                 if (!running) {
                                     language = "en"
-                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin }
+                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin; onMantraChange(target) }
                                 }
                             }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "en") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "en") MaterialTheme.colorScheme.onPrimary else ink) {
                                 Text("A", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
@@ -351,15 +355,23 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
                         DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                            chantPresets.forEach { preset ->
-                                DropdownMenuItem(text = { Text(if (language == "hi") preset.devanagari else preset.title, maxLines = 2) }, onClick = {
-                                    target = if (language == "hi") preset.devanagari else preset.latin
+                            (chantPresets.map { if (language == "hi") it.devanagari else it.latin } + customMantras).distinct().forEach { mantra ->
+                                DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
+                                    target = mantra
                                     prefs.edit().putString("target_$categoryId", target).apply()
+                                    onMantraChange(target)
                                     presetMenu = false
                                 })
                             }
+                            DropdownMenuItem(text = { Text(if (english) "+ Add mantra" else "+ नवीन मंत्र जोडा") }, onClick = {
+                                presetMenu = false
+                                newMantra = ""
+                                addMantraDialog = true
+                            })
                         }
                     }
+                }
+                if (automatic) {                    }
                 }
                 if (automatic) {
                     Surface(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
@@ -394,6 +406,27 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 }
             }
         }
+    }
+    if (addMantraDialog) {
+        AlertDialog(
+            onDismissRequest = { addMantraDialog = false },
+            title = { Text(if (english) "Add mantra" else "नवीन मंत्र") },
+            text = { OutlinedTextField(value = newMantra, onValueChange = { newMantra = it }, label = { Text(if (english) "Mantra text" else "मंत्र") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val value = newMantra.trim()
+                    if (value.isNotBlank()) {
+                        customMantras = (customMantras + value).distinct()
+                        prefs.edit().putStringSet("custom_mantras_$categoryId", customMantras.toSet())
+                            .putString("target_$categoryId", value).apply()
+                        target = value
+                        onMantraChange(value)
+                    }
+                    addMantraDialog = false
+                }, enabled = newMantra.isNotBlank()) { Text(if (english) "Add" else "जोडा") }
+            },
+            dismissButton = { TextButton(onClick = { addMantraDialog = false }) { Text(if (english) "Cancel" else "रद्द") } }
+        )
     }
 }
 
