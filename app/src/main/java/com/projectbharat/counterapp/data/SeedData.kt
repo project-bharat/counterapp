@@ -12,7 +12,7 @@ object SeedData {
         CoroutineScope(Dispatchers.IO).launch {
             if (dao.categories().first().isEmpty()) {
                 dao.addCategory(CounterCategory(titleMr = "बाळाची हालचाल", titleEn = "Baby Movements", kind = "BABY"))
-                dao.addCategory(CounterCategory(titleMr = "जप / मंत्र", titleEn = "Chants / Mantra", kind = "MANTRA"))
+                dao.addCategory(CounterCategory(titleMr = "जप", titleEn = "Chants", kind = "MANTRA"))
                 dao.addCategory(CounterCategory(titleMr = "पावले", titleEn = "Walking Steps", kind = "STEPS", goal = 6000))
             }
         }
