@@ -99,7 +99,6 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
         mutableStateOf(Build.VERSION.SDK_INT < 29 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
     }
-    var locationGranted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
     var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", false)) }
     var message by remember { mutableStateOf("") }
 
@@ -115,19 +114,10 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startService() else message = if (english) "Notification permission is required" else "सूचना परवानगी आवश्यक आहे"
     }
-    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        locationGranted = granted
-        if (granted) {
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            else startService()
-        } else message = if (english) "Precise location is required to verify walking distance" else "चालण्याचे अंतर तपासण्यासाठी अचूक लोकेशन परवानगी आवश्यक आहे"
-    }
     val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
         if (granted) {
-            if (!locationGranted) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             else startService()
         } else message = if (english) "Activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
@@ -173,7 +163,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                 when {
                     !available -> Text(if (english) "This phone has no step-counter sensor" else "या फोनमध्ये स्टेप काउंटर सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
                     !permissionGranted -> Text(if (english) "Allow physical activity access to count automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
-                    else -> Text(if (running) if (english) "GPS verifies forward movement before saving steps" else "पावले जतन करण्यापूर्वी GPS पुढील हालचाल तपासतो" else if (english) "Activity and precise location verify walking" else "चालण्याची खात्री करण्यासाठी हालचाल व अचूक लोकेशन वापरले जाते", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
+                    else -> Text(if (running) if (english) "Motion tracking active" else "हालचाल मोजणी सुरू आहे" else if (english) "Motion-validated steps are counted" else "हालचाल पडताळलेली पावले मोजली जातात", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(
@@ -181,11 +171,10 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                     onClick = {
                         if (running) { StepTrackingService.stop(context); running = false }
                         else if (Build.VERSION.SDK_INT >= 29 && !permissionGranted) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-                        else if (!locationGranted) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else startService()
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(.82f)
                 ) {
                     Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow, null)
                     Text(if (running) if (english) "Stop tracking" else "मोजणी थांबवा" else if (english) "Start step tracking" else "पावले मोजणे सुरू करा")
@@ -193,7 +182,6 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                 if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        Text(if (english) "Uses Only motion-validated steps confirmed by GPS displacement are counted. GPS may be less reliable indoors." else "सेन्सरने ओळखलेली पावले GPS अंतराने पडताळल्यानंतरच मोजली जातात. घरात GPS कमी अचूक असू शकतो.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
@@ -315,7 +303,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         }
                     }
                 }
-                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 10.dp))
+                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 26.dp))
                 val manualInteraction = remember { MutableInteractionSource() }
                 val manualPressed by manualInteraction.collectIsPressedAsState()
                 val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
