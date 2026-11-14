@@ -290,6 +290,8 @@ private fun BabyMovementScreen(
 ) {
     val elapsed = activeSession?.let { (System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) } ?: 0L
     val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
+    val tapScale = remember { Animatable(1f) }
+    val tapScope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (activeSession != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -313,7 +315,7 @@ private fun BabyMovementScreen(
                             drawCircle(tapSurface, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx()))
                             drawArc(Color(0xFFE7A33C), -90f, 360f*progress, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx(), cap=StrokeCap.Round))
                         }
-                        Box(Modifier.size(178.dp).background(Brush.linearGradient(listOf(Color(0xFFFFE6DD),Color(0xFFFFC9B9))),CircleShape).clickable { onTap(activeSession.id) }, contentAlignment=Alignment.Center) {
+                        Box(Modifier.size(178.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(listOf(Color(0xFFFFE6DD),Color(0xFFFFC9B9))),CircleShape).clickable { tapScope.launch { tapScale.animateTo(.90f, tween(70)); tapScale.animateTo(1f, tween(210)) }; onTap(activeSession.id) }, contentAlignment=Alignment.Center) {
                             Column(horizontalAlignment=Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.Favorite, null, tint=Color(0xFFC65F68), modifier=Modifier.size(34.dp))
                                 Text("+1", color=Color(0xFF7F3546), style=MaterialTheme.typography.displaySmall, fontWeight=FontWeight.ExtraBold)
@@ -333,8 +335,15 @@ private fun BabyMovementScreen(
                         }
                     }
                     LinearProgressIndicator(progress={progress}, modifier=Modifier.fillMaxWidth().padding(top=8.dp).height(7.dp).clip(CircleShape), color=Gold, trackColor=tapSurface)
-                    TextButton(onClick={onUndo(activeSession.id)}, enabled=activeSession.movementCount>0) {
-                        Icon(Icons.Default.Remove,null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo last" else "मागील हालचाल रद्द")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Surface(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) },
+                            enabled = activeSession.movementCount > 0, shape = RoundedCornerShape(14.dp), color = Color(0xFFF0F3F8)) {
+                            Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Undo, null, tint = ink, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (english) "Undo" else "मागे घ्या", color = ink, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
                     }
                 }
             }
