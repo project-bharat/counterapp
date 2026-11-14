@@ -183,6 +183,20 @@ fun CounterApp(repo: CounterRepository) {
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var showPermissionIntro by remember {
+        mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
+    }
+    val firstRunPermissions = remember {
+        buildList {
+            if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.toTypedArray()
+    }
+    val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
+        showPermissionIntro = false
+    }
     val jsonExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
             backupMessage = null
@@ -239,6 +253,27 @@ fun CounterApp(repo: CounterRepository) {
                  else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
 
     MaterialTheme(colorScheme = scheme) {
+        if (showPermissionIntro) {
+            AlertDialog(
+                onDismissRequest = {
+                    context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
+                    showPermissionIntro = false
+                },
+                title = { Text(if (english) "Set up device access" else "फोन परवानग्या सेट करा") },
+                text = { Text(if (english) "Activity access and precise location help verify walking steps. Notifications keep an active step session visible. Microphone access is requested only if you turn on Japa Auto Count." else "चालण्याची पावले पडताळण्यासाठी हालचाल व अचूक लोकेशन परवानगी वापरली जाते. पावले मोजताना सूचना दिसण्यासाठी नोटिफिकेशन परवानगी आवश्यक आहे. जपासाठी Auto Count सुरू केल्यावरच मायक्रोफोन परवानगी विचारली जाईल.") },
+                confirmButton = {
+                    TextButton(onClick = { firstRunPermissionLauncher.launch(firstRunPermissions) }) {
+                        Text(if (english) "Continue" else "पुढे")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
+                        showPermissionIntro = false
+                    }) { Text(if (english) "Not now" else "आत्ता नको") }
+                }
+            )
+        }
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
