@@ -55,6 +55,7 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     fun count(id: Long) = repo.today(id)
     fun week(id: Long) = repo.week(id)
     fun average(id: Long) = repo.average(id)
+    fun averageBabyTimeToTen(id: Long) = repo.averageBabyTimeToTen(id)
     fun sessions(id: Long, date: String) = repo.babySessionsForDay(id, date)
     fun latestSession(id: Long) = repo.latestBabySession(id)
     suspend fun startSession(id: Long) = repo.startBabySession(id)
@@ -110,7 +111,7 @@ fun CounterApp(repo: CounterRepository) {
 
     val countFlow = remember(selected?.id) { selected?.let { vm.count(it.id) } ?: flowOf(0) }
     val weekFlow = remember(selected?.id) { selected?.let { vm.week(it.id) } ?: flowOf(emptyList()) }
-    val averageFlow = remember(selected?.id) { selected?.let { vm.average(it.id) } ?: flowOf(null) }
+    val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
     val count by countFlow.collectAsStateWithLifecycle(0)
@@ -276,7 +277,7 @@ private fun BabyMovementScreen(
             val elapsed = (System.currentTimeMillis() - activeSession.startedAt).coerceAtLeast(0)
             Text(if (english) "BABY MOVEMENT SESSION" else "बाळाच्या हालचालींचे सत्र", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelLarge)
             Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
-            Text(if (english) "Movements recorded" else "हालचाली नोंदवल्या", color = ink)
+            Text(if (english) "Movements recorded" else "हालचाली नोंदवल्या", color = ink)\n            if (activeSession.movementCount >= 10) Text(if (english) "10 movements reached. Continue observing your baby’s usual pattern." else "१० हालचाली नोंदल्या. बाळाच्या नेहमीच्या हालचालींचे निरीक्षण सुरू ठेवा.", color = Gold, style = MaterialTheme.typography.bodySmall)
             Text("${periodLabel(activeSession.dayPeriod, english)}  •  ${sessionTime(activeSession.startedAt)}", color = Gold, style = MaterialTheme.typography.titleMedium)
             Text((if (english) "Session time " else "सत्राचा वेळ ") + "${elapsed / 60000}:${(elapsed / 1000 % 60).toString().padStart(2, '0')}", color = ink)
             Text((if (english) "Session window remaining " else "सत्रासाठी उर्वरित वेळ ") + "${remainingMs / 60000} min", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelMedium)
@@ -303,7 +304,7 @@ private fun BabyMovementScreen(
                 val unlockAt = lockedSession.startedAt + CounterRepository.TWO_HOURS_MS
                 Text((if (english) "Available after " else "पुन्हा उपलब्ध: ") + sessionTime(unlockAt), color = ink)
             } else {
-                Text(if (english) "Start when your baby is usually active." else "बाळ नेहमी सक्रिय असते त्या वेळी सत्र सुरू करा.", color = ink, modifier = Modifier.padding(18.dp))
+                Text(if (english) "Choose a time when your baby is usually active. Count kicks, rolls and nudges; do not count hiccups." else "बाळ नेहमी सक्रिय असते ती वेळ निवडा. लाथा, वळणे आणि हलके धक्के मोजा; उचक्या मोजू नका.", color = ink, modifier = Modifier.padding(18.dp))
                 Button(onClick = onStart, modifier = Modifier.padding(top = 12.dp)) { Text(if (english) "Start kick session" else "हालचालींचे सत्र सुरू करा") }
             }
             Spacer(Modifier.weight(1f))
