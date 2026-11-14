@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Timer
@@ -30,25 +29,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.projectbharat.counterapp.data.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
         setContent { CounterApp(repo) }
     }
 }
 
 class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
-    val categories = repo.categories.stateIn(kotlinx.coroutines.MainScope(), SharingStarted.WhileSubscribed(5000), emptyList())
+    val categories = repo.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun count(id: Long) = repo.today(id)
     fun week(id: Long) = repo.week(id)
     fun average(id: Long) = repo.average(id)
@@ -80,11 +79,18 @@ fun CounterApp(repo: CounterRepository) {
     var timerStart by remember { mutableLongStateOf(0L) }
     var elapsed by remember { mutableLongStateOf(0L) }
     var timerRunning by remember { mutableStateOf(false) }
+    var todayKey by remember { mutableStateOf(LocalDate.now().toString()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
-    LaunchedEffect(categories) { if (selectedId == 1L && categories.isNotEmpty()) selectedId = categories.first().id }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000)
+            todayKey = LocalDate.now().toString()
+        }
+    }
+    LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
     LaunchedEffect(timerRunning) {
         while (timerRunning) {
             kotlinx.coroutines.delay(1000)
@@ -140,10 +146,9 @@ fun CounterApp(repo: CounterRepository) {
                     Text(if (english) "TODAY" else "आज", color = Navy.copy(alpha = .65f), style = MaterialTheme.typography.labelLarge)
                     Text(count.toString(), color = Navy, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
                     if (selected?.kind == "MANTRA") Text("${count / 108} माळ  •  ${count % 108}/108", color = Gold, style = MaterialTheme.typography.titleMedium)
-                    if (selected?.goal ?: 0 > 0) Text("${count} / ${selected?.goal} ${if (english) "goal" else "लक्ष्य"}", color = Navy)
+                    if ((selected?.goal ?: 0) > 0) Text("${count} / ${selected?.goal} ${if (english) "goal" else "लक्ष्य"}", color = Navy)
                     Spacer(Modifier.weight(1f))
-                    val pulse by animateFloatAsState(if (count > 0) 1f else 1f, label = "tap")
-                    Box(Modifier.size(252.dp).scale(pulse).background(SoftBlue, CircleShape).clickable(enabled = selected != null) {
+                    Box(Modifier.size(252.dp).background(SoftBlue, CircleShape).clickable(enabled = selected != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         scope.launch { selected?.let { vm.add(it.id, strength, if (timerStart > 0L && isBaby) System.currentTimeMillis() - timerStart else null) } }
                         if (isBaby) strength = null
