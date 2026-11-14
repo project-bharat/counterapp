@@ -14,6 +14,7 @@ class CounterRepository(private val dao: CounterDao) {
         require(log.count > 0) { "Count must be positive" }
         dao.updateLog(log.copy(note = log.note?.trim()?.takeIf { it.isNotEmpty() }))
     }
+    suspend fun deleteLog(id: Long) = dao.deleteLog(id)
     suspend fun add(categoryId: Long, strength: String?, duration: Long? = null): Long {
         val date = LocalDate.now().toString()
         val next = dao.countNow(categoryId, date) + 1
