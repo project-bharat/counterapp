@@ -201,19 +201,33 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            if (english) "Designed & developed by Bharat Rasave" else "निर्मिती व संकल्पना · Bharat Rasave",
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
             }
         ) {
         Surface(Modifier.fillMaxSize(), color = page) {
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
-                Row(Modifier.fillMaxWidth().padding(top=4.dp,bottom=14.dp), verticalAlignment=Alignment.CenterVertically) {
-                    IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = ink) }
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color(0xFF5C0F57), Color(0xFF9B4B91))), RoundedCornerShape(22.dp))
+                        .padding(horizontal = 10.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color.White) }
                     Column(Modifier.weight(1f)) {
-                        Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=ink.copy(alpha=.5f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
-                        Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
+                        Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=Color.White.copy(alpha=.76f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                        Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=Color.White, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
                 }
+                Spacer(Modifier.height(12.dp))
 
                 Box(Modifier.weight(1f)) {
                 if (remindersScreen) {
@@ -287,10 +301,6 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 }
             }
-            Text(if (english) "Designed & developed by Bharat Rasave" else "निर्मिती व संकल्पना · Bharat Rasave",
-                color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         }
     }
