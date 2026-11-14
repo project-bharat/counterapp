@@ -245,7 +245,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var newMantraEn by remember { mutableStateOf("") }
     var customMantras by remember(categoryId) {
         mutableStateOf(prefs.getStringSet("custom_mantras_$categoryId", emptySet()).orEmpty().map { saved ->
-            val parts = saved.split("\\u001F", limit = 2)
+            val parts = saved.split("\u001F", limit = 2)
             if (parts.size == 2) ChantPreset(parts[1], parts[0], parts[1])
             else ChantPreset(saved, saved, saved)
         })
