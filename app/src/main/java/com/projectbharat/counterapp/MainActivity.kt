@@ -238,16 +238,16 @@ fun CounterApp(repo: CounterRepository) {
                                 icon = { Icon(glyph, null) },
                                 label = { Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप / मंत्र" } else if (english) cat.titleEn else cat.titleMr) },
                                 selected = selected?.id == cat.id && !remindersScreen,
-                                onClick = { selectedId = cat.id; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } }
+                                onClick = { selectedId = cat.id; remindersScreen = false; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } }
                             )
                         }
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Add, null) }, label = { Text(if (english) "Add counter" else "नवीन मोजणी") }, selected = false, onClick = { addDialog = true; scope.launch { drawerState.close() } })
                         Divider(Modifier.padding(vertical = 8.dp))
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
                         Spacer(Modifier.weight(1f))
                         Text(
