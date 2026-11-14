@@ -113,7 +113,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
             }
         }
         registerTrackingReceiver(context, receiver)
-        onDispose { context.unregisterReceiver(receiver) }
+        onDispose { context.unregisterReceiver(receiver); StepTrackingService.stop(context) }
     }
     LaunchedEffect(Unit) {
         while (true) {
