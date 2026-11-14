@@ -461,7 +461,6 @@ private fun BabyMovementScreen(
                 Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment=Alignment.CenterHorizontally) {
                     Text(if (english) "MOVEMENTS COUNTED" else "नोंदवलेल्या हालचाली", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                     Text(activeSession.movementCount.toString(), color=ink, style=MaterialTheme.typography.displayLarge, fontWeight=FontWeight.ExtraBold)
-                    Text(if (english) "Kicks · Rolls · Nudges" else "लाथा · वळणे · हलके धक्के", color=ink.copy(alpha=.6f), style=MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(12.dp))
                     Box(Modifier.size(218.dp), contentAlignment=Alignment.Center) {
                         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
@@ -525,14 +524,12 @@ private fun BabyMovementScreen(
                     }
                 }
             }
-            Text(if (english) "Session saves automatically after 2 hours" else "२ तासांनंतर सत्र आपोआप जतन होईल", color=ink.copy(alpha=.5f), style=MaterialTheme.typography.labelSmall, modifier=Modifier.padding(8.dp))
         } else {
             Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(26.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment=Alignment.CenterHorizontally) {
                     Box(Modifier.size(66.dp).background(Color(0xFFFFE4E0),CircleShape),contentAlignment=Alignment.Center) { Icon(Icons.Default.Favorite,null,tint=Color(0xFFC65F68),modifier=Modifier.size(32.dp)) }
                     Spacer(Modifier.height(12.dp))
-                    Text(if (english) "Ready to begin?" else "सत्र सुरू करूया?", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
-                    Text(if (english) "Choose a time when baby is usually active." else "बाळ नेहमी सक्रिय असते ती वेळ निवडा.", color=ink.copy(alpha=.6f), style=MaterialTheme.typography.bodySmall)
+                    Text(if (english) "Baby movement" else "बाळाची हालचाल", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
                     Button(onClick=onStart, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) {
                         Icon(Icons.Default.PlayArrow,null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start 2-hour session" else "२ तासांचे सत्र सुरू करा")
