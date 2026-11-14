@@ -97,9 +97,12 @@ fun CounterApp(repo: CounterRepository) {
             elapsed = System.currentTimeMillis() - timerStart
         }
     }
-    val count by (selected?.let { vm.count(it.id) } ?: flowOf(0)).collectAsStateWithLifecycle(0)
-    val days by (selected?.let { vm.week(it.id) } ?: flowOf(emptyList())).collectAsStateWithLifecycle(emptyList())
-    val average by (selected?.let { vm.average(it.id) } ?: flowOf(null)).collectAsStateWithLifecycle(null)
+    val countFlow = remember(selected?.id, todayKey) { selected?.let { vm.count(it.id) } ?: flowOf(0) }
+    val weekFlow = remember(selected?.id, todayKey) { selected?.let { vm.week(it.id) } ?: flowOf(emptyList()) }
+    val averageFlow = remember(selected?.id, todayKey) { selected?.let { vm.average(it.id) } ?: flowOf(null) }
+    val count by countFlow.collectAsStateWithLifecycle(0)
+    val days by weekFlow.collectAsStateWithLifecycle(emptyList())
+    val average by averageFlow.collectAsStateWithLifecycle(null)
     val isBaby = selected?.kind == "BABY"
     MaterialTheme(colorScheme = lightColorScheme(primary = Navy, secondary = Gold, background = Cream, surface = Color.White)) {
         Surface(Modifier.fillMaxSize(), color = Cream) {
