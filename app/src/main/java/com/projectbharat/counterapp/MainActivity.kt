@@ -266,17 +266,16 @@ fun CounterApp(repo: CounterRepository) {
                             scope.launch { vm.addMovement(selected.id, sessionId) }
                         },
                         onUndo = { sessionId -> scope.launch { vm.undoMovement(sessionId) } },
-                        onFinish = { finishDialog = true }
+                        onFinish = { finishDialog = true },
+                        onAutoMovement = { sessionId -> onTap(sessionId) }
                     )
                 } else if (selected?.kind == "STEPS") {
                     AutoStepCounterScreen(
-                        categoryId = selected.id, count = count, english = english, ink = ink,
-                        onDelta = { amount -> scope.launch { vm.addCount(selected.id, amount) } }
+                        categoryId = selected.id, count = count, english = english, ink = ink
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
-                        categoryId = selected.id, count = count, english = english, ink = ink,
-                        onRecognized = { amount -> scope.launch { vm.addCount(selected.id, amount) } }
+                        categoryId = selected.id, count = count, english = english, ink = ink
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
@@ -334,7 +333,7 @@ private fun BabyMovementScreen(
     english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
     lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, historyDate: LocalDate,
     onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onTap: (Long) -> Unit,
-    onUndo: (Long) -> Unit, onFinish: () -> Unit
+    onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long) -> Unit
 ) {
     val elapsed = activeSession?.let { (System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) } ?: 0L
     val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
@@ -441,6 +440,12 @@ private fun BabyMovementScreen(
                     Text(if (english) "Previous session · " + lockedSession.movementCount + " movements · Available at " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS) else "मागील सत्र · " + lockedSession.movementCount + " हालचाली · पुढील सत्र " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS), modifier=Modifier.padding(12.dp), color=Color(0xFF865B20), style=MaterialTheme.typography.labelMedium)
                 }
             }
+        }
+        activeSession?.let { session ->
+            ExperimentalBabyMotionControl(
+                activeSessionId = session.id, english = english, ink = ink,
+                onDetected = { onAutoMovement(session.id) }
+            )
         }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
