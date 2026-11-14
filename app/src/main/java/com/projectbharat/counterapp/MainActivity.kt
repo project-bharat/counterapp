@@ -10,6 +10,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -211,29 +223,11 @@ fun CounterApp(repo: CounterRepository) {
                         onFinish = { finishDialog = true }
                     )
                 } else if (selected != null) {
-                    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Spacer(Modifier.height(16.dp))
-                        Text(if (english) "TODAY" else "आज", color = ink.copy(alpha = .65f))
-                        Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
-                        if (selected.kind == "MANTRA") Text("${count / 108} माळ  •  ${count % 108}/108", color = Gold, style = MaterialTheme.typography.titleMedium)
-                        if (selected.goal > 0) Text("${count} / ${selected.goal} ${if (english) "goal" else "लक्ष्य"}", color = ink)
-                        Spacer(Modifier.weight(1f))
-                        Box(Modifier.size(240.dp).background(tapSurface, CircleShape).clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            scope.launch { vm.add(selected.id, null) }
-                        }, contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("+1", style = MaterialTheme.typography.displayLarge, color = ink, fontWeight = FontWeight.Bold)
-                                Text(if (english) "TAP TO COUNT" else "मोजण्यासाठी स्पर्श करा", color = Navy)
-                            }
-                        }
-                        Spacer(Modifier.height(20.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            OutlinedButton(onClick = { scope.launch { vm.undo(selected.id) } }) { Text(if (english) "Undo −1" else "मागे घ्या −१") }
-                            OutlinedButton(onClick = { resetDialog = true }) { Text(if (english) "Reset" else "रीसेट") }
-                        }
-                        Spacer(Modifier.weight(1f))
-                    }
+                    CounterTapScreen(
+                        english = english, count = count, goal = selected.goal, mantra = selected.kind == "MANTRA",
+                        ink = ink, onTap = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); scope.launch { vm.add(selected.id, null) } },
+                        onUndo = { scope.launch { vm.undo(selected.id) } }, onReset = { resetDialog = true }
+                    )
                 }
             }
         }
@@ -274,87 +268,115 @@ fun CounterApp(repo: CounterRepository) {
 
 @Composable
 private fun BabyMovementScreen(
-    english: Boolean,
-    ink: Color,
-    tapSurface: Color,
-    latestSession: BabySession?,
-    activeSession: BabySession?,
-    lockedSession: BabySession?,
-    remainingMs: Long,
-    sessions: List<BabySession>,
-    historyDate: LocalDate,
-    onPreviousDay: () -> Unit,
-    onNextDay: () -> Unit,
-    onStart: () -> Unit,
-    onTap: (Long) -> Unit,
-    onUndo: (Long) -> Unit,
-    onFinish: () -> Unit
+    english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
+    lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, historyDate: LocalDate,
+    onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onTap: (Long) -> Unit,
+    onUndo: (Long) -> Unit, onFinish: () -> Unit
 ) {
+    val elapsed = activeSession?.let { (System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) } ?: 0L
+    val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (activeSession != null) {
-            val elapsed = (System.currentTimeMillis() - activeSession.startedAt).coerceAtLeast(0)
-            Text(if (english) "BABY MOVEMENT SESSION" else "बाळाच्या हालचालींचे सत्र", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelLarge)
-            Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
-            Text(if (english) "Movements recorded" else "हालचाली नोंदवल्या", color = ink)
-            if (activeSession.movementCount >= 10) Text(if (english) "10 movements reached. Continue observing your baby’s usual pattern." else "१० हालचाली नोंदल्या. बाळाच्या नेहमीच्या हालचालींचे निरीक्षण सुरू ठेवा.", color = Gold, style = MaterialTheme.typography.bodySmall)
-            Text("${periodLabel(activeSession.dayPeriod, english)}  •  ${sessionTime(activeSession.startedAt)}", color = Gold, style = MaterialTheme.typography.titleMedium)
-            Text((if (english) "Session time " else "सत्राचा वेळ ") + "${elapsed / 60000}:${(elapsed / 1000 % 60).toString().padStart(2, '0')}", color = ink)
-            Text((if (english) "Session window remaining " else "सत्रासाठी उर्वरित वेळ ") + "${remainingMs / 60000} min", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelMedium)
-            Spacer(Modifier.weight(.5f))
-            Box(Modifier.size(236.dp).background(tapSurface, CircleShape).clickable { onTap(activeSession.id) }, contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("+1", style = MaterialTheme.typography.displayLarge, color = ink, fontWeight = FontWeight.Bold)
-                    Text(if (english) "TAP FOR EACH MOVEMENT" else "प्रत्येक हालचालीसाठी स्पर्श करा", color = ink, style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                    Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color=ink, style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold)
+                }
+                Surface(shape=RoundedCornerShape(50), color=Color(0xFFE1F3E9)) {
+                    Text(if (english) "● LIVE" else "● सुरू", modifier=Modifier.padding(horizontal=12.dp, vertical=7.dp), color=Color(0xFF16764E), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                OutlinedButton(onClick = { onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) { Text(if (english) "Undo −1" else "मागे घ्या −१") }
-                Button(onClick = onFinish) { Text(if (english) "Finish session" else "सत्र पूर्ण करा") }
+            Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment=Alignment.CenterHorizontally) {
+                    Text(if (english) "MOVEMENTS COUNTED" else "नोंदवलेल्या हालचाली", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                    Text(activeSession.movementCount.toString(), color=ink, style=MaterialTheme.typography.displayLarge, fontWeight=FontWeight.ExtraBold)
+                    Text(if (english) "Kicks · Rolls · Nudges" else "लाथा · वळणे · हलके धक्के", color=ink.copy(alpha=.6f), style=MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(12.dp))
+                    Box(Modifier.size(218.dp), contentAlignment=Alignment.Center) {
+                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                            drawCircle(tapSurface, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx()))
+                            drawArc(Color(0xFFE7A33C), -90f, 360f*progress, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx(), cap=StrokeCap.Round))
+                        }
+                        Box(Modifier.size(178.dp).background(Brush.linearGradient(listOf(Color(0xFFFFE6DD),Color(0xFFFFC9B9))),CircleShape).clickable { onTap(activeSession.id) }, contentAlignment=Alignment.Center) {
+                            Column(horizontalAlignment=Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.Favorite, null, tint=Color(0xFFC65F68), modifier=Modifier.size(34.dp))
+                                Text("+1", color=Color(0xFF7F3546), style=MaterialTheme.typography.displaySmall, fontWeight=FontWeight.ExtraBold)
+                                Text(if (english) "TAP MOVEMENT" else "हालचाल मोजा", color=Color(0xFF7F3546), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
+                        Column {
+                            Text(if (english) "ELAPSED" else "झालेला वेळ", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall)
+                            Text("%02d:%02d".format(elapsed/60000,(elapsed/1000)%60), color=ink, style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment=Alignment.End) {
+                            Text(if (english) "TIME LEFT" else "उर्वरित वेळ", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall)
+                            Text("%02d:%02d".format(remainingMs/3600000,(remainingMs/60000)%60), color=Gold, style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
+                        }
+                    }
+                    LinearProgressIndicator(progress={progress}, modifier=Modifier.fillMaxWidth().padding(top=8.dp).height(7.dp).clip(CircleShape), color=Gold, trackColor=tapSurface)
+                    TextButton(onClick={onUndo(activeSession.id)}, enabled=activeSession.movementCount>0) {
+                        Icon(Icons.Default.Remove,null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo last" else "मागील हालचाल रद्द")
+                    }
+                }
             }
-            Spacer(Modifier.weight(.35f))
+            if (activeSession.movementCount >= 10) {
+                Surface(Modifier.fillMaxWidth().padding(top=9.dp), shape=RoundedCornerShape(15.dp), color=Color(0xFFE5F2E8)) {
+                    Row(Modifier.padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
+                        Icon(Icons.Default.CheckCircle,null,tint=Color(0xFF39865B)); Spacer(Modifier.width(7.dp))
+                        Text(if (english) "10 movements reached · Keep observing" else "१० हालचाली पूर्ण · निरीक्षण सुरू ठेवा", color=Color(0xFF286342), style=MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+            Text(if (english) "Session saves automatically after 2 hours" else "२ तासांनंतर सत्र आपोआप जतन होईल", color=ink.copy(alpha=.5f), style=MaterialTheme.typography.labelSmall, modifier=Modifier.padding(8.dp))
         } else {
-            Spacer(Modifier.height(16.dp))
-            Text(if (english) "Baby movements" else "बाळाची हालचाल", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.SemiBold)
-            if (lockedSession != null) {
-                Text(if (english) "This session is saved. A new session can start after its 2-hour window." else "हे सत्र जतन केले आहे. सुरुवातीपासून २ तास पूर्ण झाल्यावरच नवीन सत्र सुरू करता येईल.", color = ink, modifier = Modifier.padding(18.dp))
-                Text("${periodLabel(lockedSession.dayPeriod, english)}  •  ${sessionTime(lockedSession.startedAt)}", color = Gold)
-                Text(if (english) "Recorded movements: ${lockedSession.movementCount}" else "नोंदवलेल्या हालचाली: ${lockedSession.movementCount}", color = ink)
-                val unlockAt = lockedSession.startedAt + CounterRepository.TWO_HOURS_MS
-                Text((if (english) "Available after " else "पुन्हा उपलब्ध: ") + sessionTime(unlockAt), color = ink)
-            } else {
-                Text(if (english) "Choose a time when your baby is usually active. Count kicks, rolls and nudges; do not count hiccups." else "बाळ नेहमी सक्रिय असते ती वेळ निवडा. लाथा, वळणे आणि हलके धक्के मोजा; उचक्या मोजू नका.", color = ink, modifier = Modifier.padding(18.dp))
-                Button(onClick = onStart, modifier = Modifier.padding(top = 12.dp)) { Text(if (english) "Start kick session" else "हालचालींचे सत्र सुरू करा") }
+            Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(26.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment=Alignment.CenterHorizontally) {
+                    Box(Modifier.size(66.dp).background(Color(0xFFFFE4E0),CircleShape),contentAlignment=Alignment.Center) { Icon(Icons.Default.Favorite,null,tint=Color(0xFFC65F68),modifier=Modifier.size(32.dp)) }
+                    Spacer(Modifier.height(12.dp))
+                    Text(if (english) "Ready to begin?" else "सत्र सुरू करूया?", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
+                    Text(if (english) "Choose a time when baby is usually active." else "बाळ नेहमी सक्रिय असते ती वेळ निवडा.", color=ink.copy(alpha=.6f), style=MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick=onStart, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) {
+                        Icon(Icons.Default.PlayArrow,null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start 2-hour session" else "२ तासांचे सत्र सुरू करा")
+                    }
+                }
             }
-            Spacer(Modifier.weight(1f))
+            if (lockedSession != null) {
+                Surface(Modifier.fillMaxWidth().padding(top=9.dp), shape=RoundedCornerShape(15.dp), color=Color(0xFFFFF1D9)) {
+                    Text(if (english) "Previous session · " + lockedSession.movementCount + " movements · Available at " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS) else "मागील सत्र · " + lockedSession.movementCount + " हालचाली · पुढील सत्र " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS), modifier=Modifier.padding(12.dp), color=Color(0xFF865B20), style=MaterialTheme.typography.labelMedium)
+                }
+            }
         }
-
-        Divider(color = ink.copy(alpha = .16f))
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(if (english) "Sessions by day" else "दिवसानुसार सत्रे", color = ink, fontWeight = FontWeight.SemiBold)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onPreviousDay) { Text("‹") }
-                Text(historyDate.format(dateFormat), color = ink, style = MaterialTheme.typography.labelMedium)
-                TextButton(onClick = onNextDay, enabled = historyDate.isBefore(LocalDate.now())) { Text("›") }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
+            Text(if (english) "SESSION HISTORY" else "सत्रांची नोंद", color=ink, style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold)
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                IconButton(onClick=onPreviousDay, modifier=Modifier.size(30.dp)) { Text("‹",color=ink,style=MaterialTheme.typography.titleLarge) }
+                Text(historyDate.format(dateFormat), color=ink, style=MaterialTheme.typography.labelMedium)
+                IconButton(onClick=onNextDay, enabled=historyDate.isBefore(LocalDate.now()), modifier=Modifier.size(30.dp)) { Text("›",color=ink,style=MaterialTheme.typography.titleLarge) }
             }
         }
         if (sessions.isEmpty()) {
-            Text(if (english) "No sessions recorded for this day" else "या दिवशी कोणतेही सत्र नोंदलेले नाही", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
+            Surface(Modifier.fillMaxWidth(), shape=RoundedCornerShape(16.dp), color=MaterialTheme.colorScheme.surface) {
+                Text(if (english) "No sessions on this day" else "या दिवसाची नोंद उपलब्ध नाही", modifier=Modifier.padding(16.dp), color=ink.copy(alpha=.55f), style=MaterialTheme.typography.bodySmall)
+            }
         } else {
-            LazyColumn(Modifier.fillMaxWidth().weight(.9f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(sessions, key = { it.id }) { session ->
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(12.dp)) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement=Arrangement.spacedBy(7.dp), contentPadding=PaddingValues(bottom=12.dp)) {
+                items(sessions,key={it.id}) { session ->
+                    Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(17.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
+                            Box(Modifier.size(40.dp).background(Color(0xFFFFE8DC),CircleShape),contentAlignment=Alignment.Center) { Icon(Icons.Default.Favorite,null,tint=Color(0xFFC65F68)) }
+                            Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text("${periodLabel(session.dayPeriod, english)}  •  ${sessionTime(session.startedAt)}", color = ink, fontWeight = FontWeight.Medium)
-                                Text(
-                                    (if (english) "Duration: " else "कालावधी: ") +
-                                        "${((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000} min" +
-                                        (session.strength?.let { "  •  ${when(it) { "LIGHT" -> if (english) "Light" else "हलकी"; "MEDIUM" -> if (english) "Medium" else "मध्यम"; "STRONG" -> if (english) "Strong" else "जोरात"; else -> it }}" } ?: ""),
-                                    color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall
-                                )
+                                Text(periodLabel(session.dayPeriod,english) + " · " + sessionTime(session.startedAt), color=ink, fontWeight=FontWeight.Bold)
+                                val duration=((session.endedAt ?: minOf(session.startedAt+CounterRepository.TWO_HOURS_MS,System.currentTimeMillis()))-session.startedAt).coerceAtLeast(0)/60000
+                                Text(duration.toString()+" min · "+(if(session.endedAt!=null || System.currentTimeMillis()>=session.startedAt+CounterRepository.TWO_HOURS_MS) if(english) "Completed" else "पूर्ण" else if(english) "In progress" else "सुरू"), color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall)
                             }
-                            Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text(session.movementCount.toString(), color=Gold, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                         }
                     }
                 }
