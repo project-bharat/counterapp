@@ -203,6 +203,11 @@ class ChantRecognitionService : Service() {
             model = Model(modelDir.absolutePath)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
+            // Allow consecutive repetitions to be decoded as one continuous utterance.
+            if (cleanMantra.split(" ").size <= 14) {
+                grammarPhrases.add("$cleanMantra $cleanMantra")
+                grammarPhrases.add("$cleanMantra $cleanMantra $cleanMantra")
+            }
             if (language == "hi") {
                 grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
                 grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
