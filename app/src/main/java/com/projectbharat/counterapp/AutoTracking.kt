@@ -103,14 +103,18 @@ fun AutoStepCounterScreen(
                 override fun onSensorChanged(event: SensorEvent) {
                     val raw = event.values.firstOrNull()?.toInt() ?: return
                     val baseline = prefs.getInt(baselineKey, -1)
-                    if (baseline < 0 || raw < baseline) {
+                    if (baseline < 0) {
                         prefs.edit().putInt(baselineKey, raw).apply()
-                        sensorTotal = latestCount
+                        sensorTotal = 0
                         submitted = latestCount
                         sensorStatus = "TRACKING"
                         return
                     }
-                    val todaySteps = (raw - baseline).coerceAtLeast(0)
+                    if (raw < baseline) {
+                        // The phone rebooted; the hardware counter restarted from zero.
+                        prefs.edit().putInt(baselineKey, 0).apply()
+                    }
+                    val todaySteps = (raw - if (raw < baseline) 0 else baseline).coerceAtLeast(0)
                     sensorTotal = todaySteps
                     val missing = todaySteps - submitted
                     if (missing > 0) {
