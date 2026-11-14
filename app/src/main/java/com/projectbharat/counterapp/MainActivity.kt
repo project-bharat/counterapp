@@ -170,8 +170,8 @@ fun CounterApp(repo: CounterRepository) {
                         Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
                     IconButton(onClick={english=!english}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.Language,null,tint=ink) }
-                    IconButton(onClick={weekly=!weekly;monthlyHistory=false}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.BarChart,null,tint=ink) }
-                    IconButton(onClick={monthlyHistory=!monthlyHistory;weekly=false}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.History,null,tint=ink) }
+                    IconButton(onClick={weekly=!weekly;monthlyHistory=false}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.BarChart,null,tint=ink) }
+                    IconButton(onClick={monthlyHistory=!monthlyHistory;weekly=false}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.History,null,tint=ink) }
                 }
                 if(categories.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=14.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
