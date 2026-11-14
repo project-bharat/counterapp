@@ -193,12 +193,8 @@ private val chantPresets = listOf(
 fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onManualCount: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
-    var target by remember(categoryId) {
-        mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम")
-    }
-    var language by remember(categoryId) {
-        mutableStateOf(prefs.getString("language_$categoryId", if (english) "en" else "hi") ?: "hi")
-    }
+    var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम") }
+    var language by remember(categoryId) { mutableStateOf(prefs.getString("language_$categoryId", if (english) "en" else "hi") ?: "hi") }
     var automatic by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
@@ -210,16 +206,15 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
         ChantRecognitionService.stop(context)
         running = false
         automatic = false
-        status = if (english) "Voice counting stopped" else "आवाजाद्वारे मोजणी थांबवली"
+        status = if (english) "Stopped" else "थांबवले"
     }
     val startService = {
         if (target.isNotBlank()) {
-            prefs.edit().putString("target_$categoryId", target.trim())
-                .putString("language_$categoryId", language).apply()
+            prefs.edit().putString("target_$categoryId", target.trim()).putString("language_$categoryId", language).apply()
             try {
                 ChantRecognitionService.start(context, categoryId, target.trim(), language)
                 running = true
-                status = if (english) "Preparing offline speech model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
+                status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
             } catch (error: Exception) {
                 running = false
                 automatic = false
@@ -237,7 +232,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
             else startService()
         } else { automatic = false; status = if (english) "Microphone permission denied" else "मायक्रोफोन परवानगी नाकारली" }
     }
-
     DisposableEffect(context, categoryId) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, intent: Intent?) {
@@ -250,26 +244,21 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
             }
         }
         registerTrackingReceiver(context, receiver)
-        onDispose {
-            context.unregisterReceiver(receiver)
-            ChantRecognitionService.stop(context)
-        }
+        onDispose { context.unregisterReceiver(receiver); ChantRecognitionService.stop(context) }
     }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(if (english) "TODAY" else "आजचा जप", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Text("${count / 108} ${if (english) "mala" else "माळ"} · ${count % 108}/108", color = Color(0xFFB17B28), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(if (english) "TODAY" else "आज", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(if (english) "Chants" else "जप", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (english) "Auto" else "ऑटो", color = ink, style = MaterialTheme.typography.labelMedium)
-                Switch(checked = automatic, onCheckedChange = { checked ->
-                    if (!checked) stopRecognition()
+                Text(if (english) "Auto count" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall)
+                Switch(checked = automatic, onCheckedChange = { enabled ->
+                    if (!enabled) stopRecognition()
                     else {
-                        automatic = true
-                        matched = false
-                        transcript = ""
+                        automatic = true; matched = false; transcript = ""
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
@@ -279,68 +268,59 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 })
             }
         }
-        Card(Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                Text(if (english) "CHANTS" else "जप", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(18.dp))
-                Button(onClick = onManualCount, modifier = Modifier.fillMaxWidth().height(104.dp), shape = RoundedCornerShape(24.dp)) {
+                Text("${count / 108} ${if (english) "mala" else "माळ"} · ${count % 108}/108", color = Gold, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                val manualInteraction = remember { MutableInteractionSource() }
+                Box(
+                    Modifier.padding(top = 12.dp).size(218.dp)
+                        .background(Brush.linearGradient(listOf(Color(0xFFE9DDF8), Color(0xFFD8C4F0))), CircleShape)
+                        .clickable(interactionSource = manualInteraction, indication = null, onClick = onManualCount),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("+1", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
-                        Text(if (english) "TAP TO COUNT" else "मोजण्यासाठी स्पर्श करा", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Default.SelfImprovement, null, tint = Color(0xFF7855A6), modifier = Modifier.size(42.dp))
+                        Text("+1", color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                        Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
-                Text(if (english) "Manual counting" else "मॅन्युअल मोजणी",
-                    color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 10.dp))
-            }
-        }
-        if (automatic || running) {
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Box {
-                        OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (english) "Choose mantra" else "मंत्र निवडा")
-                        }
-                        DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                            chantPresets.forEach { preset ->
-                                DropdownMenuItem(
-                                    text = { Text(if (english) preset.title else preset.devanagari, maxLines = 2) },
-                                    onClick = {
-                                        target = if (language == "hi") preset.devanagari else preset.latin
-                                        prefs.edit().putString("target_$categoryId", target).apply()
-                                        presetMenu = false
-                                    }
-                                )
-                            }
+                Spacer(Modifier.height(14.dp))
+                Box {
+                    OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (english) "Choose mantra" else "मंत्र निवडा")
+                    }
+                    DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
+                        chantPresets.forEach { preset ->
+                            DropdownMenuItem(text = { Text(if (language == "hi") preset.devanagari else preset.title, maxLines = 2) }, onClick = {
+                                target = if (language == "hi") preset.devanagari else preset.latin
+                                prefs.edit().putString("target_$categoryId", target).apply()
+                                presetMenu = false
+                            })
                         }
                     }
-                    OutlinedTextField(value = target, onValueChange = { target = it }, enabled = !running,
-                        singleLine = true, label = { Text(if (english) "Mantra to recognise" else "ओळखायचा मंत्र") },
-                        modifier = Modifier.fillMaxWidth())
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = language == "hi", onClick = {
-                            language = "hi"
-                            chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari }
-                        }, label = { Text(if (english) "Devanagari" else "देवनागरी") }, enabled = !running)
-                        FilterChip(selected = language == "en", onClick = {
-                            language = "en"
-                            chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin }
-                        }, label = { Text("English") }, enabled = !running)
-                    }
-                    Surface(Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = language == "hi", onClick = {
+                        language = "hi"
+                        chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari }
+                    }, label = { Text(if (english) "Devanagari" else "देवनागरी") }, enabled = !running)
+                    FilterChip(selected = language == "en", onClick = {
+                        language = "en"
+                        chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin }
+                    }, label = { Text("English") }, enabled = !running)
+                }
+                if (automatic) {
+                    Surface(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
                         Column(Modifier.padding(12.dp)) {
-                            Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख",
-                                color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text(transcript.ifBlank {
-                                if (running) (if (english) "Listening…" else "ऐकत आहे…")
-                                else status.ifBlank { if (english) "Voice count is off" else "आवाज मोजणी बंद" }
-                            }, color = if (matched) Color(0xFF16834F) else ink,
-                                fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
+                            Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text(transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
+                                color = if (matched) Color(0xFF16834F) else ink, fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal,
+                                style = MaterialTheme.typography.bodyMedium)
                             if (matched) Text(if (english) "Matched" else "मंत्र जुळला", color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
                         }
                     }
+                    TextButton(onClick = stopRecognition, modifier = Modifier.align(Alignment.End)) { Text(if (english) "Stop" else "थांबवा") }
                 }
             }
         }
