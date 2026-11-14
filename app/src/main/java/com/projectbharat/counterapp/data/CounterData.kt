@@ -40,6 +40,9 @@ interface CounterDao {
     @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date")
     fun todayCount(categoryId: Long, date: String): Flow<Int>
 
+    @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date")
+    suspend fun countNow(categoryId: Long, date: String): Int
+
     @Insert
     suspend fun addLog(log: CounterLog): Long
 
@@ -55,7 +58,7 @@ interface CounterDao {
     @Query("SELECT date, SUM(count) AS total FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate GROUP BY date ORDER BY date")
     fun weeklyTotals(categoryId: Long, fromDate: String, toDate: String): Flow<List<DayTotal>>
 
-    @Query("SELECT AVG(sessionDurationMs) FROM counter_logs WHERE categoryId=:categoryId AND count >= 10 AND sessionDurationMs IS NOT NULL AND date BETWEEN :fromDate AND :toDate")
+    @Query("SELECT AVG(sessionDurationMs) FROM counter_logs WHERE categoryId=:categoryId AND sessionDurationMs IS NOT NULL AND date BETWEEN :fromDate AND :toDate")
     fun averageSession(categoryId: Long, fromDate: String, toDate: String): Flow<Double?>
 }
 
