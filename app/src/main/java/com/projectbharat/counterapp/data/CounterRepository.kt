@@ -92,6 +92,14 @@ class CounterRepository(private val dao: CounterDao) {
         if (session.endedAt == null) dao.finishBabySession(sessionId, minOf(now, session.startedAt + TWO_HOURS_MS), strength)
     }
 
+    suspend fun completeExpiredBabySession(sessionId: Long) {
+        val session = dao.babySession(sessionId) ?: return
+        val completedAt = session.startedAt + TWO_HOURS_MS
+        if (session.endedAt == null && System.currentTimeMillis() >= completedAt) {
+            dao.finishBabySession(sessionId, completedAt, session.strength)
+        }
+    }
+
     companion object {
         const val TWO_HOURS_MS = 2 * 60 * 60 * 1000L
     }
