@@ -145,6 +145,26 @@ interface CounterDao {
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date ORDER BY timestamp DESC, id DESC")
     fun logsForDay(categoryId: Long, date: String): Flow<List<CounterLog>>
 
+    @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note LIKE 'MANTRA:%' ORDER BY note")
+    fun mantraLogsForDay(categoryId: Long, date: String): Flow<List<CounterLog>>
+
+    @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note=:note")
+    fun mantraTodayCount(categoryId: Long, date: String, note: String): Flow<Int>
+
+    @Query("SELECT date, SUM(count) AS total FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate AND note=:note GROUP BY date ORDER BY date")
+    fun mantraWeeklyTotals(categoryId: Long, fromDate: String, toDate: String, note: String): Flow<List<DayTotal>>
+
+    @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note=:note LIMIT 1")
+    suspend fun findMantraLog(categoryId: Long, date: String, note: String): CounterLog?
+
+    @Transaction
+    suspend fun incrementMantraDaily(categoryId: Long, date: String, mantra: String) {
+        val note = "MANTRA:" + mantra
+        val existing = findMantraLog(categoryId, date, note)
+        if (existing == null) addLog(CounterLog(date = date, timestamp = System.currentTimeMillis(), categoryId = categoryId, note = note))
+        else updateLog(existing.copy(count = existing.count + 1))
+    }
+
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY timestamp DESC, id DESC")
     fun logsForRange(categoryId: Long, fromDate: String, toDate: String): Flow<List<CounterLog>>
 
@@ -244,7 +264,7 @@ interface CounterDao {
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class], version = 5, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class], version = 6, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
@@ -277,9 +297,15 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE baby_sessions ADD COLUMN trackingMode TEXT NOT NULL DEFAULT 'TEN_MOVEMENTS'")
             }
         }
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Daily mantra totals reuse one log row per mantra and date.
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_counter_logs_categoryId_date_note ON counter_logs(categoryId, date, note)")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { INSTANCE = it }
         }
     }
 }
