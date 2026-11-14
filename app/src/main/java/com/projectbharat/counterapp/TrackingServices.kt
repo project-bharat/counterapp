@@ -225,7 +225,14 @@ class ChantRecognitionService : Service() {
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
             model = Model(modelDir.absolutePath)
-            val grammar = JSONArray().put(mantra).put("[unk]").toString()
+            val grammarPhrases = linkedSetOf(mantra)
+            if (language == "hi") {
+                grammarPhrases.add(mantra.replace("ॐ", "ओम").replace("नमः", "नम"))
+            }
+            val grammarJson = JSONArray()
+            grammarPhrases.forEach { grammarJson.put(it) }
+            grammarJson.put("[unk]")
+            val grammar = grammarJson.toString()
             recognizer = Recognizer(model, 16000.0f, grammar)
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
@@ -291,7 +298,8 @@ class ChantRecognitionService : Service() {
     private fun countPhrase(transcript: String, phrase: String): Int {
         if (transcript.isBlank() || phrase.isBlank()) return 0
         val normalize = { value: String ->
-            value.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+            value.lowercase(Locale.ROOT).replace("ॐ", "ओम").replace("aum", "om")
+                .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .replace(Regex("\\s+"), " ").trim()
         }
         val text = normalize(transcript)
