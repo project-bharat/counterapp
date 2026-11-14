@@ -355,7 +355,7 @@ private fun BabyMovementScreen(
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
                             Modifier.size(178.dp)
-                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value, translationY = babyBob.dp.toPxSafe())
+                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value, translationY = babyBob * 2f)
                                 .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
                                     tapScope.launch { tapScale.animateTo(1.16f, tween(110)); tapScale.animateTo(1f, tween(260)) }
