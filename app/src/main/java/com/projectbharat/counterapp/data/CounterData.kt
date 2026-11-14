@@ -93,6 +93,9 @@ interface CounterDao {
     @Query("SELECT * FROM baby_detections WHERE sessionId=:sessionId ORDER BY timestamp DESC")
     fun detectionsForSession(sessionId: Long): Flow<List<BabyDetection>>
 
+    @Query("SELECT d.* FROM baby_detections d INNER JOIN baby_sessions s ON s.id=d.sessionId WHERE s.categoryId=:categoryId AND s.date=:date ORDER BY d.timestamp DESC")
+    fun detectionsForDay(categoryId: Long, date: String): Flow<List<BabyDetection>>
+
     @Query("SELECT * FROM baby_detections ORDER BY id")
     suspend fun allBabyDetections(): List<BabyDetection>
 
