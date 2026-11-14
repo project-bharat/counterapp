@@ -156,7 +156,7 @@ class StepTrackingService : Service(), SensorEventListener {
             }
         }
         sendState(true)
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onSensorChanged(event: SensorEvent) {
