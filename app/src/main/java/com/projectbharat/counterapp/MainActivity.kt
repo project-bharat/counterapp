@@ -215,14 +215,14 @@ fun CounterApp(repo: CounterRepository) {
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
     val latestSession by latestFlow.collectAsStateWithLifecycle(null)
-    val detectionFlow = remember(activeSession?.id) { activeSession?.let { vm.detections(it.id) } ?: flowOf(emptyList()) }
-    val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     LaunchedEffect(latestSession?.id, clock) { latestSession?.let { if (it.endedAt == null && clock >= it.startedAt + CounterRepository.TWO_HOURS_MS) vm.completeSession(it.id) } }
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
     val isBaby = selected?.kind == "BABY"
     val activeSession = latestSession?.takeIf { it.endedAt == null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val lockedSession = latestSession?.takeIf { clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val remainingMs = activeSession?.let { (it.startedAt + CounterRepository.TWO_HOURS_MS - clock).coerceAtLeast(0L) } ?: 0L
+    val detectionFlow = remember(activeSession?.id) { activeSession?.let { vm.detections(it.id) } ?: flowOf(emptyList()) }
+    val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
     val page = if (dark) Color(0xFF0D1B2A) else Cream
     val ink = if (dark) Color(0xFFEAF0F6) else Navy
@@ -542,6 +542,43 @@ private fun BabyMovementScreen(
             if (lockedSession != null) {
                 Surface(Modifier.fillMaxWidth().padding(top=9.dp), shape=RoundedCornerShape(15.dp), color=Color(0xFFFFF1D9)) {
                     Text(if (english) "Previous session · " + lockedSession.movementCount + " movements · Available at " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS) else "मागील सत्र · " + lockedSession.movementCount + " हालचाली · पुढील सत्र " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS), modifier=Modifier.padding(12.dp), color=Color(0xFF865B20), style=MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+        if (detections.isNotEmpty()) {
+            val pending = detections.filter { it.status == "PENDING" }
+            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (english) "DETECTED MOMENTS" else "ओळखलेले क्षण", color = ink, fontWeight = FontWeight.SemiBold)
+                            Text((if (english) "Pending: " else "तपासायचे: ") + pending.size +
+                                "  ·  " + (if (english) "Added: " else "नोंदवले: ") + detections.count { it.status == "CONFIRMED" },
+                                color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+                        }
+                        if (pending.isNotEmpty()) {
+                            TextButton(onClick = { onConfirmDetections(pending.map { it.id }) }) {
+                                Text(if (english) "Add all" else "सर्व जोडा")
+                            }
+                        }
+                    }
+                    detections.take(5).forEach { item ->
+                        Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(sessionTime(item.timestamp), color = ink, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            Text(when (item.status) {
+                                "CONFIRMED" -> if (english) "Added" else "जोडले"
+                                "DISMISSED" -> if (english) "Ignored" else "वगळले"
+                                else -> if (english) "Review" else "तपासा"
+                            }, color = if (item.status == "CONFIRMED") Color(0xFF238451) else ink.copy(alpha = .55f),
+                                style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    if (pending.isNotEmpty()) {
+                        TextButton(onClick = { onDismissDetections(pending.map { it.id }) }, modifier = Modifier.align(Alignment.End)) {
+                            Text(if (english) "Dismiss pending" else "प्रलंबित वगळा")
+                        }
+                    }
                 }
             }
         }
