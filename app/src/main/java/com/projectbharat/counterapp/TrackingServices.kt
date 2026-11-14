@@ -239,9 +239,8 @@ class ChantRecognitionService : Service() {
                         sendState(true, if (matches > 0) "Selected mantra matched" else "Listening offline", transcript, matches > 0)
                         if (matches > 0) {
                             scope.launch {
-                                CounterDatabase.get(this@ChantRecognitionService).dao().addLog(
-                                    CounterLog(date = LocalDate.now().toString(), timestamp = now,
-                                        categoryId = categoryId, count = matches, note = "VOSK:" + language + ":" + mantra)
+                                CounterDatabase.get(this@ChantRecognitionService).dao().incrementMantraDaily(
+                                    categoryId, LocalDate.now().toString(), mantra
                                 )
                                 sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
                                     .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
