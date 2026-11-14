@@ -190,7 +190,6 @@ fun CounterApp(repo: CounterRepository) {
     val firstRunPermissions = remember {
         buildList {
             if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
     }
@@ -261,7 +260,7 @@ fun CounterApp(repo: CounterRepository) {
                     showPermissionIntro = false
                 },
                 title = { Text(if (english) "Set up device access" else "फोन परवानग्या सेट करा") },
-                text = { Text(if (english) "Steps: activity, location and notifications. Microphone is requested only for Japa Auto Count." else "पावले: हालचाल, लोकेशन व सूचना. जपासाठी Auto Count सुरू केल्यावरच मायक्रोफोन.") },
+                text = { Text(if (english) "Steps: activity access. Japa: microphone only when Auto Count is enabled." else "पावले: हालचाल परवानगी. जप: Auto Count सुरू केल्यावरच मायक्रोफोन.") },
                 confirmButton = {
                     TextButton(onClick = { firstRunPermissionLauncher.launch(firstRunPermissions) }) {
                         Text(if (english) "Continue" else "पुढे")
@@ -609,9 +608,6 @@ private fun BabyMovementScreen(
                     }
                 }
             }
-            if (lockedSession != null && resumableSession == null) {
-                Text(if (english) "Next session at " + sessionTime(lockedSession.startedAt + CounterRepository.TWO_HOURS_MS) else "पुढील सत्र " + sessionTime(lockedSession.startedAt + CounterRepository.TWO_HOURS_MS), color = ink.copy(alpha=.6f), modifier = Modifier.padding(10.dp))
-            }
         }
         if (detections.isNotEmpty() || autoDetect) {
             Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -660,7 +656,6 @@ private fun BabyMovementScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(periodLabel(session.dayPeriod, english) + " · " + sessionTime(session.startedAt), color = ink, fontWeight = FontWeight.Bold)
                                 val duration = ((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000
-                                Text(duration.toString() + (if (english) " min" else " मिनिटे"), color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
                                 if (session.timeToTenMs != null) Text((if (english) "10 in " else "१० साठी ") + "%.1f min".format(session.timeToTenMs / 60000.0), color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                             Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
