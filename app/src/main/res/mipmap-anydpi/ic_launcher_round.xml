@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/counter_icon"
-    android:gravity="center" />
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:insetLeft="8dp" android:insetTop="8dp" android:insetRight="8dp" android:insetBottom="8dp">
+    <vector android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+        <path android:fillColor="#00000000" android:strokeColor="#E7A33C" android:strokeWidth="5" android:pathData="M54,13 A41,41 0,1 0,54 95 A41,41 0,1 0,54 13"/>
+        <path android:fillColor="#E7A33C" android:pathData="M54,77 C47,71 31,59 31,45 C31,35 38,29 47,29 C53,29 58,33 61,39 C65,32 71,29 78,31 C88,34 91,45 85,56 C79,66 65,74 54,82 Z"/>
+        <path android:fillColor="#102E55" android:pathData="M34,54 L45,54 L51,44 L59,65 L66,52 L75,52 L80,47 L84,47 L84,54 L70,54 L59,72 L51,53 L48,60 L34,60 Z"/>
+    </vector>
+</inset>
