@@ -175,15 +175,15 @@ private data class ChantPreset(val title: String, val devanagari: String, val la
 
 private val chantPresets = listOf(
     ChantPreset("Om Namah Shivaya", "ॐ नमः शिवाय", "Om Namah Shivaya"),
-    ChantPreset("Maha Mrityunjaya Mantra", "ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्", "Om Tryambakam Yajamahe"),
+    ChantPreset("Maha Mrityunjaya Mantra", "ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्। उर्वारुकमिव बन्धनान्मृत्योर्मुक्षीय मामृतात्॥", "Om Tryambakam Yajamahe Sugandhim Pushtivardhanam Urvarukamiva Bandhanan Mrityor Mukshiya Maamritat"),
     ChantPreset("Om Namo Bhagavate Vasudevaya", "ॐ नमो भगवते वासुदेवाय", "Om Namo Bhagavate Vasudevaya"),
     ChantPreset("Hare Krishna Mahamantra", "हरे कृष्ण हरे कृष्ण कृष्ण कृष्ण हरे हरे", "Hare Krishna Hare Krishna Krishna Krishna Hare Hare"),
     ChantPreset("Om Gam Ganapataye Namaha", "ॐ गं गणपतये नमः", "Om Gam Ganapataye Namaha"),
     ChantPreset("Om Dum Durgaye Namaha", "ॐ दुं दुर्गायै नमः", "Om Dum Durgaye Namaha"),
-    ChantPreset("Gayatri Mantra", "ॐ भूर् भुवः स्वः", "Om Bhur Bhuvah Svah"),
+    ChantPreset("Gayatri Mantra", "ॐ भूर्भुवः स्वः तत्सवितुर्वरेण्यं भर्गो देवस्य धीमहि धियो यो नः प्रचोदयात्॥", "Om Bhur Bhuvah Svah Tat Savitur Varenyam Bhargo Devasya Dhimahi Dhiyo Yo Nah Prachodayat"),
     ChantPreset("Shri Ram Jai Ram", "श्री राम जय राम जय जय राम", "Shri Ram Jai Ram Jai Jai Ram"),
     ChantPreset("Om Hanumate Namah", "ॐ हनुमते नमः", "Om Hanumate Namah"),
-    ChantPreset("Guru Mantra", "गुरुर्ब्रह्मा गुरुर्विष्णुः", "Gurur Brahma Gurur Vishnu"),
+    ChantPreset("Guru Mantra", "गुरुर्ब्रह्मा गुरुर्विष्णुः गुरुर्देवो महेश्वरः। गुरुः साक्षात् परब्रह्म तस्मै श्रीगुरवे नमः॥", "Gurur Brahma Gurur Vishnuh Gurur Devo Maheshwarah Guruh Sakshat Parabrahma Tasmai Shri Gurave Namah"),
     ChantPreset("Om (Pranava)", "ॐ", "Om"),
     ChantPreset("Lokah Samastah Sukhino Bhavantu", "लोकाः समस्ताः सुखिनो भवन्तु", "Lokah Samastah Sukhino Bhavantu")
 )
@@ -438,9 +438,12 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                         Text(if (english) "Experimental motion assist" else "प्रायोगिक हालचाल ओळख", color = ink, fontWeight = FontWeight.SemiBold)
                         Text(if (english) "Experimental signal only · false positives and missed movements are possible" else "फक्त प्रायोगिक संकेत · चुकीच्या व सुटलेल्या नोंदी शक्य", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
                     }
-                    androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it }, enabled = linear != null)
                 }
-                if (enabled) {
+                if (linear == null) {
+                    Text(if (english) "This phone does not expose a linear-acceleration sensor." else "या फोनमध्ये linear-acceleration सेन्सर उपलब्ध नाही.", color = Color(0xFFB45353), style = MaterialTheme.typography.labelSmall)
+                }
+                if (enabled && linear != null) {
                     Text((if (english) "Detected: " else "ओळखले: ") + detections, color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(status.ifBlank { if (calibrated) "Baseline ready" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
                     if (candidatePending) {
