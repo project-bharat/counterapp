@@ -353,7 +353,7 @@ class ChantRecognitionService : Service() {
             if (existingBytes > 0L) connection.setRequestProperty("Range", "bytes=$existingBytes-")
             connection.connect()
             val response = connection.responseCode
-            if (response == HttpURLConnection.HTTP_REQUESTED_RANGE_NOT_SATISFIABLE && existingBytes > 0L) {
+            if (response == 416 && existingBytes > 0L) {
                 connection.disconnect()
                 zipFile.delete()
                 downloadAndExtractModel(modelUrl, modelName, target)
