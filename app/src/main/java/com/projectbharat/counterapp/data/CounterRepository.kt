@@ -1,6 +1,7 @@
 package com.projectbharat.counterapp.data
 
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 
 class CounterRepository(private val dao: CounterDao) {
@@ -23,5 +24,65 @@ class CounterRepository(private val dao: CounterDao) {
     fun average(categoryId: Long): Flow<Double?> {
         val today = LocalDate.now()
         return dao.averageSession(categoryId, today.minusDays(6).toString(), today.toString())
+    }
+
+    fun babySessionsForDay(categoryId: Long, date: String = LocalDate.now().toString()) =
+        dao.babySessionsForDay(categoryId, date)
+
+    fun latestBabySession(categoryId: Long): Flow<BabySession?> =
+        dao.latestSessionFlow(categoryId, System.currentTimeMillis() - TWO_HOURS_MS)
+
+    suspend fun startBabySession(categoryId: Long): Long? {
+        val now = System.currentTimeMillis()
+        val previous = dao.latestBabySession(categoryId, now - TWO_HOURS_MS)
+        if (previous != null) return null
+        val time = LocalTime.now()
+        val period = when (time.hour) {
+            in 5..10 -> "MORNING"
+            in 11..15 -> "AFTERNOON"
+            in 16..18 -> "EVENING"
+            else -> "NIGHT"
+        }
+        return dao.insertBabySession(
+            BabySession(
+                categoryId = categoryId,
+                date = LocalDate.now().toString(),
+                startedAt = now,
+                dayPeriod = period
+            )
+        )
+    }
+
+    suspend fun addBabyMovement(categoryId: Long, sessionId: Long, strength: String?) {
+        val now = System.currentTimeMillis()
+        val session = dao.babySession(sessionId) ?: return
+        if (session.endedAt != null || now >= session.startedAt + TWO_HOURS_MS) return
+        dao.addLog(
+            CounterLog(
+                date = session.date,
+                timestamp = now,
+                categoryId = categoryId,
+                strength = strength,
+                sessionId = sessionId
+            )
+        )
+        dao.incrementBabySession(sessionId)
+    }
+
+    suspend fun undoBabyMovement(sessionId: Long) {
+        dao.latestSessionLog(sessionId)?.let {
+            dao.deleteSessionLog(it.id)
+            dao.decrementBabySession(sessionId)
+        }
+    }
+
+    suspend fun finishBabySession(sessionId: Long, strength: String?) {
+        val now = System.currentTimeMillis()
+        val session = dao.babySession(sessionId) ?: return
+        if (session.endedAt == null) dao.finishBabySession(sessionId, minOf(now, session.startedAt + TWO_HOURS_MS), strength)
+    }
+
+    companion object {
+        const val TWO_HOURS_MS = 2 * 60 * 60 * 1000L
     }
 }
