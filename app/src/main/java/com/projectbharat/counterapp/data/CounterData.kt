@@ -28,7 +28,7 @@ data class BabySession(
     val timeToTenMs: Long? = null,
     val strength: String? = null,
     val note: String? = null,
-    @ColumnInfo(defaultValue = "'TEN_MOVEMENTS'") val trackingMode: String = "TEN_MOVEMENTS"
+    @ColumnInfo(defaultValue = "'TEN_MOVEMENTS'") val trackingMode: String = "TWO_HOURS"
 )
 
 @Entity(tableName = "baby_detections", indices = [Index("sessionId"), Index("timestamp")])
@@ -238,7 +238,7 @@ interface CounterDao {
     @Query("DELETE FROM counter_logs WHERE id=:id")
     suspend fun deleteSessionLog(id: Long)
 
-    @Query("UPDATE baby_sessions SET movementCount=CASE WHEN movementCount>0 THEN movementCount-1 ELSE 0 END WHERE id=:sessionId")
+    @Query("UPDATE baby_sessions SET timeToTenMs=CASE WHEN movementCount=10 THEN NULL ELSE timeToTenMs END, movementCount=CASE WHEN movementCount>0 THEN movementCount-1 ELSE 0 END WHERE id=:sessionId")
     suspend fun decrementBabySession(sessionId: Long)
 }
 
