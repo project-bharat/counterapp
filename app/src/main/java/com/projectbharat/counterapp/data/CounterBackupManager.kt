@@ -15,6 +15,7 @@ object CounterBackupManager {
         val categories = dao.allCategories()
         val logs = dao.allLogs()
         val sessions = dao.allBabySessions()
+        val detections = dao.allBabyDetections()
         val root = JSONObject().put("formatVersion", FORMAT_VERSION)
             .put("app", "Daily Counter")
             .put("exportedAt", System.currentTimeMillis())
@@ -31,6 +32,9 @@ object CounterBackupManager {
                     .putNullable("sessionDurationMs", l.sessionDurationMs).putNullable("strength", l.strength)
                     .putNullable("note", l.note).putNullable("sessionId", l.sessionId))
             }
+        })
+        root.put("babyDetections", JSONArray().apply {
+            detections.forEach { d -> put(JSONObject().put("id", d.id).put("sessionId", d.sessionId).put("timestamp", d.timestamp).put("magnitude", d.magnitude.toDouble()).put("status", d.status)) }
         })
         root.put("babySessions", JSONArray().apply {
             sessions.forEach { s ->
@@ -54,6 +58,7 @@ object CounterBackupManager {
         val categoryArray = root.getJSONArray("categories")
         val logArray = root.getJSONArray("logs")
         val sessionArray = root.getJSONArray("babySessions")
+        val detectionArray = root.optJSONArray("babyDetections") ?: JSONArray()
         require(categoryArray.length() > 0) { "Backup contains no categories" }
 
         val categories = (0 until categoryArray.length()).map { i ->
@@ -75,8 +80,13 @@ object CounterBackupManager {
                 o.stringOrNull("strength"), o.stringOrNull("note"))
         }
 
+        val detections = (0 until detectionArray.length()).map { i ->
+            val o = detectionArray.getJSONObject(i)
+            BabyDetection(o.getLong("id"), o.getLong("sessionId"), o.getLong("timestamp"), o.getDouble("magnitude").toFloat(), o.optString("status", "PENDING"))
+        }
+        require(detections.all { d -> sessions.any { it.id == d.sessionId } && d.status in setOf("PENDING", "CONFIRMED", "DISMISSED") }) { "Invalid baby detection records" }
         BackupSnapshotValidator.validate(categories, logs, sessions)
-        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions)
+        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions, detections)
     }
 
     suspend fun exportCsv(context: Context, uri: Uri) {
