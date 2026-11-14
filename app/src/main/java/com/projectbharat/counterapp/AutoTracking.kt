@@ -16,6 +16,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -276,7 +277,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                Text("${count / 108} ${if (english) "mala" else "माळ"} · ${count % 108}/108", color = Gold, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("${count / 108} ${if (english) "mala" else "माळ"} · ${count % 108}/108", color = Color(0xFFB17B28), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 val manualInteraction = remember { MutableInteractionSource() }
                 Box(
                     Modifier.padding(top = 12.dp).size(218.dp)
