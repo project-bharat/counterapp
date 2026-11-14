@@ -264,6 +264,16 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
         registerTrackingReceiver(context, receiver)
         onDispose { context.unregisterReceiver(receiver); ChantRecognitionService.stop(context) }
     }
+    LaunchedEffect(categoryId) {
+        while (true) {
+            val active = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)
+            if (running && !active) {
+                running = false
+                if (automatic) status = if (english) "Recognition interrupted · Resume" else "ओळख थांबली · पुन्हा सुरू करा"
+            }
+            delay(1200)
+        }
+    }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
