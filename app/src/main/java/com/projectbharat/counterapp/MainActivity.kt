@@ -261,7 +261,7 @@ fun CounterApp(repo: CounterRepository) {
                     showPermissionIntro = false
                 },
                 title = { Text(if (english) "Set up device access" else "फोन परवानग्या सेट करा") },
-                text = { Text(if (english) "Activity access and precise location help verify walking steps. Notifications keep an active step session visible. Microphone access is requested only if you turn on Japa Auto Count." else "चालण्याची पावले पडताळण्यासाठी हालचाल व अचूक लोकेशन परवानगी वापरली जाते. पावले मोजताना सूचना दिसण्यासाठी नोटिफिकेशन परवानगी आवश्यक आहे. जपासाठी Auto Count सुरू केल्यावरच मायक्रोफोन परवानगी विचारली जाईल.") },
+                text = { Text(if (english) "Steps: activity, location and notifications. Microphone is requested only for Japa Auto Count." else "पावले: हालचाल, लोकेशन व सूचना. जपासाठी Auto Count सुरू केल्यावरच मायक्रोफोन.") },
                 confirmButton = {
                     TextButton(onClick = { firstRunPermissionLauncher.launch(firstRunPermissions) }) {
                         Text(if (english) "Continue" else "पुढे")
@@ -522,7 +522,6 @@ private fun BabyMovementScreen(
                 Column(Modifier.weight(1f)) {
                     Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(if (english) "2-hour movement session" else "२ तासांचे हालचाल सत्र", color = Gold, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
                 Row(Modifier.padding(end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(if (english) "Auto count" else "स्वयंचलित मोजणी", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
@@ -604,7 +603,6 @@ private fun BabyMovementScreen(
                         }
                     } else if (lockedSession == null) {
                         Spacer(Modifier.height(12.dp))
-                        Text(if (english) "One two-hour session. Time to the first 10 movements is saved as a milestone; counting continues." else "एकच २ तासांचे सत्र. पहिल्या १० हालचालींचा वेळ स्वतंत्र नोंदवला जाईल; मोजणी पुढे सुरू राहील.", color = ink.copy(alpha=.6f), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                         Button(onClick = onStart, modifier = Modifier.height(46.dp)) {
                             Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start session" else "सत्र सुरू करा")
                         }
@@ -662,7 +660,7 @@ private fun BabyMovementScreen(
                             Column(Modifier.weight(1f)) {
                                 Text(periodLabel(session.dayPeriod, english) + " · " + sessionTime(session.startedAt), color = ink, fontWeight = FontWeight.Bold)
                                 val duration = ((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000
-                                Text(duration.toString() + (if (english) " min · 2-hour session" else " मिनिटे · २ तासांचे सत्र"), color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                                Text(duration.toString() + (if (english) " min" else " मिनिटे"), color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
                                 if (session.timeToTenMs != null) Text((if (english) "10 in " else "१० साठी ") + "%.1f min".format(session.timeToTenMs / 60000.0), color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                             Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
@@ -998,7 +996,7 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         val dateLabel = runCatching { LocalDate.parse(session.date).format(DateTimeFormatter.ofPattern("dd MMM")) }.getOrDefault(session.date)
         val end = session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())
         val duration = (end - session.startedAt).coerceAtLeast(0L) / 60000L
-        val methodLabel = if (english) "2-hour session" else "२ तासांचे सत्र"
+        val methodLabel = if (english) "Baby movement" else "बाळाची हालचाल"
         val timeLabel = session.timeToTenMs?.let { "%.1f min".format(it / 60000.0) } ?: (duration.toString() + " min")
         val values = listOf(dateLabel, periodLabel(session.dayPeriod, english), sessionTime(session.startedAt),
             methodLabel, session.movementCount.toString(), timeLabel)
