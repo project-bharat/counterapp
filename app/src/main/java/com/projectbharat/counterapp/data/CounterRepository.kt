@@ -40,7 +40,7 @@ class CounterRepository(private val dao: CounterDao) {
     }
 
     fun latestBabySession(categoryId: Long): Flow<BabySession?> =
-        dao.latestSessionFlow(categoryId, System.currentTimeMillis() - TWO_HOURS_MS)
+        dao.latestSessionFlow(categoryId, 0L)
 
     suspend fun startBabySession(categoryId: Long): Long? {
         val now = System.currentTimeMillis()
