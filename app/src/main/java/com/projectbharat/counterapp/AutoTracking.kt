@@ -127,6 +127,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
     val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
         if (granted) {
+            permissionGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
                 locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
             else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
@@ -182,7 +183,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                     enabled = available,
                     onClick = {
                         if (running) { StepTrackingService.stop(context); running = false }
-                        else if (Build.VERSION.SDK_INT >= 29 && !permissionGranted) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        else if (Build.VERSION.SDK_INT >= 29 && ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
                         else if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else startService()
