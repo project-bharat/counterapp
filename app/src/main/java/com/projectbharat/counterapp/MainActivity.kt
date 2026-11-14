@@ -559,7 +559,7 @@ private fun BabyMovementScreen(
                         Text("%02d:%02d".format(remainingMs / 3600000, (remainingMs / 60000) % 60), color = Gold, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(6.dp).clip(CircleShape), color = Gold, trackColor = tapSurface)
-                    if (activeSession.trackingMode == "TEN_MOVEMENTS" && activeSession.timeToTenMs != null) {
+                    if (activeSession.timeToTenMs != null) {
                         Surface(Modifier.fillMaxWidth().padding(top = 12.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFE8F4EC)) {
                             Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(if (english) "10 MOVEMENTS REACHED" else "१० हालचाली पूर्ण", color = Color(0xFF246B48), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
@@ -840,7 +840,7 @@ private fun MonthlyHistoryScreen(
                                 val end = session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)
                                 val duration = ((end - session.startedAt).coerceAtLeast(0) / 60000)
                                 Text((if (english) "Duration: " else "कालावधी: ") + "${duration} min" + (session.strength?.let { "  •  " + strengthLabel(it, english) } ?: ""), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
-                                session.timeToTenMs?.let { Text((if (english) "Time to 10: " else "१० हालचालींसाठी वेळ: ") + "${it / 60000} min", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall) }
+                                session.timeToTenMs?.let { Text((if (english) "Time to 10: " else "१० हालचालींसाठी वेळ: ") + "%.1f".format(it / 60000.0) + (if (english) " min" else " मिनिटे"), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall) }
                             }
                             Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         }
@@ -987,7 +987,7 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         val dateLabel = runCatching { LocalDate.parse(session.date).format(DateTimeFormatter.ofPattern("dd MMM")) }.getOrDefault(session.date)
         val end = session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())
         val duration = (end - session.startedAt).coerceAtLeast(0L) / 60000L
-        val methodLabel = if (session.trackingMode == "ONE_HOUR") { if (english) "1-hour" else "१ तास" } else { if (english) "To 10" else "१० पर्यंत" }
+        val methodLabel = if (english) "2-hour session" else "२ तासांचे सत्र"
         val timeLabel = session.timeToTenMs?.let { "%.1f min".format(it / 60000.0) } ?: (duration.toString() + " min")
         val values = listOf(dateLabel, periodLabel(session.dayPeriod, english), sessionTime(session.startedAt),
             methodLabel, session.movementCount.toString(), timeLabel)
