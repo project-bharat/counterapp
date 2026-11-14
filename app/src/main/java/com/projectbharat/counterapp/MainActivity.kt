@@ -2,6 +2,10 @@ package com.projectbharat.counterapp
 
 import android.content.Intent
 import android.os.Bundle
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -14,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -57,6 +62,7 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     fun average(id: Long) = repo.average(id)
     fun averageBabyTimeToTen(id: Long) = repo.averageBabyTimeToTen(id)
     fun sessions(id: Long, date: String) = repo.babySessionsForDay(id, date)
+    fun monthSessions(id: Long, month: LocalDate) = repo.babySessionsForMonth(id, month)
     fun latestSession(id: Long) = repo.latestBabySession(id)
     suspend fun startSession(id: Long) = repo.startBabySession(id)
     suspend fun addMovement(id: Long, sessionId: Long) = repo.addBabyMovement(id, sessionId, null)
@@ -96,6 +102,8 @@ fun CounterApp(repo: CounterRepository) {
     var selectedId by remember { mutableLongStateOf(1L) }
     var english by remember { mutableStateOf(false) }
     var weekly by remember { mutableStateOf(false) }
+    var monthlyHistory by remember { mutableStateOf(false) }
+    var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
     var addDialog by remember { mutableStateOf(false) }
     var resetDialog by remember { mutableStateOf(false) }
     var finishDialog by remember { mutableStateOf(false) }
@@ -114,11 +122,13 @@ fun CounterApp(repo: CounterRepository) {
     val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
+    val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
     val average by averageFlow.collectAsStateWithLifecycle(null)
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val latestSession by latestFlow.collectAsStateWithLifecycle(null)
+    val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
     val isBaby = selected?.kind == "BABY"
     val activeSession = latestSession?.takeIf { it.endedAt == null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val lockedSession = latestSession?.takeIf { clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
@@ -137,7 +147,8 @@ fun CounterApp(repo: CounterRepository) {
                     Text(if (english) "Daily Counter" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ink)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { english = !english }) { Icon(Icons.Default.Language, contentDescription = "Language") }
-                        IconButton(onClick = { weekly = !weekly }) { Icon(Icons.Default.BarChart, contentDescription = "Weekly report") }
+                        IconButton(onClick = { weekly = !weekly; monthlyHistory = false }) { Icon(Icons.Default.BarChart, contentDescription = "Weekly report") }
+                        IconButton(onClick = { monthlyHistory = !monthlyHistory; weekly = false }) { Icon(Icons.Default.History, contentDescription = "Monthly history") }
                     }
                 }
                 if (categories.isNotEmpty()) {
@@ -153,7 +164,14 @@ fun CounterApp(repo: CounterRepository) {
                     }
                 }
 
-                if (weekly) {
+                if (monthlyHistory && isBaby && selected != null) {
+                    MonthlyHistoryScreen(
+                        english = english, ink = ink, month = historyMonth, sessions = monthSessions,
+                        onPrevious = { historyMonth = historyMonth.minusMonths(1) },
+                        onNext = { if (historyMonth.isBefore(LocalDate.now().withDayOfMonth(1))) historyMonth = historyMonth.plusMonths(1) },
+                        onExportPdf = { exportMonthlyPdf(context, selected.titleMr, selected.titleEn, historyMonth, monthSessions, english) }
+                    )
+                } else if (weekly) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(if (english) "Last 7 days" else "मागील ७ दिवस", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(18.dp))
@@ -358,4 +376,122 @@ private fun WeeklyChart(values: List<Int>, modifier: Modifier = Modifier) {
         }
         drawLine(Navy.copy(alpha = .25f), androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 2f, cap = StrokeCap.Round)
     }
+}
+
+
+@Composable
+private fun MonthlyHistoryScreen(
+    english: Boolean,
+    ink: Color,
+    month: LocalDate,
+    sessions: List<BabySession>,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onExportPdf: () -> Unit
+) {
+    val totals = sessions.groupBy { it.date }.mapValues { entry -> entry.value.sumOf { it.movementCount } }
+    val daysInMonth = month.lengthOfMonth()
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onPrevious) { Text("‹") }
+            Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), color = ink, style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = onNext, enabled = month.isBefore(LocalDate.now().withDayOfMonth(1))) { Text("›") }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            HistoryMetric(if (english) "Sessions" else "सत्रे", sessions.size.toString(), ink)
+            HistoryMetric(if (english) "Movements" else "हालचाली", sessions.sumOf { it.movementCount }.toString(), ink)
+            HistoryMetric(if (english) "Avg/session" else "प्रति सत्र सरासरी", if (sessions.isEmpty()) "—" else "%.1f".format(sessions.map { it.movementCount }.average()), ink)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(if (english) "Daily movement pattern" else "दैनिक हालचालींचा आलेख", color = ink, style = MaterialTheme.typography.titleSmall)
+        MonthlyChart((1..daysInMonth).map { day -> totals[month.withDayOfMonth(day).toString()] ?: 0 }, Modifier.fillMaxWidth().height(112.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Button(onClick = onExportPdf, enabled = sessions.isNotEmpty()) { Text(if (english) "Share doctor PDF" else "डॉक्टरांसाठी PDF शेअर करा") }
+        }
+        Text(if (english) "Individual sessions" else "स्वतंत्र सत्रांची नोंद", color = ink, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 6.dp))
+        if (sessions.isEmpty()) {
+            Text(if (english) "No sessions recorded this month" else "या महिन्यात सत्रे नोंदलेली नाहीत", color = ink.copy(alpha = .65f))
+        } else {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(sessions, key = { it.id }) { session ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("${session.date}  •  ${periodLabel(session.dayPeriod, english)}  •  ${sessionTime(session.startedAt)}", color = ink, fontWeight = FontWeight.Medium)
+                                val end = session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)
+                                val duration = ((end - session.startedAt).coerceAtLeast(0) / 60000)
+                                Text((if (english) "Duration: " else "कालावधी: ") + "${duration} min" + (session.strength?.let { "  •  " + strengthLabel(it, english) } ?: ""), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+                                session.timeToTenMs?.let { Text((if (english) "Time to 10: " else "१० हालचालींसाठी वेळ: ") + "${it / 60000} min", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall) }
+                            }
+                            Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryMetric(label: String, value: String, ink: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(label, color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+private fun strengthLabel(value: String, english: Boolean) = when (value) {
+    "LIGHT" -> if (english) "Light" else "हलकी"
+    "MEDIUM" -> if (english) "Medium" else "मध्यम"
+    "STRONG" -> if (english) "Strong" else "जोरात"
+    else -> value
+}
+
+@Composable
+private fun MonthlyChart(values: List<Int>, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val max = (values.maxOrNull() ?: 0).coerceAtLeast(1).toFloat()
+        val gap = size.width / (values.size * 1.45f)
+        val width = gap * .62f
+        values.forEachIndexed { index, value ->
+            val height = (size.height * .88f * value / max).coerceAtLeast(if (value > 0) 2f else 0f)
+            drawRoundRect(Gold, androidx.compose.ui.geometry.Offset(index * gap + gap * .18f, size.height - height), androidx.compose.ui.geometry.Size(width, height), androidx.compose.ui.geometry.CornerRadius(4f))
+        }
+        drawLine(Navy.copy(alpha = .25f), androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 1.5f)
+    }
+}
+
+private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, titleEn: String, month: LocalDate, sessions: List<BabySession>, english: Boolean) {
+    val pdf = PdfDocument()
+    val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+    val page = pdf.startPage(pageInfo)
+    val canvas = page.canvas
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 12f; color = android.graphics.Color.DKGRAY }
+    val heading = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 20f; typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD); color = android.graphics.Color.rgb(16, 46, 85) }
+    var y = 48f
+    canvas.drawText(if (english) "Baby Movement Monthly Report" else "बाळाच्या हालचालींचा मासिक अहवाल", 36f, y, heading); y += 28f
+    canvas.drawText(if (english) "Category: $titleEn" else "प्रकार: $titleMr", 36f, y, paint); y += 20f
+    canvas.drawText("Month: ${month.format(DateTimeFormatter.ofPattern("MMMM yyyy"))}", 36f, y, paint); y += 22f
+    canvas.drawText("Sessions: ${sessions.size}    Movements: ${sessions.sumOf { it.movementCount }}", 36f, y, paint); y += 28f
+    canvas.drawText(if (english) "Date / Period / Start / Count / Duration / Strength" else "दिनांक / वेळ / सुरुवात / संख्या / कालावधी / ताकद", 36f, y, heading.apply { textSize = 11f }); y += 20f
+    sessions.sortedBy { it.startedAt }.forEach { session ->
+        if (y > 800f) return@forEach
+        val end = session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)
+        val duration = ((end - session.startedAt).coerceAtLeast(0) / 60000)
+        val row = "${session.date} | ${periodLabel(session.dayPeriod, true)} | ${sessionTime(session.startedAt)} | ${session.movementCount} | ${duration}m | ${session.strength ?: "—"}"
+        canvas.drawText(row.take(100), 36f, y, paint); y += 17f
+    }
+    y += 20f
+    canvas.drawText(if (english) "This report records logged sessions; it is not a medical assessment." else "हा अहवाल नोंदवलेल्या सत्रांचा सारांश आहे; वैद्यकीय मूल्यांकन नाही.", 36f, y, paint)
+    pdf.finishPage(page)
+    val file = File(context.cacheDir, "baby-movement-${month.year}-${month.monthValue}.pdf")
+    file.outputStream().use { pdf.writeTo(it) }
+    pdf.close()
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val share = Intent(Intent.ACTION_SEND).apply {
+        type = "application/pdf"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(share, if (english) "Share doctor report" else "अहवाल शेअर करा"))
 }
