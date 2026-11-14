@@ -57,7 +57,7 @@ jobs:
           sdkmanager --list_installed
 
       - name: Build debug APK
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
       - name: Verify APK exists
         run: |
