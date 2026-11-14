@@ -18,6 +18,8 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -69,6 +71,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.projectbharat.counterapp.data.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -114,6 +118,8 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun finishSession(sessionId: Long, strength: String?) = repo.finishBabySession(sessionId, strength)
     suspend fun completeSession(sessionId: Long) = repo.completeExpiredBabySession(sessionId)
     suspend fun addCategory(mr: String, en: String) = repo.addCategory(mr, en)
+    suspend fun updateCategory(category: CounterCategory) = repo.updateCategory(category)
+    suspend fun archiveCategory(id: Long) = repo.archiveCategory(id)
     suspend fun add(id: Long, strength: String?, duration: Long? = null) = repo.add(id, strength, duration)
     suspend fun addCount(id: Long, amount: Int) = repo.addCount(id, amount)
     suspend fun undo(id: Long) = repo.undo(id)
@@ -152,6 +158,10 @@ fun CounterApp(repo: CounterRepository) {
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
     var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
+    var categoryScreen by remember { mutableStateOf(false) }
+    var backupScreen by remember { mutableStateOf(false) }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     var resetDialog by remember { mutableStateOf(false) }
     var finishDialog by remember { mutableStateOf(false) }
@@ -160,6 +170,25 @@ fun CounterApp(repo: CounterRepository) {
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val jsonExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) scope.launch {
+            backupMessage = null
+            runCatching { withContext(Dispatchers.IO) { CounterBackupManager.exportJson(context, uri) } }
+                .onSuccess { backupMessage = if (english) "Backup saved successfully." else "बॅकअप यशस्वीपणे जतन झाला." }
+                .onFailure { backupMessage = (if (english) "Backup failed: " else "बॅकअप अयशस्वी: ") + (it.message ?: "Unknown error") }
+        }
+    }
+    val csvExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) scope.launch {
+            backupMessage = null
+            runCatching { withContext(Dispatchers.IO) { CounterBackupManager.exportCsv(context, uri) } }
+                .onSuccess { backupMessage = if (english) "CSV exported successfully." else "CSV निर्यात यशस्वी." }
+                .onFailure { backupMessage = (if (english) "CSV export failed: " else "CSV निर्यात अयशस्वी: ") + (it.message ?: "Unknown error") }
+        }
+    }
+    val jsonImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        pendingRestoreUri = uri
+    }
     val haptic = LocalHapticFeedback.current
     val clickTone = remember { ToneGenerator(android.media.AudioManager.STREAM_SYSTEM, 35) }
     DisposableEffect(clickTone) { onDispose { clickTone.release() } }
@@ -213,6 +242,8 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Add, null) }, label = { Text(if (english) "Add counter" else "नवीन मोजणी") }, selected = false, onClick = { addDialog = true; scope.launch { drawerState.close() } })
                         Divider(Modifier.padding(vertical = 8.dp))
                         NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
@@ -245,7 +276,17 @@ fun CounterApp(repo: CounterRepository) {
                 Spacer(Modifier.height(12.dp))
 
                 Box(Modifier.weight(1f)) {
-                if (remindersScreen) {
+                if (backupScreen) {
+                    BackupSettingsScreen(english = english, ink = ink, message = backupMessage,
+                        onExportBackup = { jsonExportLauncher.launch("daily-counter-backup.json") },
+                        onImportBackup = { jsonImportLauncher.launch(arrayOf("application/json", "text/*")) },
+                        onExportCsv = { csvExportLauncher.launch("daily-counter-history.csv") })
+                } else if (categoryScreen) {
+                    CategoryManagementScreen(categories = categories, english = english, ink = ink,
+                        onAdd = { mr, en -> scope.launch { vm.addCategory(mr, en) } },
+                        onUpdate = { item -> scope.launch { vm.updateCategory(item) } },
+                        onArchive = { item -> scope.launch { runCatching { vm.archiveCategory(item.id) }.onFailure { backupMessage = it.message } } })
+                } else if (remindersScreen) {
                     ReminderSettingsScreen(english = english, ink = ink)
                 } else
                 if (monthlyHistory && isBaby && selected != null) {
@@ -329,6 +370,25 @@ fun CounterApp(repo: CounterRepository) {
         }
     }
 
+    pendingRestoreUri?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingRestoreUri = null },
+            title = { Text(if (english) "Replace app data?" else "सध्याचा डेटा बदलायचा?") },
+            text = { Text(if (english) "Restoring replaces all counters, history and baby movement sessions on this device. Export a backup first if you need to keep the current data." else "बॅकअप पुनर्संचयित केल्याने या उपकरणावरील सर्व मोजण्या, इतिहास आणि बाळाच्या हालचालींची सत्रे बदलली जातील. सध्याचा डेटा हवा असल्यास आधी बॅकअप घ्या.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRestoreUri = null
+                    scope.launch {
+                        backupMessage = null
+                        runCatching { withContext(Dispatchers.IO) { CounterBackupManager.restoreJson(context, uri) } }
+                            .onSuccess { backupMessage = if (english) "Backup restored successfully." else "बॅकअप यशस्वीपणे पुनर्संचयित झाला." }
+                            .onFailure { backupMessage = (if (english) "Restore failed: " else "पुनर्संचयित करणे अयशस्वी: ") + (it.message ?: "Unknown error") }
+                    }
+                }) { Text(if (english) "Replace data" else "डेटा बदला") }
+            },
+            dismissButton = { TextButton(onClick = { pendingRestoreUri = null }) { Text(if (english) "Cancel" else "रद्द") } }
+        )
+    }
     if (addDialog) {
         var mr by remember { mutableStateOf("") }
         var en by remember { mutableStateOf("") }
