@@ -78,6 +78,12 @@ interface CounterDao {
     @Query("UPDATE categories SET enabled = 0 WHERE id = :id")
     suspend fun disableCategory(id: Long)
 
+    @Query("SELECT * FROM categories WHERE enabled = 0 ORDER BY id")
+    fun archivedCategories(): Flow<List<CounterCategory>>
+
+    @Query("UPDATE categories SET enabled = 1 WHERE id = :id")
+    suspend fun enableCategory(id: Long)
+
     @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date")
     fun todayCount(categoryId: Long, date: String): Flow<Int>
 
@@ -215,6 +221,9 @@ interface CounterDao {
 
     @Query("UPDATE baby_sessions SET endedAt=:endedAt, strength=:strength WHERE id=:sessionId")
     suspend fun finishBabySession(sessionId: Long, endedAt: Long, strength: String?)
+
+    @Query("UPDATE baby_sessions SET endedAt=NULL, strength=NULL WHERE id=:sessionId AND endedAt IS NOT NULL")
+    suspend fun resumeBabySession(sessionId: Long)
 
     @Query("SELECT * FROM baby_sessions WHERE id=:id LIMIT 1")
     suspend fun babySession(id: Long): BabySession?

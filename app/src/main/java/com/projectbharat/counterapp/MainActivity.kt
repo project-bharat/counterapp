@@ -105,6 +105,7 @@ class MainActivity : ComponentActivity() {
 
 class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     val categories = repo.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val archivedCategories = repo.archivedCategories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun count(id: Long) = repo.today(id)
     fun logsForDay(id: Long, date: LocalDate) = repo.logsForDay(id, date)
     suspend fun updateLog(log: CounterLog) = repo.updateLog(log)
@@ -124,10 +125,12 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun addMovement(id: Long, sessionId: Long) = repo.addBabyMovement(id, sessionId, null)
     suspend fun undoMovement(sessionId: Long) = repo.undoBabyMovement(sessionId)
     suspend fun finishSession(sessionId: Long, strength: String?) = repo.finishBabySession(sessionId, strength)
+    suspend fun resumeSession(sessionId: Long) = repo.resumeBabySession(sessionId)
     suspend fun completeSession(sessionId: Long) = repo.completeExpiredBabySession(sessionId)
     suspend fun addCategory(mr: String, en: String) = repo.addCategory(mr, en)
     suspend fun updateCategory(category: CounterCategory) = repo.updateCategory(category)
     suspend fun archiveCategory(id: Long) = repo.archiveCategory(id)
+    suspend fun restoreCategory(id: Long) = repo.restoreCategory(id)
     suspend fun add(id: Long, strength: String?, duration: Long? = null) = repo.add(id, strength, duration)
     suspend fun addCount(id: Long, amount: Int) = repo.addCount(id, amount)
     suspend fun undo(id: Long) = repo.undo(id)
@@ -159,6 +162,7 @@ private fun periodLabel(period: String, english: Boolean): String = when (period
 fun CounterApp(repo: CounterRepository) {
     val vm: CounterViewModel = viewModel(factory = CounterViewModel.Factory(repo))
     val categories by vm.categories.collectAsStateWithLifecycle()
+    val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
     var selectedId by remember { mutableLongStateOf(1L) }
     var english by remember { mutableStateOf(false) }
     var weekly by remember { mutableStateOf(false) }
@@ -221,6 +225,7 @@ fun CounterApp(repo: CounterRepository) {
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
     val isBaby = selected?.kind == "BABY"
     val activeSession = latestSession?.takeIf { it.endedAt == null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
+    val resumableSession = latestSession?.takeIf { it.endedAt != null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val lockedSession = latestSession?.takeIf { clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val remainingMs = activeSession?.let { (it.startedAt + CounterRepository.TWO_HOURS_MS - clock).coerceAtLeast(0L) } ?: 0L
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
@@ -292,10 +297,11 @@ fun CounterApp(repo: CounterRepository) {
                         onImportBackup = { jsonImportLauncher.launch(arrayOf("application/json", "text/*")) },
                         onExportCsv = { csvExportLauncher.launch("daily-counter-history.csv") })
                 } else if (categoryScreen) {
-                    CategoryManagementScreen(categories = categories, english = english, ink = ink,
+                    CategoryManagementScreen(categories = categories, archivedCategories = archivedCategories, english = english, ink = ink,
                         onAdd = { mr, en -> scope.launch { vm.addCategory(mr, en) } },
                         onUpdate = { item -> scope.launch { vm.updateCategory(item) } },
-                        onArchive = { item -> scope.launch { runCatching { vm.archiveCategory(item.id) }.onFailure { backupMessage = it.message } } })
+                        onArchive = { item -> scope.launch { runCatching { vm.archiveCategory(item.id) }.onFailure { backupMessage = it.message } } },
+                        onRestore = { item -> scope.launch { vm.restoreCategory(item.id) } })
                 } else if (remindersScreen) {
                     ReminderSettingsScreen(english = english, ink = ink)
                 } else
@@ -341,6 +347,7 @@ fun CounterApp(repo: CounterRepository) {
                         tapSurface = tapSurface,
                         latestSession = latestSession,
                         activeSession = activeSession,
+                        resumableSession = resumableSession,
                         lockedSession = lockedSession,
                         remainingMs = remainingMs,
                         sessions = sessions,
@@ -349,6 +356,7 @@ fun CounterApp(repo: CounterRepository) {
                         onPreviousDay = { historyDate = historyDate.minusDays(1) },
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
                         onStart = { scope.launch { vm.startSession(selected.id) } },
+                        onResume = { sessionId -> scope.launch { vm.resumeSession(sessionId) } },
                         onTap = { sessionId ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
@@ -438,8 +446,8 @@ fun CounterApp(repo: CounterRepository) {
 @Composable
 private fun BabyMovementScreen(
     english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
-    lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, historyDate: LocalDate,
-    onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onTap: (Long) -> Unit,
+    resumableSession: BabySession?, lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, historyDate: LocalDate,
+    onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onResume: (Long) -> Unit, onTap: (Long) -> Unit,
     onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long, Long, Float) -> Unit,
     onConfirmDetections: (List<Long>) -> Unit, onDismissDetections: (List<Long>) -> Unit
 ) {
@@ -516,14 +524,20 @@ private fun BabyMovementScreen(
         } else {
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Favorite, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
+                    Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
                     Text(if (english) "Baby movement" else "बाळाची हालचाल", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(54.dp)) {
-                        Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start 2-hour session" else "२ तासांचे सत्र सुरू करा")
+                    if (resumableSession != null) {
+                        Button(onClick = { onResume(resumableSession.id) }, modifier = Modifier.height(46.dp)) {
+                            Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Resume session" else "सत्र पुन्हा सुरू करा")
+                        }
+                    } else if (lockedSession == null) {
+                        Button(onClick = onStart, modifier = Modifier.height(46.dp)) {
+                            Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start session" else "सत्र सुरू करा")
+                        }
                     }
                 }
             }
-            if (lockedSession != null) {
+            if (lockedSession != null && resumableSession == null) {
                 Text(if (english) "Next session at " + sessionTime(lockedSession.startedAt + CounterRepository.TWO_HOURS_MS) else "पुढील सत्र " + sessionTime(lockedSession.startedAt + CounterRepository.TWO_HOURS_MS), color = ink.copy(alpha=.6f), modifier = Modifier.padding(10.dp))
             }
         }

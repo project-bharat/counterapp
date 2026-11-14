@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 class CounterRepository(private val dao: CounterDao) {
     val categories = dao.categories()
+    val archivedCategories = dao.archivedCategories()
     suspend fun addCategory(mr: String, en: String) = dao.addCategory(CounterCategory(titleMr = mr.trim(), titleEn = en.trim()))
     suspend fun updateCategory(category: CounterCategory) {
         require(category.titleMr.isNotBlank() && category.titleEn.isNotBlank()) { "Both category names are required" }
@@ -15,6 +16,7 @@ class CounterRepository(private val dao: CounterDao) {
         require(dao.allCategories().count { it.enabled } > 1) { "Keep at least one active counter" }
         dao.disableCategory(id)
     }
+    suspend fun restoreCategory(id: Long) = dao.enableCategory(id)
     fun today(categoryId: Long): Flow<Int> = dao.todayCount(categoryId, LocalDate.now().toString())
     fun logsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.logsForDay(categoryId, date.toString())
     fun logsForRange(categoryId: Long, from: LocalDate, to: LocalDate): Flow<List<CounterLog>> = dao.logsForRange(categoryId, from.toString(), to.toString())
@@ -127,6 +129,12 @@ class CounterRepository(private val dao: CounterDao) {
         val now = System.currentTimeMillis()
         val session = dao.babySession(sessionId) ?: return
         if (session.endedAt == null) dao.finishBabySession(sessionId, minOf(now, session.startedAt + TWO_HOURS_MS), strength)
+    }
+
+    suspend fun resumeBabySession(sessionId: Long) {
+        val now = System.currentTimeMillis()
+        val session = dao.babySession(sessionId) ?: return
+        if (session.endedAt != null && now < session.startedAt + TWO_HOURS_MS) dao.resumeBabySession(sessionId)
     }
 
     suspend fun completeExpiredBabySession(sessionId: Long) {

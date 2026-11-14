@@ -18,11 +18,13 @@ import com.projectbharat.counterapp.data.CounterCategory
 @Composable
 fun CategoryManagementScreen(
     categories: List<CounterCategory>,
+    archivedCategories: List<CounterCategory>,
     english: Boolean,
     ink: Color,
     onAdd: (String, String) -> Unit,
     onUpdate: (CounterCategory) -> Unit,
-    onArchive: (CounterCategory) -> Unit
+    onArchive: (CounterCategory) -> Unit,
+    onRestore: (CounterCategory) -> Unit
 ) {
     var editing by remember { mutableStateOf<CounterCategory?>(null) }
     var archiving by remember { mutableStateOf<CounterCategory?>(null) }
@@ -44,6 +46,22 @@ fun CategoryManagementScreen(
                         }
                         IconButton(onClick = { editing = category }) { Icon(Icons.Default.Edit, contentDescription = if (english) "Edit" else "बदला", tint = ink) }
                         IconButton(onClick = { archiving = category }) { Icon(Icons.Default.Archive, contentDescription = if (english) "Archive" else "संग्रहित करा", tint = Color(0xFFB27632)) }
+                    }
+                }
+            }
+            if (archivedCategories.isNotEmpty()) {
+                item {
+                    Text(if (english) "ARCHIVED" else "संग्रहित", color = ink, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
+                }
+                items(archivedCategories, key = { "archived-${it.id}" }) { category ->
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(category.titleMr, color = ink, fontWeight = FontWeight.SemiBold)
+                                Text(category.titleEn, color = ink.copy(alpha = .62f), style = MaterialTheme.typography.bodySmall)
+                            }
+                            TextButton(onClick = { onRestore(category) }) { Text(if (english) "Restore" else "पुन्हा वापरा") }
+                        }
                     }
                 }
             }
