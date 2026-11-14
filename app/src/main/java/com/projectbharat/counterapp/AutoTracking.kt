@@ -336,7 +336,6 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
     val gyro = remember { manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
     var enabled by remember(activeSessionId) { mutableStateOf(false) }
     var calibrated by remember { mutableStateOf(false) }
-    var detections by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(enabled, activeSessionId, linear, gyro, lifecycleOwner) {
@@ -377,7 +376,6 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                     val now = System.currentTimeMillis()
                     if (spike && quietRotation && now - lastDetection > 2200L) {
                         lastDetection = now
-                        detections++
                         onDetected(now, magnitude)
                         status = if (english) "Moment saved for review" else "संकेत तपासणीसाठी जतन केला"
                     } else if (!spike) {
@@ -429,9 +427,8 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                     Text(if (english) "This phone does not expose a linear-acceleration sensor." else "या फोनमध्ये linear-acceleration सेन्सर उपलब्ध नाही.", color = Color(0xFFB45353), style = MaterialTheme.typography.labelSmall)
                 }
                 if (enabled && linear != null) {
-                    Text((if (english) "Detected: " else "ओळखले: ") + detections, color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(status.ifBlank { if (calibrated) "Baseline ready" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
-                    Text(if (english) "A phone accelerometer cannot reliably separate fetal movement from breathing, speech or maternal motion. Manual logging remains the primary record; this is not a medical monitor." else "फोनचा सेन्सर बाळाची हालचाल आणि श्वास, बोलणे किंवा आईची हालचाल विश्वासार्हपणे वेगळी ओळखू शकत नाही. मॅन्युअल नोंद मुख्य आहे; हे वैद्यकीय उपकरण नाही.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
+                    Text(status.ifBlank { if (calibrated) "Ready" else if (english) "Calibrating…" else "कॅलिब्रेट होत आहे…" },
+                        color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
