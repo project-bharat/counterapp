@@ -66,8 +66,7 @@ class CounterRepository(private val dao: CounterDao) {
     fun babyDetections(sessionId: Long): Flow<List<BabyDetection>> = dao.detectionsForSession(sessionId)
     fun babyDetectionsForDay(categoryId: Long, date: String): Flow<List<BabyDetection>> = dao.detectionsForDay(categoryId, date)
 
-    private fun sessionLimit(session: BabySession): Long =
-        if (session.trackingMode == "ONE_HOUR") ONE_HOUR_MS else TWO_HOURS_MS
+    private fun sessionLimit(session: BabySession): Long = TWO_HOURS_MS
 
     suspend fun recordBabyDetection(sessionId: Long, timestamp: Long, magnitude: Float) {
         val session = dao.babySession(sessionId) ?: return
@@ -81,18 +80,13 @@ class CounterRepository(private val dao: CounterDao) {
     suspend fun confirmBabyDetection(id: Long) {
         val detection = dao.pendingDetection(id) ?: return
         val session = dao.babySession(detection.sessionId) ?: return
-        if (session.trackingMode == "TEN_MOVEMENTS" && session.movementCount >= 10) return
         val sessionEnd = minOf(session.endedAt ?: (session.startedAt + sessionLimit(session)), session.startedAt + sessionLimit(session))
         if (detection.timestamp < session.startedAt || detection.timestamp > sessionEnd) return
         dao.confirmDetection(id, CounterLog(date = session.date, timestamp = detection.timestamp, categoryId = session.categoryId), detection.timestamp - session.startedAt)
-        val refreshed = dao.babySession(session.id) ?: return
-        if (refreshed.trackingMode == "TEN_MOVEMENTS" && refreshed.movementCount >= 10 && refreshed.endedAt == null) {
-            dao.finishBabySession(session.id, detection.timestamp, null)
-        }
+        // Reaching ten movements records a milestone; the two-hour session continues.
     }
 
-    suspend fun startBabySession(categoryId: Long, trackingMode: String = "TEN_MOVEMENTS"): Long? {
-        require(trackingMode in setOf("TEN_MOVEMENTS", "ONE_HOUR")) { "Invalid baby movement tracking mode" }
+    suspend fun startBabySession(categoryId: Long): Long? {
         val now = System.currentTimeMillis()
         val previous = dao.latestBabySession(categoryId, now - TWO_HOURS_MS)
         if (previous != null && now < previous.startedAt + sessionLimit(previous)) return null
@@ -109,7 +103,7 @@ class CounterRepository(private val dao: CounterDao) {
                 date = LocalDate.now().toString(),
                 startedAt = now,
                 dayPeriod = period,
-                trackingMode = trackingMode
+                trackingMode = "TWO_HOURS"
             )
         )
     }
@@ -129,9 +123,7 @@ class CounterRepository(private val dao: CounterDao) {
             sessionId,
             now - session.startedAt
         )
-        if (session.trackingMode == "TEN_MOVEMENTS" && session.movementCount + 1 >= 10) {
-            dao.finishBabySession(sessionId, now, null)
-        }
+        // Do not end the session at ten movements; keep recording until two hours.
     }
 
     suspend fun undoBabyMovement(sessionId: Long) {
@@ -147,7 +139,7 @@ class CounterRepository(private val dao: CounterDao) {
     suspend fun resumeBabySession(sessionId: Long) {
         val now = System.currentTimeMillis()
         val session = dao.babySession(sessionId) ?: return
-        if (session.endedAt != null && !(session.trackingMode == "TEN_MOVEMENTS" && session.movementCount >= 10) && now < session.startedAt + sessionLimit(session)) dao.resumeBabySession(sessionId)
+        if (session.endedAt != null && now < session.startedAt + sessionLimit(session)) dao.resumeBabySession(sessionId)
     }
 
     suspend fun completeExpiredBabySession(sessionId: Long) {
@@ -159,7 +151,6 @@ class CounterRepository(private val dao: CounterDao) {
     }
 
     companion object {
-        const val ONE_HOUR_MS = 60 * 60 * 1000L
         const val TWO_HOURS_MS = 2 * 60 * 60 * 1000L
     }
 }
