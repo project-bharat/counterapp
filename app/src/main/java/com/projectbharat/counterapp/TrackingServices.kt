@@ -186,6 +186,7 @@ class StepTrackingService : Service(), SensorEventListener {
 class ChantRecognitionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var recording = false
+    @Volatile private var stopRequested = false
     private var audioRecord: AudioRecord? = null
     private var recognizer: Recognizer? = null
     private var model: Model? = null
@@ -196,6 +197,7 @@ class ChantRecognitionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
+        stopRequested = false
         categoryId = intent?.getLongExtra(StepTrackingService.EXTRA_CATEGORY_ID, -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
         language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
@@ -221,6 +223,7 @@ class ChantRecognitionService : Service() {
             else "https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip"
             val modelDir = File(filesDir, modelName)
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
+            if (stopRequested || Thread.currentThread().isInterrupted) return
             model = Model(modelDir.absolutePath)
             val grammar = JSONArray().put(mantra).put("[unk]").toString()
             recognizer = Recognizer(model, 16000.0f, grammar)
@@ -230,12 +233,14 @@ class ChantRecognitionService : Service() {
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 8192))
             if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); throw IllegalStateException("Microphone unavailable") }
             audioRecord = record
+            if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
             record.startRecording()
             recording = true
             sendState(true, "Listening offline")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             while (recording && !Thread.currentThread().isInterrupted) {
                 val read = record.read(buffer, 0, buffer.size)
+                if (read < 0) throw IllegalStateException("Microphone read failed: " + read)
                 if (read > 0 && recognizer?.acceptWaveForm(buffer, read) == true) {
                     val transcript = JSONObject(recognizer?.result ?: "{}").optString("text").trim()
                     val matches = countPhrase(transcript, mantra)
@@ -306,6 +311,7 @@ class ChantRecognitionService : Service() {
     }
 
     private fun stopRecognition() {
+        stopRequested = true
         recording = false
         try { audioRecord?.stop() } catch (_: Exception) { }
         worker?.interrupt()
