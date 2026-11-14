@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,11 +105,17 @@ fun CounterApp(repo: CounterRepository) {
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
     val average by averageFlow.collectAsStateWithLifecycle(null)
     val isBaby = selected?.kind == "BABY"
-    MaterialTheme(colorScheme = lightColorScheme(primary = Navy, secondary = Gold, background = Cream, surface = Color.White)) {
-        Surface(Modifier.fillMaxSize(), color = Cream) {
+    val dark = isSystemInDarkTheme()
+    val page = if (dark) Color(0xFF0D1B2A) else Cream
+    val ink = if (dark) Color(0xFFEAF0F6) else Navy
+    val tapSurface = if (dark) Color(0xFF23466A) else SoftBlue
+    val scheme = if (dark) darkColorScheme(primary = Color(0xFF9FC7ED), secondary = Gold, background = page, surface = Color(0xFF172A3E))
+                 else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
+    MaterialTheme(colorScheme = scheme) {
+        Surface(Modifier.fillMaxSize(), color = page) {
             Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (english) "Daily Counter" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Navy)
+                    Text(if (english) "Daily Counter" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ink)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { english = !english }) { Icon(Icons.Default.Language, contentDescription = "Language") }
                         IconButton(onClick = { weekly = !weekly }) { Icon(Icons.Default.BarChart, contentDescription = "Weekly report") }
@@ -131,7 +138,7 @@ fun CounterApp(repo: CounterRepository) {
                     Text(if (english) "Last 7 days" else "मागील ७ दिवस", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 22.dp))
                     Spacer(Modifier.height(20.dp))
                     WeeklyChart(days.map { it.total }, Modifier.fillMaxWidth().height(210.dp))
-                    Text(if (english) "Daily total" else "दररोजची मोजणी", color = Navy)
+                    Text(if (english) "Daily total" else "दररोजची मोजणी", color = ink)
                     if (isBaby) Text((if (english) "Average session: " else "सरासरी सत्र: ") + (average?.let { "%.1f min".format(it / 60000.0) } ?: "—"))
                     Spacer(Modifier.height(18.dp))
                     Button(onClick = {
@@ -146,12 +153,12 @@ fun CounterApp(repo: CounterRepository) {
                     }) { Text(if (english) "Share summary" else "सारांश शेअर करा") }
                 } else {
                     Spacer(Modifier.height(18.dp))
-                    Text(if (english) "TODAY" else "आज", color = Navy.copy(alpha = .65f), style = MaterialTheme.typography.labelLarge)
-                    Text(count.toString(), color = Navy, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
+                    Text(if (english) "TODAY" else "आज", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelLarge)
+                    Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
                     if (selected?.kind == "MANTRA") Text("${count / 108} माळ  •  ${count % 108}/108", color = Gold, style = MaterialTheme.typography.titleMedium)
                     if ((selected?.goal ?: 0) > 0) Text("${count} / ${selected?.goal} ${if (english) "goal" else "लक्ष्य"}", color = Navy)
                     Spacer(Modifier.weight(1f))
-                    Box(Modifier.size(252.dp).background(SoftBlue, CircleShape).clickable(enabled = selected != null) {
+                    Box(Modifier.size(252.dp).background(tapSurface, CircleShape).clickable(enabled = selected != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         scope.launch { selected?.let { vm.add(it.id, strength, if (timerStart > 0L && isBaby) System.currentTimeMillis() - timerStart else null) } }
                         if (isBaby) strength = null
@@ -171,7 +178,7 @@ fun CounterApp(repo: CounterRepository) {
                     }
                     if (isBaby) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Timer, contentDescription = null, tint = Navy)
+                            Icon(Icons.Default.Timer, contentDescription = null, tint = ink)
                             Text(if (timerRunning) "${elapsed / 60000}:${(elapsed / 1000 % 60).toString().padStart(2,'0')}" else if (english) "Session timer" else "सत्र वेळ")
                             TextButton(onClick = {
                                 if (timerRunning) { elapsed = System.currentTimeMillis() - timerStart; timerRunning = false }
