@@ -221,7 +221,7 @@ fun CounterApp(repo: CounterRepository) {
     val activeSession = latestSession?.takeIf { it.endedAt == null && clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val lockedSession = latestSession?.takeIf { clock < it.startedAt + CounterRepository.TWO_HOURS_MS }
     val remainingMs = activeSession?.let { (it.startedAt + CounterRepository.TWO_HOURS_MS - clock).coerceAtLeast(0L) } ?: 0L
-    val detectionFlow = remember(activeSession?.id) { activeSession?.let { vm.detections(it.id) } ?: flowOf(emptyList()) }
+    val detectionFlow = remember(latestSession?.id) { latestSession?.let { vm.detections(it.id) } ?: flowOf(emptyList()) }
     val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
     val page = if (dark) Color(0xFF0D1B2A) else Cream
