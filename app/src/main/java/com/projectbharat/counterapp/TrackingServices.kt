@@ -168,10 +168,12 @@ class ChantRecognitionService : Service() {
     private var categoryId = -1L
     private var mantra = "Ram"
     private var language = "en"
+    private var partialCounted = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
         stopRequested = false
+        partialCounted = 0
         categoryId = intent?.getLongExtra(StepTrackingService.EXTRA_CATEGORY_ID, -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
         language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
@@ -233,24 +235,18 @@ class ChantRecognitionService : Service() {
                     if (activeRecognizer.acceptWaveForm(buffer, read)) {
                         val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
                         val matches = countPhrase(transcript, mantra)
-                        val now = System.currentTimeMillis()
-                        sendState(true, if (matches > 0) "Selected mantra matched" else "Listening offline", transcript, matches > 0)
-                        if (matches > 0) {
-                            scope.launch {
-                                CounterDatabase.get(this@ChantRecognitionService).dao().incrementMantraDaily(
-                                    categoryId, LocalDate.now().toString(), mantra, matches
-                                )
-                                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                                    .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
-                                    .putExtra("transcript", transcript).putExtra("matched", true))
-                            }
-                        }
+                        val delta = (matches - partialCounted).coerceAtLeast(0)
+                        partialCounted = 0
+                        sendRecognitionUpdate(transcript, delta)
                         lastPartial = ""
                     } else {
                         val partial = JSONObject(activeRecognizer.partialResult ?: "{}").optString("partial").trim()
                         if (partial != lastPartial) {
                             lastPartial = partial
-                            sendState(true, "Listening offline", partial, countPhrase(partial, mantra) > 0)
+                            val detected = countPhrase(partial, mantra)
+                            val delta = (detected - partialCounted).coerceAtLeast(0)
+                            if (detected > partialCounted) partialCounted = detected
+                            sendRecognitionUpdate(partial, delta)
                         }
                     }
                 }
@@ -267,6 +263,20 @@ class ChantRecognitionService : Service() {
             audioRecord?.release(); audioRecord = null
             recognizer?.close(); recognizer = null
             model?.close(); model = null
+        }
+    }
+
+    private fun sendRecognitionUpdate(transcript: String, matches: Int) {
+        val matched = matches > 0 || countPhrase(transcript, mantra) > 0
+        sendState(true, if (matched) "Mantra matched" else "Listening offline", transcript, matched)
+        if (matches <= 0) return
+        scope.launch {
+            CounterDatabase.get(this@ChantRecognitionService).dao().incrementMantraDaily(
+                categoryId, LocalDate.now().toString(), mantra, matches
+            )
+            sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
+                .putExtra("transcript", transcript).putExtra("matched", true))
         }
     }
 
