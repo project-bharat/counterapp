@@ -6,7 +6,15 @@ import kotlinx.coroutines.flow.Flow
 
 class CounterRepository(private val dao: CounterDao) {
     val categories = dao.categories()
-    suspend fun addCategory(mr: String, en: String) = dao.addCategory(CounterCategory(titleMr = mr, titleEn = en))
+    suspend fun addCategory(mr: String, en: String) = dao.addCategory(CounterCategory(titleMr = mr.trim(), titleEn = en.trim()))
+    suspend fun updateCategory(category: CounterCategory) {
+        require(category.titleMr.isNotBlank() && category.titleEn.isNotBlank()) { "Both category names are required" }
+        dao.updateCategory(category.copy(titleMr = category.titleMr.trim(), titleEn = category.titleEn.trim()))
+    }
+    suspend fun archiveCategory(id: Long) {
+        require(dao.allCategories().count { it.enabled } > 1) { "Keep at least one active counter" }
+        dao.disableCategory(id)
+    }
     fun today(categoryId: Long): Flow<Int> = dao.todayCount(categoryId, LocalDate.now().toString())
     fun logsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.logsForDay(categoryId, date.toString())
     fun logsForRange(categoryId: Long, from: LocalDate, to: LocalDate): Flow<List<CounterLog>> = dao.logsForRange(categoryId, from.toString(), to.toString())
