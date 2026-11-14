@@ -113,3 +113,9 @@ class DailyReminderReceiver : BroadcastReceiver() {
         if (id >= 0) DailyReminderScheduler.showNotification(context, id)
     }
 }
+
+class ReminderBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) DailyReminderScheduler.rescheduleAll(context)
+    }
+}
