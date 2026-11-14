@@ -164,17 +164,7 @@ class StepTrackingService : Service(), SensorEventListener {
         }
         if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR) return
         val accepted = motionValidator.acceptStepDetector(event.timestamp)
-        if (accepted > 0) {
-            val dateNow = LocalDate.now().toString()
-            scope.launch {
-                CounterDatabase.get(this@StepTrackingService).dao().addLog(
-                    CounterLog(date = dateNow, timestamp = System.currentTimeMillis(), categoryId = categoryId,
-                        count = accepted, note = "MOTION_VALIDATED_STEP")
-                )
-                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                    .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", accepted))
-            }
-        }
+        if (accepted > 0) pendingValidatedSteps = (pendingValidatedSteps + accepted).coerceAtMost(30)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
