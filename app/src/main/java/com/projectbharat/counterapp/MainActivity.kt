@@ -352,7 +352,7 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (monthlyHistory && selected != null) {
                     CounterHistoryScreen(
-                        english = english, ink = ink, date = historyDate, logs = historyLogs,
+                        english = english, ink = ink, date = historyDate, logs = historyLogs, days = days,
                         onPrevious = { historyDate = historyDate.minusDays(1) },
                         onNext = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
                         onUpdate = { log -> scope.launch { vm.updateLog(log) } },
@@ -793,7 +793,7 @@ private fun StatTile(label: String, value: String, ink: Color, modifier: Modifie
 }
 
 @Composable
-private fun WeeklyChart(days: List<DayTotal>, modifier: Modifier = Modifier) {
+fun WeeklyChart(days: List<DayTotal>, modifier: Modifier = Modifier) {
     val maxValue=(days.maxOfOrNull{it.total} ?: 0).coerceAtLeast(1)
     Row(modifier, horizontalArrangement=Arrangement.spacedBy(6.dp), verticalAlignment=Alignment.Bottom) {
         days.forEach { day ->
