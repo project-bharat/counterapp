@@ -74,7 +74,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
         mutableStateOf(Build.VERSION.SDK_INT < 29 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
     }
-    var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_enabled", false)) }
+    var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", false)) }
     var message by remember { mutableStateOf("") }
 
     val startService = {
@@ -111,7 +111,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
     }
     LaunchedEffect(Unit) {
         while (true) {
-            running = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_enabled", running)
+            running = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", running)
             delay(1500)
         }
     }
