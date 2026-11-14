@@ -61,6 +61,24 @@ class CounterRepository(private val dao: CounterDao) {
     fun latestBabySession(categoryId: Long): Flow<BabySession?> =
         dao.latestSessionFlow(categoryId, 0L)
 
+    fun babyDetections(sessionId: Long): Flow<List<BabyDetection>> = dao.detectionsForSession(sessionId)
+
+    suspend fun recordBabyDetection(sessionId: Long, timestamp: Long, magnitude: Float) {
+        val session = dao.babySession(sessionId) ?: return
+        if (session.endedAt == null && timestamp >= session.startedAt && timestamp < session.startedAt + TWO_HOURS_MS) {
+            dao.addBabyDetection(BabyDetection(sessionId = sessionId, timestamp = timestamp, magnitude = magnitude))
+        }
+    }
+
+    suspend fun dismissBabyDetection(id: Long) = dao.dismissDetection(id)
+
+    suspend fun confirmBabyDetection(id: Long) {
+        val detection = dao.pendingDetection(id) ?: return
+        val session = dao.babySession(detection.sessionId) ?: return
+        if (session.endedAt != null) return
+        dao.confirmDetection(id, CounterLog(date = session.date, timestamp = detection.timestamp, categoryId = session.categoryId), detection.timestamp - session.startedAt)
+    }
+
     suspend fun startBabySession(categoryId: Long): Long? {
         val now = System.currentTimeMillis()
         val previous = dao.latestBabySession(categoryId, now - TWO_HOURS_MS)
