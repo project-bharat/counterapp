@@ -27,7 +27,7 @@ class CounterRepository(private val dao: CounterDao) {
     }
     suspend fun addMantraCount(categoryId: Long, mantra: String) {
         require(mantra.isNotBlank()) { "Choose a mantra first" }
-        dao.incrementMantraDaily(categoryId, LocalDate.now().toString(), mantra.trim())
+        dao.incrementMantraDaily(categoryId, LocalDate.now().toString(), mantra.trim(), 1)
     }
     fun logsForRange(categoryId: Long, from: LocalDate, to: LocalDate): Flow<List<CounterLog>> = dao.logsForRange(categoryId, from.toString(), to.toString())
     suspend fun updateLog(log: CounterLog) {
