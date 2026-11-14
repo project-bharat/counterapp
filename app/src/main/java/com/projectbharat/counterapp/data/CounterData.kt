@@ -51,6 +51,9 @@ interface CounterDao {
     @Insert
     suspend fun addCategory(category: CounterCategory): Long
 
+    @Update
+    suspend fun updateCategory(category: CounterCategory)
+
     @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
     suspend fun category(id: Long): CounterCategory?
 
@@ -63,11 +66,35 @@ interface CounterDao {
     @Insert
     suspend fun addLog(log: CounterLog): Long
 
+    @Update
+    suspend fun updateLog(log: CounterLog)
+
+    @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date ORDER BY timestamp DESC, id DESC")
+    fun logsForDay(categoryId: Long, date: String): Flow<List<CounterLog>>
+
+    @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY timestamp DESC, id DESC")
+    fun logsForRange(categoryId: Long, fromDate: String, toDate: String): Flow<List<CounterLog>>
+
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date ORDER BY timestamp DESC LIMIT 1")
     suspend fun latestLog(categoryId: Long, date: String): CounterLog?
 
     @Query("DELETE FROM counter_logs WHERE id=:id")
     suspend fun deleteLog(id: Long)
+
+    @Transaction
+    suspend fun addBabyMovementAtomically(log: CounterLog, sessionId: Long, durationMs: Long): Long {
+        val id = addLog(log)
+        incrementBabySession(sessionId, durationMs)
+        return id
+    }
+
+    @Transaction
+    suspend fun undoLatestBabyMovementAtomically(sessionId: Long): Boolean {
+        val latest = latestSessionLog(sessionId) ?: return false
+        deleteSessionLog(latest.id)
+        decrementBabySession(sessionId)
+        return true
+    }
 
     @Query("DELETE FROM counter_logs WHERE categoryId=:categoryId AND date=:date")
     suspend fun resetDay(categoryId: Long, date: String)
@@ -131,7 +158,6 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_categoryId ON baby_sessions(categoryId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_date ON baby_sessions(date)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_sessions_startedAt ON baby_sessions(startedAt)")
-                db.execSQL("ALTER TABLE baby_sessions ADD COLUMN timeToTenMs INTEGER")
                 db.execSQL("ALTER TABLE counter_logs ADD COLUMN sessionId INTEGER")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_counter_logs_sessionId ON counter_logs(sessionId)")
             }
