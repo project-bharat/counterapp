@@ -808,31 +808,129 @@ private fun MonthlyChart(values: List<Int>, modifier: Modifier = Modifier) {
 
 private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, titleEn: String, month: LocalDate, sessions: List<BabySession>, english: Boolean) {
     val pdf = PdfDocument()
-    val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-    val page = pdf.startPage(pageInfo)
-    val canvas = page.canvas
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 12f; color = android.graphics.Color.DKGRAY }
-    val heading = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 20f; typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.BOLD); color = android.graphics.Color.rgb(16, 46, 85) }
-    var y = 48f
-    canvas.drawText(if (english) "Baby Movement Monthly Report" else "बाळाच्या हालचालींचा मासिक अहवाल", 36f, y, heading); y += 28f
-    canvas.drawText(if (english) "Category: $titleEn" else "प्रकार: $titleMr", 36f, y, paint); y += 20f
-    canvas.drawText("Month: ${month.format(DateTimeFormatter.ofPattern("MMMM yyyy"))}", 36f, y, paint); y += 22f
-    canvas.drawText("Sessions: ${sessions.size}    Movements: ${sessions.sumOf { it.movementCount }}", 36f, y, paint); y += 28f
-    canvas.drawText(if (english) "Date / Period / Start / Count / Duration / Strength" else "दिनांक / वेळ / सुरुवात / संख्या / कालावधी / ताकद", 36f, y, heading.apply { textSize = 11f }); y += 20f
-    sessions.sortedBy { it.startedAt }.forEach { session ->
-        if (y > 800f) return@forEach
-        val end = session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)
-        val duration = ((end - session.startedAt).coerceAtLeast(0) / 60000)
-        val row = "${session.date} | ${periodLabel(session.dayPeriod, true)} | ${sessionTime(session.startedAt)} | ${session.movementCount} | ${duration}m | ${session.strength ?: "—"}"
-        canvas.drawText(row.take(100), 36f, y, paint); y += 17f
+    val width = 595
+    val height = 842
+    val navy = android.graphics.Color.rgb(16, 46, 85)
+    val blue = android.graphics.Color.rgb(58, 112, 163)
+    val gold = android.graphics.Color.rgb(231, 163, 60)
+    val pale = android.graphics.Color.rgb(239, 245, 251)
+    val ink = android.graphics.Color.rgb(45, 57, 72)
+    val muted = android.graphics.Color.rgb(105, 119, 136)
+    val monthLabel = month.format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+    val sorted = sessions.sortedBy { it.startedAt }
+    val total = sessions.sumOf { it.movementCount }
+    val average = if (sessions.isEmpty()) 0.0 else sessions.map { it.movementCount }.average()
+    val daily = (1..month.lengthOfMonth()).map { day ->
+        sessions.filter { it.date == month.withDayOfMonth(day).toString() }.sumOf { it.movementCount }
     }
-    y += 20f
-    canvas.drawText(if (english) "This report records logged sessions; it is not a medical assessment." else "हा अहवाल नोंदवलेल्या सत्रांचा सारांश आहे; वैद्यकीय मूल्यांकन नाही.", 36f, y, paint)
-    pdf.finishPage(page)
-    val file = File(context.cacheDir, "baby-movement-${month.year}-${month.monthValue}.pdf")
+    val maxDaily = (daily.maxOrNull() ?: 0).coerceAtLeast(1)
+    fun paint(color: Int, size: Float, bold: Boolean = false) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        textSize = size
+        typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
+    }
+    val titlePaint = paint(android.graphics.Color.WHITE, 21f, true)
+    val subPaint = paint(android.graphics.Color.rgb(224, 234, 245), 10f)
+    val bodyPaint = paint(ink, 9.5f)
+    val smallPaint = paint(muted, 8.5f)
+    val headPaint = paint(android.graphics.Color.WHITE, 9f, true)
+    val numberPaint = paint(navy, 17f, true)
+    val labelPaint = paint(muted, 8.5f, true)
+    val footerPaint = paint(muted, 8f)
+    val xs = floatArrayOf(36f, 120f, 196f, 268f, 328f, 403f)
+    var pageNumber = 0
+    var currentPage: PdfDocument.Page? = null
+    var cv: android.graphics.Canvas? = null
+    var y = 0f
+
+    fun tableHeader(canvas: android.graphics.Canvas, top: Float): Float {
+        canvas.drawRoundRect(android.graphics.RectF(36f, top, 559f, top + 28f), 7f, 7f, paint(navy, 9f, true))
+        val labels = if (english) listOf("DATE", "PERIOD", "START", "COUNT", "DURATION", "STRENGTH")
+                     else listOf("दिनांक", "वेळ", "सुरुवात", "संख्या", "कालावधी", "तीव्रता")
+        labels.forEachIndexed { i, label -> canvas.drawText(label, xs[i] + 7f, top + 18f, headPaint) }
+        return top + 28f
+    }
+    fun startPage(first: Boolean) {
+        pageNumber++
+        currentPage = pdf.startPage(PdfDocument.PageInfo.Builder(width, height, pageNumber).create())
+        cv = currentPage!!.canvas
+        val canvas = cv!!
+        canvas.drawColor(android.graphics.Color.WHITE)
+        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 571f, 119f), 16f, 16f, paint(navy, 12f, true))
+        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 32f, 119f), 4f, 4f, paint(gold, 10f))
+        canvas.drawText(if (english) "BABY MOVEMENT REPORT" else "बाळाच्या हालचालींचा अहवाल", 48f, 58f, titlePaint)
+        canvas.drawText(if (english) titleEn + " · " + monthLabel else titleMr + " · " + monthLabel, 48f, 81f, subPaint)
+        canvas.drawText(if (first) (if (english) "Monthly summary" else "मासिक सारांश") else (if (english) "Session details · continued" else "सत्र तपशील · पुढे"), 48f, 101f, subPaint)
+        var tableTop = 156f
+        if (first) {
+            val metrics = listOf(
+                Triple(if (english) "SESSIONS" else "सत्रे", sessions.size.toString(), blue),
+                Triple(if (english) "MOVEMENTS" else "हालचाली", total.toString(), navy),
+                Triple(if (english) "AVG / SESSION" else "सरासरी", "%.1f".format(average), gold)
+            )
+            metrics.forEachIndexed { i, metric ->
+                val left = 36f + i * 177f
+                canvas.drawRoundRect(android.graphics.RectF(left, 135f, left + 164f, 203f), 11f, 11f, paint(pale, 10f))
+                canvas.drawRoundRect(android.graphics.RectF(left, 135f, left + 5f, 203f), 3f, 3f, paint(metric.third, 10f))
+                canvas.drawText(metric.first, left + 15f, 156f, labelPaint)
+                canvas.drawText(metric.second, left + 15f, 185f, numberPaint)
+            }
+            canvas.drawText(if (english) "DAILY MOVEMENT PATTERN" else "दैनिक हालचालींचा आलेख", 36f, 226f, paint(navy, 10f, true))
+            canvas.drawRoundRect(android.graphics.RectF(36f, 238f, 559f, 298f), 8f, 8f, paint(pale, 9f))
+            val slot = 505f / daily.size.coerceAtLeast(1)
+            daily.forEachIndexed { i, value ->
+                val barHeight = if (value == 0) 1.5f else (value.toFloat() / maxDaily * 39f).coerceAtLeast(3f)
+                val left = 45f + i * slot + slot * .2f
+                canvas.drawRoundRect(android.graphics.RectF(left, 286f - barHeight, left + slot * .58f, 286f), 2f, 2f,
+                    paint(if (value > 0) blue else android.graphics.Color.rgb(205, 216, 228), 8f))
+            }
+            canvas.drawText("1", 45f, 293f, smallPaint)
+            canvas.drawText(month.lengthOfMonth().toString(), 538f, 293f, smallPaint)
+            tableTop = 316f
+        } else {
+            canvas.drawText(if (english) "Session records" else "सत्र नोंदी", 36f, 143f, paint(navy, 11f, true))
+        }
+        canvas.drawText(if (english) "SESSION DETAILS" else "सत्रांचा तपशील", 36f, tableTop - 9f, paint(navy, 10f, true))
+        y = tableHeader(canvas, tableTop)
+    }
+    fun finishPage() {
+        val canvas = cv ?: return
+        canvas.drawLine(36f, 805f, 559f, 805f, paint(android.graphics.Color.rgb(220, 228, 237), 1f))
+        canvas.drawText(if (english) "Daily Counter · Personal movement log · Not a medical assessment" else "दैनिक मोजणी · वैयक्तिक नोंद · वैद्यकीय मूल्यांकन नाही", 36f, 823f, footerPaint)
+        canvas.drawText(pageNumber.toString(), 544f, 823f, paint(navy, 9f, true))
+        pdf.finishPage(currentPage!!)
+        currentPage = null
+        cv = null
+    }
+    startPage(true)
+    sorted.forEachIndexed { index, session ->
+        if (y > 775f) {
+            finishPage()
+            startPage(false)
+        }
+        val canvas = cv!!
+        if (index % 2 == 0) canvas.drawRoundRect(android.graphics.RectF(36f, y, 559f, y + 25f), 4f, 4f, paint(pale, 8f))
+        val dateLabel = runCatching { LocalDate.parse(session.date).format(DateTimeFormatter.ofPattern("dd MMM")) }.getOrDefault(session.date)
+        val end = session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())
+        val duration = (end - session.startedAt).coerceAtLeast(0L) / 60000L
+        val values = listOf(dateLabel, periodLabel(session.dayPeriod, english), sessionTime(session.startedAt),
+            session.movementCount.toString(), duration.toString() + " min",
+            session.strength?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "—")
+        values.forEachIndexed { col, value ->
+            if (col == 3) {
+                canvas.drawRoundRect(android.graphics.RectF(xs[col] + 5f, y + 4f, xs[col] + 49f, y + 21f), 6f, 6f, paint(android.graphics.Color.rgb(222, 237, 249), 8f))
+                canvas.drawText(value, xs[col] + 20f, y + 17f, paint(navy, 10f, true))
+            } else {
+                canvas.drawText(value.take(if (col == 5) 22 else 14), xs[col] + 7f, y + 16f, bodyPaint)
+            }
+        }
+        y += 27f
+    }
+    finishPage()
+    val file = File(context.cacheDir, "baby-movement-" + month.year + "-" + month.monthValue + ".pdf")
     file.outputStream().use { pdf.writeTo(it) }
     pdf.close()
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
     val share = Intent(Intent.ACTION_SEND).apply {
         type = "application/pdf"
         putExtra(Intent.EXTRA_STREAM, uri)
