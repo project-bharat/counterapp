@@ -80,9 +80,17 @@ fun AutoStepCounterScreen(
     }
     var sensorTotal by remember { mutableIntStateOf(count) }
     var sensorStatus by remember { mutableStateOf("WAITING") }
+    var today by remember { mutableStateOf(LocalDate.now().toString()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            val dateNow = LocalDate.now().toString()
+            if (dateNow != today) today = dateNow
+        }
+    }
     val latestCount by rememberUpdatedState(count)
     val latestOnDelta by rememberUpdatedState(onDelta)
-    var submitted by remember(categoryId, LocalDate.now().toString()) { mutableIntStateOf(count) }
+    var submitted by remember(categoryId, today) { mutableIntStateOf(count) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
     }
@@ -90,8 +98,7 @@ fun AutoStepCounterScreen(
     DisposableEffect(stepSensor, permissionGranted, categoryId) {
         if (permissionGranted && stepSensor != null) {
             val prefs = context.getSharedPreferences("auto_tracking", Context.MODE_PRIVATE)
-            val date = LocalDate.now().toString()
-            val baselineKey = "steps_baseline_${categoryId}_${date}"
+            val baselineKey = "steps_baseline_${categoryId}_${today}"
             val listener = object : SensorEventListener {
                 override fun onSensorChanged(event: SensorEvent) {
                     val raw = event.values.firstOrNull()?.toInt() ?: return
@@ -179,6 +186,7 @@ fun AutoChantCounterScreen(
     val latestTarget by rememberUpdatedState(target)
     val latestOnRecognized by rememberUpdatedState(onRecognized)
     val latestListening by rememberUpdatedState(listening)
+    val latestPermission by rememberUpdatedState(permissionGranted)
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
         if (!granted) status = "PERMISSION"
@@ -201,7 +209,7 @@ fun AutoChantCounterScreen(
     DisposableEffect(recognizer, speechIntent, categoryId) {
         if (recognizer != null) {
             fun restart() {
-                if (latestListening && permissionGranted) {
+                if (latestListening && latestPermission) {
                     handler.postDelayed({
                         if (latestListening) {
                             try { recognizer.startListening(speechIntent); status = "LISTENING" }
