@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -344,15 +345,15 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
     var enabled by remember(activeSessionId) { mutableStateOf(false) }
     var calibrated by remember { mutableStateOf(false) }
     var detections by remember { mutableIntStateOf(0) }
+    var candidatePending by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
-    val latestOnDetected by rememberUpdatedState(onDetected)
 
     DisposableEffect(enabled, activeSessionId, linear, gyro) {
         if (enabled && activeSessionId != null && linear != null) {
             val startedAt = System.currentTimeMillis()
             val samples = ArrayList<Float>()
             var baseline = 0f
-            var threshold = 1.1f
+            var threshold = 0.55f
             var gyroMagnitude = 0f
             var lastDetection = 0L
             var calibratedLocal = false
@@ -368,24 +369,28 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                     val magnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
                     if (!calibratedLocal) {
                         samples.add(magnitude)
-                        if (System.currentTimeMillis() - startedAt >= 3000L && samples.size >= 20) {
-                            baseline = samples.average().toFloat()
-                            val variance = samples.map { (it - baseline) * (it - baseline) }.average().toFloat()
-                            threshold = maxOf(1.0f, baseline + 3f * sqrt(variance))
+                        if (System.currentTimeMillis() - startedAt >= 8000L && samples.size >= 40) {
+                            val sorted = samples.sorted()
+                            baseline = sorted[sorted.size / 2]
+                            val deviations = sorted.map { kotlin.math.abs(it - baseline) }.sorted()
+                            val mad = deviations[deviations.size / 2]
+                            threshold = maxOf(0.55f, baseline + 5f * mad)
                             calibratedLocal = true
                             calibrated = true
-                            status = if (english) "Calibrated · experimental" else "कॅलिब्रेशन पूर्ण · प्रायोगिक"
+                            status = if (english) "Baseline set · experimental only" else "मूलभूत कंपन नोंदले · प्रायोगिक"
                         }
                         return
                     }
-                    baseline = baseline * 0.985f + magnitude * 0.015f
-                    val spike = magnitude > maxOf(threshold, baseline + 0.9f)
-                    val quietRotation = gyro == null || gyroMagnitude < 1.8f
+                    val spike = magnitude > maxOf(threshold, baseline + 0.65f)
+                    val quietRotation = gyro == null || gyroMagnitude < 1.2f
                     val now = System.currentTimeMillis()
-                    if (spike && quietRotation && now - lastDetection > 1400L) {
+                    if (spike && quietRotation && now - lastDetection > 2200L && !candidatePending) {
                         lastDetection = now
                         detections++
-                        latestOnDetected()
+                        candidatePending = true
+                        status = if (english) "Possible movement · confirm or dismiss" else "संभाव्य हालचाल · पुष्टी करा किंवा नाकारा"
+                    } else if (!spike) {
+                        baseline = baseline * 0.995f + magnitude * 0.005f
                     }
                 }
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -393,7 +398,8 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
             manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
             gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
             calibrated = false
-            status = if (english) "Calibrating for 3 seconds…" else "३ सेकंद कॅलिब्रेशन…"
+            candidatePending = false
+            status = if (english) "Keep phone still for 8-second baseline…" else "८ सेकंद फोन स्थिर ठेवा…"
             onDispose { manager.unregisterListener(listener) }
         } else {
             calibrated = false
@@ -408,13 +414,25 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
                         Text(if (english) "Experimental motion assist" else "प्रायोगिक हालचाल ओळख", color = ink, fontWeight = FontWeight.SemiBold)
-                        Text(if (english) "Phone movement may cause false detections" else "फोन हलल्यास चुकीची नोंद होऊ शकते", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+                        Text(if (english) "Experimental signal only · false positives and missed movements are possible" else "फक्त प्रायोगिक संकेत · चुकीच्या व सुटलेल्या नोंदी शक्य", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
                     }
                     androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it })
                 }
                 if (enabled) {
                     Text((if (english) "Detected: " else "ओळखले: ") + detections, color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(status.ifBlank { if (calibrated) "Calibrated" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                    Text(status.ifBlank { if (calibrated) "Baseline ready" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                    if (candidatePending) {
+                        Text(if (english) "Possible sensor event — check whether you felt a baby movement." else "सेन्सरला हालचाल जाणवली — प्रत्यक्ष बाळाची हालचाल जाणवली का ते तपासा.", color = ink, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { candidatePending = false; onDetected(); status = if (english) "Movement confirmed by you" else "तुम्ही हालचालीची पुष्टी केली" }, modifier = Modifier.weight(1f)) {
+                                Text(if (english) "Confirm +1" else "पुष्टी +१")
+                            }
+                            OutlinedButton(onClick = { candidatePending = false; status = if (english) "Candidate dismissed" else "संकेत नाकारला" }, modifier = Modifier.weight(1f)) {
+                                Text(if (english) "Dismiss" else "नाकारा")
+                            }
+                        }
+                    }
+                    Text(if (english) "A phone accelerometer cannot reliably separate fetal movement from breathing, speech or maternal motion. Manual logging remains the primary record; this is not a medical monitor." else "फोनचा सेन्सर बाळाची हालचाल आणि श्वास, बोलणे किंवा आईची हालचाल विश्वासार्हपणे वेगळी ओळखू शकत नाही. मॅन्युअल नोंद मुख्य आहे; हे वैद्यकीय उपकरण नाही.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         }
