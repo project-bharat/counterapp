@@ -23,23 +23,31 @@ fun BackupSettingsScreen(
 ) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(if (english) "BACKUP & EXPORT" else "बॅकअप व निर्यात", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(if (english) "Your data stays on this device unless you choose to export it." else "तुम्ही निर्यात करण्याचा निर्णय घेतल्याशिवाय तुमचा डेटा या उपकरणावरच राहतो.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+        Text(if (english) "Your data stays on this device until you export it." else "निर्यात करेपर्यंत तुमचा डेटा याच उपकरणावर राहतो.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Default.Backup, contentDescription = null, tint = ink)
-                    Text(if (english) "Full backup (JSON)" else "पूर्ण बॅकअप (JSON)", color = ink, fontWeight = FontWeight.SemiBold)
+                    Text(if (english) "Full app backup" else "पूर्ण अॅप बॅकअप", color = ink, fontWeight = FontWeight.SemiBold)
                 }
-                Text(if (english) "Includes counters, settings stored with categories, all counter records and baby movement sessions. Restoring replaces current app data." else "यामध्ये मोजणीचे प्रकार, श्रेणींमध्ये साठवलेली माहिती, सर्व नोंदी आणि बाळाच्या हालचालींची सत्रे असतात. पुनर्संचयित केल्यास सध्याचा डेटा बदलला जातो.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
-                Button(onClick = onExportBackup, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Export full backup" else "पूर्ण बॅकअप निर्यात करा") }
-                OutlinedButton(onClick = onImportBackup, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FileUpload, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Restore from backup" else "बॅकअपमधून पुनर्संचयित करा") }
+                Text(if (english) "JSON includes counters, records and baby sessions. Restore replaces current data." else "JSON मध्ये मोजण्या, नोंदी आणि बाळाची सत्रे असतात. पुनर्संचयित केल्यास सध्याचा डेटा बदलतो.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Button(onClick = onExportBackup) {
+                        Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text(if (english) "Export JSON" else "JSON निर्यात")
+                    }
+                    OutlinedButton(onClick = onImportBackup) {
+                        Icon(Icons.Default.FileUpload, null); Spacer(Modifier.width(6.dp)); Text(if (english) "Restore" else "पुनर्संचयित")
+                    }
+                }
             }
         }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (english) "CSV history export" else "CSV इतिहास निर्यात", color = ink, fontWeight = FontWeight.SemiBold)
-                Text(if (english) "Export counter log rows for spreadsheets. Baby session summaries are included in the full JSON backup." else "स्प्रेडशीटमध्ये वापरण्यासाठी मोजणीच्या नोंदी निर्यात करा. बाळाच्या सत्रांचा संपूर्ण तपशील JSON बॅकअपमध्ये समाविष्ट आहे.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = onExportCsv, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Export CSV" else "CSV निर्यात करा") }
+            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text(if (english) "Spreadsheet export" else "स्प्रेडशीट निर्यात", color = ink, fontWeight = FontWeight.SemiBold)
+                Text(if (english) "Export counter entries as CSV." else "मोजणीच्या नोंदी CSV स्वरूपात निर्यात करा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = onExportCsv) {
+                    Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text(if (english) "Export CSV" else "CSV निर्यात")
+                }
             }
         }
         if (!message.isNullOrBlank()) {
