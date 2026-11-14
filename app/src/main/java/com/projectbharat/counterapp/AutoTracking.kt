@@ -64,7 +64,6 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
     if (Build.VERSION.SDK_INT >= 33) {
         context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
     } else {
-        @Suppress("DEPRECATION")
         context.registerReceiver(receiver, filter)
     }
 }
