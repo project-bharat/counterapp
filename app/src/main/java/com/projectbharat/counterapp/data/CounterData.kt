@@ -90,6 +90,9 @@ interface CounterDao {
     @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND date=:date ORDER BY startedAt DESC")
     fun babySessionsForDay(categoryId: Long, date: String): Flow<List<BabySession>>
 
+    @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY startedAt DESC")
+    fun babySessionsForMonth(categoryId: Long, fromDate: String, toDate: String): Flow<List<BabySession>>
+
     @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
     fun latestSessionFlow(categoryId: Long, lockStart: Long): Flow<BabySession?>
 
