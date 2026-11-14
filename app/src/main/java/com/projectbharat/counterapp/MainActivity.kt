@@ -425,6 +425,14 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 }
                 if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
+                    if (historyLogs.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            historyLogs.take(2).forEach { item ->
+                                Text(sessionTime(item.timestamp) + " · +" + item.count, color = ink.copy(alpha = .75f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            }
+                        }
+                    }
                     TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
                         Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
                     }
