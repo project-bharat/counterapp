@@ -434,8 +434,7 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f)) {
-                        Text(if (english) "Experimental motion assist" else "प्रायोगिक हालचाल ओळख", color = ink, fontWeight = FontWeight.SemiBold)
-                        Text(if (english) "Experimental signal only · false positives and missed movements are possible" else "फक्त प्रायोगिक संकेत · चुकीच्या व सुटलेल्या नोंदी शक्य", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+                        Text(if (english) "Auto detect" else "स्वयंचलित ओळख", color = ink, fontWeight = FontWeight.SemiBold)
                     }
                     androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it }, enabled = linear != null)
                 }
@@ -445,7 +444,6 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                 if (enabled && linear != null) {
                     Text((if (english) "Detected: " else "ओळखले: ") + detections, color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(status.ifBlank { if (calibrated) "Baseline ready" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
-                    Text(if (english) "Detected moments are saved separately for your review." else "ओळखलेले क्षण स्वतंत्रपणे तपासणीसाठी जतन होतात.", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
                     Text(if (english) "A phone accelerometer cannot reliably separate fetal movement from breathing, speech or maternal motion. Manual logging remains the primary record; this is not a medical monitor." else "फोनचा सेन्सर बाळाची हालचाल आणि श्वास, बोलणे किंवा आईची हालचाल विश्वासार्हपणे वेगळी ओळखू शकत नाही. मॅन्युअल नोंद मुख्य आहे; हे वैद्यकीय उपकरण नाही.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
                 }
             }
