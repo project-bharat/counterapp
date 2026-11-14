@@ -119,7 +119,7 @@ class StepTrackingService : Service(), SensorEventListener {
             }
         }
         sendState(true)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -166,7 +166,7 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     override fun onDestroy() {
         sensorManager.unregisterListener(this)
-        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).apply()
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).putBoolean("steps_enabled", false).apply()
         sendState(false)
         scope.cancel()
         super.onDestroy()
@@ -179,7 +179,7 @@ class StepTrackingService : Service(), SensorEventListener {
         const val EXTRA_CATEGORY_ID = "category_id"
         fun start(context: Context, categoryId: Long) = ContextCompat.startForegroundService(
             context, Intent(context, StepTrackingService::class.java).putExtra(EXTRA_CATEGORY_ID, categoryId))
-        fun stop(context: Context) { context.startService(Intent(context, StepTrackingService::class.java).setAction(ACTION_STOP)) }
+        fun stop(context: Context) { context.stopService(Intent(context, StepTrackingService::class.java)) }
     }
 }
 
@@ -238,19 +238,40 @@ class ChantRecognitionService : Service() {
             recording = true
             sendState(true, "Listening offline")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
+            var lastPartial = ""
+            var lastCountedText = ""
+            var lastCountedAt = 0L
             while (recording && !Thread.currentThread().isInterrupted) {
                 val read = record.read(buffer, 0, buffer.size)
                 if (read < 0) throw IllegalStateException("Microphone read failed: " + read)
-                if (read > 0 && recognizer?.acceptWaveForm(buffer, read) == true) {
-                    val transcript = JSONObject(recognizer?.result ?: "{}").optString("text").trim()
-                    val matches = countPhrase(transcript, mantra)
-                    if (matches > 0) scope.launch {
-                        CounterDatabase.get(this@ChantRecognitionService).dao().addLog(
-                            CounterLog(date = LocalDate.now().toString(), timestamp = System.currentTimeMillis(),
-                                categoryId = categoryId, count = matches, note = "VOSK:" + language + ":" + mantra)
-                        )
-                        sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                            .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches))
+                if (read > 0) {
+                    val activeRecognizer = recognizer ?: continue
+                    if (activeRecognizer.acceptWaveForm(buffer, read)) {
+                        val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
+                        val matches = countPhrase(transcript, mantra)
+                        val now = System.currentTimeMillis()
+                        sendState(true, if (matches > 0) "Selected mantra matched" else "Listening offline", transcript, matches > 0)
+                        val duplicate = transcript.isNotBlank() && transcript == lastCountedText && now - lastCountedAt < 1500L
+                        if (matches > 0 && !duplicate) {
+                            lastCountedText = transcript
+                            lastCountedAt = now
+                            scope.launch {
+                                CounterDatabase.get(this@ChantRecognitionService).dao().addLog(
+                                    CounterLog(date = LocalDate.now().toString(), timestamp = now,
+                                        categoryId = categoryId, count = matches, note = "VOSK:" + language + ":" + mantra)
+                                )
+                                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                                    .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
+                                    .putExtra("transcript", transcript).putExtra("matched", true))
+                            }
+                        }
+                        lastPartial = ""
+                    } else {
+                        val partial = JSONObject(activeRecognizer.partialResult ?: "{}").optString("partial").trim()
+                        if (partial != lastPartial) {
+                            lastPartial = partial
+                            sendState(true, "Listening offline", partial, countPhrase(partial, mantra) > 0)
+                        }
                     }
                 }
             }
@@ -318,8 +339,13 @@ class ChantRecognitionService : Service() {
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
         sendState(false, "Stopped")
     }
-    private fun sendState(active: Boolean, message: String) = sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-        .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("active", active).putExtra("message", message))
+    private fun sendState(active: Boolean, message: String, transcript: String? = null, matched: Boolean? = null) {
+        val intent = Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+            .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("active", active).putExtra("message", message)
+        transcript?.let { intent.putExtra("transcript", it) }
+        matched?.let { intent.putExtra("matched", it) }
+        sendBroadcast(intent)
+    }
     override fun onDestroy() {
         stopRecognition(); scope.cancel(); super.onDestroy()
     }
@@ -334,7 +360,7 @@ class ChantRecognitionService : Service() {
                 .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language)
             ContextCompat.startForegroundService(context, intent)
         }
-        fun stop(context: Context) { context.startService(Intent(context, ChantRecognitionService::class.java).setAction(ACTION_STOP)) }
+        fun stop(context: Context) { context.stopService(Intent(context, ChantRecognitionService::class.java)) }
     }
 }
 
