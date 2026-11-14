@@ -156,7 +156,7 @@ fun CounterApp(repo: CounterRepository) {
                     Text(if (english) "TODAY" else "आज", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelLarge)
                     Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.Bold)
                     if (selected?.kind == "MANTRA") Text("${count / 108} माळ  •  ${count % 108}/108", color = Gold, style = MaterialTheme.typography.titleMedium)
-                    if ((selected?.goal ?: 0) > 0) Text("${count} / ${selected?.goal} ${if (english) "goal" else "लक्ष्य"}", color = Navy)
+                    if ((selected?.goal ?: 0) > 0) Text("${count} / ${selected?.goal} ${if (english) "goal" else "लक्ष्य"}", color = ink)
                     Spacer(Modifier.weight(1f))
                     Box(Modifier.size(252.dp).background(tapSurface, CircleShape).clickable(enabled = selected != null) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -164,7 +164,7 @@ fun CounterApp(repo: CounterRepository) {
                         if (isBaby) strength = null
                     }, contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("+1", style = MaterialTheme.typography.displayLarge, color = Navy, fontWeight = FontWeight.Bold)
+                            Text("+1", style = MaterialTheme.typography.displayLarge, color = ink, fontWeight = FontWeight.Bold)
                             Text(if (english) "TAP TO COUNT" else "मोजण्यासाठी स्पर्श करा", color = Navy, style = MaterialTheme.typography.labelMedium)
                         }
                     }
