@@ -47,6 +47,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -224,6 +225,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var status by remember { mutableStateOf("") }
     var transcript by remember { mutableStateOf("") }
     var matched by remember { mutableStateOf(false) }
+    var matchedCount by remember { mutableIntStateOf(0) }
     var presetMenu by remember { mutableStateOf(false) }
 
     val stopRecognition = {
@@ -264,7 +266,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 intent.getStringExtra("message")?.let { status = it }
                 intent.getStringExtra("transcript")?.let { transcript = it }
                 if (intent.hasExtra("matched")) matched = intent.getBooleanExtra("matched", false)
-                if (intent.hasExtra("delta")) matched = true
+                if (intent.hasExtra("delta")) { matched = true; matchedCount = intent.getIntExtra("delta", 0) }
             }
         }
         registerTrackingReceiver(context, receiver)
@@ -282,7 +284,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 Switch(checked = automatic, onCheckedChange = { enabled ->
                     if (!enabled) stopRecognition()
                     else {
-                        automatic = true; matched = false; transcript = ""
+                        automatic = true; matched = false; matchedCount = 0; transcript = ""
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
@@ -313,7 +315,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         }
                     }
                 }
-                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp))
+                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 10.dp))
                 val manualInteraction = remember { MutableInteractionSource() }
                 val manualPressed by manualInteraction.collectIsPressedAsState()
                 val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
@@ -375,13 +377,32 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     Surface(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
                         Column(Modifier.padding(12.dp)) {
                             Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text(transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
-                                color = if (matched) Color(0xFF16834F) else ink, fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal,
-                                style = MaterialTheme.typography.bodyMedium)
-                            if (matched) Text(if (english) "Matched" else "मंत्र जुळला", color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
+                            if (status.contains("Preparing", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    Text(if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…", color = ink, style = MaterialTheme.typography.bodySmall)
+                                }
+                            } else {
+                                Text(transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
+                                    color = if (matched) Color(0xFF16834F) else ink, fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal,
+                                    style = MaterialTheme.typography.bodyMedium)
+                                if (matched) Text(
+                                    (if (english) "Mantra matched" else "मंत्र जुळला") + if (matchedCount > 0) " · +$matchedCount" else "",
+                                    color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
-                    TextButton(onClick = stopRecognition, modifier = Modifier.align(Alignment.End)) { Text(if (english) "Stop" else "थांबवा") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        if (automatic && !running && status.isNotBlank() && status != "Stopped" && status != "थांबवले") {
+                            TextButton(onClick = startService) { Text(if (english) "Resume" else "पुन्हा सुरू करा") }
+                        }
+                        androidx.compose.material3.Button(
+                            onClick = stopRecognition,
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFFE7E7), contentColor = Color(0xFFB3261E)
+                            )
+                        ) { Text(if (english) "Stop" else "थांबवा") }
+                    }
                 }
             }
         }
