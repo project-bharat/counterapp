@@ -17,6 +17,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -86,11 +88,12 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
 fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null }
+    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null && sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null }
     var permissionGranted by remember {
         mutableStateOf(Build.VERSION.SDK_INT < 29 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
     }
+    var locationGranted by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) }
     var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", false)) }
     var message by remember { mutableStateOf("") }
 
@@ -103,15 +106,24 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
             message = error.message ?: if (english) "Could not start tracking" else "मोजणी सुरू झाली नाही"
         }
     }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        startService()
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startService() else message = if (english) "Notification permission is required" else "सूचना परवानगी आवश्यक आहे"
+    }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        locationGranted = granted
+        if (granted) {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else startService()
+        } else message = if (english) "Precise location is required to verify walking distance" else "चालण्याचे अंतर तपासण्यासाठी अचूक लोकेशन परवानगी आवश्यक आहे"
     }
     val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
         if (granted) {
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            if (!locationGranted) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else startService()
+            else startService()
         } else message = if (english) "Activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
     }
 
@@ -163,6 +175,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                     onClick = {
                         if (running) { StepTrackingService.stop(context); running = false }
                         else if (Build.VERSION.SDK_INT >= 29 && !permissionGranted) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        else if (!locationGranted) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else startService()
                     },
@@ -259,8 +272,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 Text(if (english) "TODAY" else "आज", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 Text(if (english) "Chants" else "जप", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (english) "Auto count" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.padding(start = 8.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (english) "Auto count" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 Switch(checked = automatic, onCheckedChange = { enabled ->
                     if (!enabled) stopRecognition()
                     else {
@@ -278,10 +291,18 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
                 Text("${count / 108} ${if (english) "mala" else "माळ"} · ${count % 108}/108", color = Color(0xFFB17B28), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Surface(modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFFF5F0FA), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDCCBEF))) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (english) "SELECTED JAPA" else "निवडलेला जप", color = Color(0xFF80639D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text(target, color = Color(0xFF38234F), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                    }
+                }
                 val manualInteraction = remember { MutableInteractionSource() }
                 Box(
-                    Modifier.padding(top = 12.dp).size(218.dp)
-                        .background(Brush.linearGradient(listOf(Color(0xFFE9DDF8), Color(0xFFD8C4F0))), CircleShape)
+                    Modifier.padding(top = 16.dp).size(218.dp)
+                        .shadow(12.dp, CircleShape)
+                        .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
+                        .border(3.dp, Color(0xFFB895D7), CircleShape)
                         .clickable(interactionSource = manualInteraction, indication = null, onClick = onManualCount),
                     contentAlignment = Alignment.Center
                 ) {
@@ -423,8 +444,8 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
         Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f).padding(end = 10.dp)) {
                         Text(if (english) "Auto detect" else "स्वयंचलित ओळख", color = ink, fontWeight = FontWeight.SemiBold)
                     }
                     androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it }, enabled = linear != null)

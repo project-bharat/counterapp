@@ -528,6 +528,7 @@ private fun BabyMovementScreen(
                     Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
                     Text(if (english) "Baby movement" else "बाळाची हालचाल", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     if (resumableSession != null) {
+                        Spacer(Modifier.height(28.dp))
                         Button(onClick = { onResume(resumableSession.id) }, modifier = Modifier.height(46.dp)) {
                             Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Resume session" else "सत्र पुन्हा सुरू करा")
                         }
