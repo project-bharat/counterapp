@@ -442,7 +442,7 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
 
 
 @Composable
-private fun BabyMotionSensorEngine(
+fun BabyMotionSensorEngine(
     activeSessionId: Long,
     enabled: Boolean,
     onDetected: (Long, Float) -> Unit,
