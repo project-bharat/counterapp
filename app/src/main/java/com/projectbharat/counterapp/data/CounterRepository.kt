@@ -8,6 +8,12 @@ class CounterRepository(private val dao: CounterDao) {
     val categories = dao.categories()
     suspend fun addCategory(mr: String, en: String) = dao.addCategory(CounterCategory(titleMr = mr, titleEn = en))
     fun today(categoryId: Long): Flow<Int> = dao.todayCount(categoryId, LocalDate.now().toString())
+    fun logsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.logsForDay(categoryId, date.toString())
+    fun logsForRange(categoryId: Long, from: LocalDate, to: LocalDate): Flow<List<CounterLog>> = dao.logsForRange(categoryId, from.toString(), to.toString())
+    suspend fun updateLog(log: CounterLog) {
+        require(log.count > 0) { "Count must be positive" }
+        dao.updateLog(log.copy(note = log.note?.trim()?.takeIf { it.isNotEmpty() }))
+    }
     suspend fun add(categoryId: Long, strength: String?, duration: Long? = null): Long {
         val date = LocalDate.now().toString()
         val next = dao.countNow(categoryId, date) + 1
@@ -71,23 +77,21 @@ class CounterRepository(private val dao: CounterDao) {
         val now = System.currentTimeMillis()
         val session = dao.babySession(sessionId) ?: return
         if (session.endedAt != null || now >= session.startedAt + TWO_HOURS_MS) return
-        dao.addLog(
+        dao.addBabyMovementAtomically(
             CounterLog(
                 date = session.date,
                 timestamp = now,
                 categoryId = categoryId,
                 strength = strength,
                 sessionId = sessionId
-            )
+            ),
+            sessionId,
+            now - session.startedAt
         )
-        dao.incrementBabySession(sessionId, now - session.startedAt)
     }
 
     suspend fun undoBabyMovement(sessionId: Long) {
-        dao.latestSessionLog(sessionId)?.let {
-            dao.deleteSessionLog(it.id)
-            dao.decrementBabySession(sessionId)
-        }
+        dao.undoLatestBabyMovementAtomically(sessionId)
     }
 
     suspend fun finishBabySession(sessionId: Long, strength: String?) {
