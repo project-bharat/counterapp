@@ -13,6 +13,10 @@ class CounterRepository(private val dao: CounterDao) {
         val next = dao.countNow(categoryId, date) + 1
         return dao.addLog(CounterLog(date = date, timestamp = System.currentTimeMillis(), categoryId = categoryId, strength = strength, sessionDurationMs = if (next == 10) duration else null))
     }
+    suspend fun addCount(categoryId: Long, amount: Int) {
+        if (amount <= 0) return
+        dao.addLog(CounterLog(date = LocalDate.now().toString(), timestamp = System.currentTimeMillis(), categoryId = categoryId, count = amount))
+    }
     suspend fun undo(categoryId: Long) {
         dao.latestLog(categoryId, LocalDate.now().toString())?.let { dao.deleteLog(it.id) }
     }
