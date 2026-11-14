@@ -277,7 +277,7 @@ fun CounterApp(repo: CounterRepository) {
                     showPermissionIntro = false
                 },
                 title = { Text(if (english) "Set up device access" else "फोन परवानग्या सेट करा") },
-                text = { Text(if (english) "Steps: activity access. Japa: microphone only when Auto Count is enabled." else "पावले: हालचाल परवानगी. जप: Auto Count सुरू केल्यावरच मायक्रोफोन.") },
+                text = { Text(if (english) "Steps: activity & notifications. Japa: microphone for Auto Count." else "पावले: हालचाल व सूचना. जप: Auto Count वर मायक्रोफोन.") },
                 confirmButton = {
                     TextButton(onClick = { firstRunPermissionLauncher.launch(firstRunPermissions) }) {
                         Text(if (english) "Continue" else "पुढे")
