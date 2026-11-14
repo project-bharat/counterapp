@@ -112,6 +112,8 @@ class StepTrackingService : Service(), SensorEventListener {
             TrackingNotifications.stopPending(this, StepTrackingService::class.java, TrackingNotifications.STEP_ID))
         if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        else if (Build.VERSION.SDK_INT >= 29) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         else ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
 
         val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
