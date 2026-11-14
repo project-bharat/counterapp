@@ -95,7 +95,7 @@ fun AutoStepCounterScreen(
         permissionGranted = granted
     }
 
-    DisposableEffect(stepSensor, permissionGranted, categoryId) {
+    DisposableEffect(stepSensor, permissionGranted, categoryId, today) {
         if (permissionGranted && stepSensor != null) {
             val prefs = context.getSharedPreferences("auto_tracking", Context.MODE_PRIVATE)
             val baselineKey = "steps_baseline_${categoryId}_${today}"
