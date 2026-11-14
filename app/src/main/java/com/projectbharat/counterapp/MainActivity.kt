@@ -1,6 +1,15 @@
 package com.projectbharat.counterapp
 
 import android.content.Intent
+import android.app.TimePickerDialog
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PregnantWoman
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import android.os.Bundle
 import android.media.ToneGenerator
 import android.graphics.Paint
@@ -66,6 +75,7 @@ import java.time.format.DateTimeFormatter
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        DailyReminderScheduler.rescheduleAll(this)
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
         setContent { CounterApp(repo) }
@@ -123,6 +133,8 @@ fun CounterApp(repo: CounterRepository) {
     var monthlyHistory by remember { mutableStateOf(false) }
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
     var addDialog by remember { mutableStateOf(false) }
+    var remindersScreen by remember { mutableStateOf(false) }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
     var resetDialog by remember { mutableStateOf(false) }
     var finishDialog by remember { mutableStateOf(false) }
     var finalStrength by remember { mutableStateOf("MEDIUM") }
@@ -162,34 +174,46 @@ fun CounterApp(repo: CounterRepository) {
                  else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
 
     MaterialTheme(colorScheme = scheme) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet {
+                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                        Text(if (english) "DAILY COUNTER" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(14.dp))
+                        categories.forEach { cat ->
+                            val glyph = when (cat.kind) { "BABY" -> Icons.Default.PregnantWoman; "MANTRA" -> Icons.Default.SelfImprovement; "STEPS" -> Icons.Default.DirectionsWalk; else -> Icons.Default.Add }
+                            NavigationDrawerItem(
+                                icon = { Icon(glyph, null) },
+                                label = { Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप / मंत्र" } else if (english) cat.titleEn else cat.titleMr) },
+                                selected = selected?.id == cat.id && !remindersScreen,
+                                onClick = { selectedId = cat.id; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } }
+                            )
+                        }
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Add, null) }, label = { Text(if (english) "Add counter" else "नवीन मोजणी") }, selected = false, onClick = { addDialog = true; scope.launch { drawerState.close() } })
+                        Divider(Modifier.padding(vertical = 8.dp))
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
+                    }
+                }
+            }
+        ) {
         Surface(Modifier.fillMaxSize(), color = page) {
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
                 Row(Modifier.fillMaxWidth().padding(top=4.dp,bottom=14.dp), verticalAlignment=Alignment.CenterVertically) {
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = ink) }
                     Column(Modifier.weight(1f)) {
                         Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=ink.copy(alpha=.5f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                         Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
-                    IconButton(onClick={english=!english}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.Language,null,tint=ink) }
-                    IconButton(onClick={weekly=!weekly;monthlyHistory=false}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.BarChart,null,tint=ink) }
-                    IconButton(onClick={monthlyHistory=!monthlyHistory;weekly=false}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.History,null,tint=ink) }
-                }
-                if(categories.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=14.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        categories.forEach { cat ->
-                            val active=selected?.id==cat.id
-                            val glyph=when(cat.kind) { "BABY" -> Icons.Default.Favorite; "MANTRA" -> Icons.Default.SelfImprovement; "STEPS" -> Icons.Default.DirectionsWalk; else -> Icons.Default.Add }
-                            Surface(onClick={selectedId=cat.id;weekly=false;monthlyHistory=false}, shape=RoundedCornerShape(17.dp), color=if(active) Navy else MaterialTheme.colorScheme.surface) {
-                                Row(Modifier.padding(horizontal=13.dp,vertical=11.dp),verticalAlignment=Alignment.CenterVertically) {
-                                    Icon(glyph,null,tint=if(active) Color.White else ink,modifier=Modifier.size(17.dp)); Spacer(Modifier.width(6.dp))
-                                    Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप" } else if(english) cat.titleEn else cat.titleMr,color=if(active) Color.White else ink,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
-                                }
-                            }
-                        }
-                        Surface(onClick={addDialog=true},shape=CircleShape,color=Gold.copy(alpha=.2f)) { Icon(Icons.Default.Add,null,tint=Navy,modifier=Modifier.padding(11.dp).size(18.dp)) }
-                    }
                 }
 
                 Box(Modifier.weight(1f)) {
+                if (remindersScreen) {
+                    ReminderSettingsScreen(english = english, ink = ink)
+                } else
                 if (monthlyHistory && isBaby && selected != null) {
                     MonthlyHistoryScreen(
                         english = english, ink = ink, month = historyMonth, sessions = monthSessions,
@@ -253,6 +277,7 @@ fun CounterApp(repo: CounterRepository) {
                 color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
         }
     }
 
@@ -325,7 +350,7 @@ private fun BabyMovementScreen(
                         }
                         Box(Modifier.size(178.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(listOf(Color(0xFFFFE6DD),Color(0xFFFFC9B9))),CircleShape).clickable { tapScope.launch { tapScale.animateTo(.90f, tween(70)); tapScale.animateTo(1f, tween(210)) }; onTap(activeSession.id) }, contentAlignment=Alignment.Center) {
                             Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Favorite, null, tint=Color(0xFFC65F68), modifier=Modifier.size(34.dp))
+                                Icon(Icons.Default.PregnantWoman, null, tint=Color(0xFFC65F68), modifier=Modifier.size(34.dp))
                                 Text("+1", color=Color(0xFF7F3546), style=MaterialTheme.typography.displaySmall, fontWeight=FontWeight.ExtraBold)
                                 Text(if (english) "TAP MOVEMENT" else "हालचाल मोजा", color=Color(0xFF7F3546), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                             }
