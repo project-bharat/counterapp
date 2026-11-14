@@ -185,7 +185,7 @@ private val chantPresets = listOf(
 )
 
 @Composable
-fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color) {
+fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onManualCount: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) {
@@ -326,17 +326,11 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                Button(onClick = { /* manual count remains independent of microphone */ }, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (english) "Manual count is available below" else "मॅन्युअल मोजणी खाली उपलब्ध")
+                Button(onClick = onManualCount, modifier = Modifier.fillMaxWidth().height(54.dp)) {
+                    Text(if (english) "Manual +1" else "मॅन्युअल +१")
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
-        Button(
-            onClick = { /* count is sent through the parent callback below */ },
-            enabled = false,
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (english) "Manual +1" else "मॅन्युअल +१") }
         Text(if (english) "Offline speech uses a Hindi or English model; Marathi speech accuracy must be validated on-device. Audio is processed in memory, not saved." else "ऑफलाइन आवाज ओळख हिंदी किंवा इंग्रजी मॉडेल वापरते. मराठी ओळख प्रत्यक्ष फोनवर तपासणे आवश्यक आहे. आवाज साठवला जात नाही.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 10.dp))
     }
 }
