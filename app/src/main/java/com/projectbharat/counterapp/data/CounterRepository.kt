@@ -29,6 +29,11 @@ class CounterRepository(private val dao: CounterDao) {
     fun babySessionsForDay(categoryId: Long, date: String = LocalDate.now().toString()) =
         dao.babySessionsForDay(categoryId, date)
 
+    fun babySessionsForMonth(categoryId: Long, month: LocalDate): Flow<List<BabySession>> {
+        val first = month.withDayOfMonth(1)
+        return dao.babySessionsForMonth(categoryId, first.toString(), first.withDayOfMonth(first.lengthOfMonth()).toString())
+    }
+
     fun averageBabyTimeToTen(categoryId: Long): Flow<Double?> {
         val today = LocalDate.now()
         return dao.averageBabyTimeToTen(categoryId, today.minusDays(6).toString(), today.toString())
