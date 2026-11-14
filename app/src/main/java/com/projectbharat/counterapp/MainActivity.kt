@@ -80,6 +80,7 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun addMovement(id: Long, sessionId: Long) = repo.addBabyMovement(id, sessionId, null)
     suspend fun undoMovement(sessionId: Long) = repo.undoBabyMovement(sessionId)
     suspend fun finishSession(sessionId: Long, strength: String?) = repo.finishBabySession(sessionId, strength)
+    suspend fun completeSession(sessionId: Long) = repo.completeExpiredBabySession(sessionId)
     suspend fun addCategory(mr: String, en: String) = repo.addCategory(mr, en)
     suspend fun add(id: Long, strength: String?, duration: Long? = null) = repo.add(id, strength, duration)
     suspend fun undo(id: Long) = repo.undo(id)
@@ -127,6 +128,7 @@ fun CounterApp(repo: CounterRepository) {
     val haptic = LocalHapticFeedback.current
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
     LaunchedEffect(Unit) { while (true) { delay(1000); clock = System.currentTimeMillis() } }
+    LaunchedEffect(latestSession?.id, clock) { latestSession?.let { if (it.endedAt == null && clock >= it.startedAt + CounterRepository.TWO_HOURS_MS) vm.completeSession(it.id) } }
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
 
     val countFlow = remember(selected?.id) { selected?.let { vm.count(it.id) } ?: flowOf(0) }
@@ -155,24 +157,28 @@ fun CounterApp(repo: CounterRepository) {
     MaterialTheme(colorScheme = scheme) {
         Surface(Modifier.fillMaxSize(), color = page) {
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (english) "Daily Counter" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ink)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { english = !english }) { Icon(Icons.Default.Language, contentDescription = "Language") }
-                        IconButton(onClick = { weekly = !weekly; monthlyHistory = false }) { Icon(Icons.Default.BarChart, contentDescription = "Weekly report") }
-                        IconButton(onClick = { monthlyHistory = !monthlyHistory; weekly = false }) { Icon(Icons.Default.History, contentDescription = "Monthly history") }
+                Row(Modifier.fillMaxWidth().padding(top=4.dp,bottom=14.dp), verticalAlignment=Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=ink.copy(alpha=.5f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                        Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
+                    IconButton(onClick={english=!english}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.Language,null,tint=ink) }
+                    IconButton(onClick={weekly=!weekly;monthlyHistory=false}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.BarChart,null,tint=ink) }
+                    IconButton(onClick={monthlyHistory=!monthlyHistory;weekly=false}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.History,null,tint=ink) }
                 }
-                if (categories.isNotEmpty()) {
-                    var expanded by remember { mutableStateOf(false) }
-                    Box(Modifier.align(Alignment.CenterHorizontally).padding(vertical = 8.dp)) {
-                        OutlinedButton(onClick = { expanded = true }, shape = RoundedCornerShape(16.dp)) {
-                            Text(if (english) selected?.titleEn ?: "" else selected?.titleMr ?: "")
+                if(categories.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom=14.dp), horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        categories.forEach { cat ->
+                            val active=selected?.id==cat.id
+                            val glyph=when(cat.kind) { "BABY" -> Icons.Default.Favorite; "MANTRA" -> Icons.Default.SelfImprovement; "STEPS" -> Icons.Default.DirectionsWalk; else -> Icons.Default.Add }
+                            Surface(onClick={selectedId=cat.id;weekly=false;monthlyHistory=false}, shape=RoundedCornerShape(17.dp), color=if(active) Navy else MaterialTheme.colorScheme.surface) {
+                                Row(Modifier.padding(horizontal=13.dp,vertical=11.dp),verticalAlignment=Alignment.CenterVertically) {
+                                    Icon(glyph,null,tint=if(active) Color.White else ink,modifier=Modifier.size(17.dp)); Spacer(Modifier.width(6.dp))
+                                    Text(if(english) cat.titleEn else cat.titleMr,color=if(active) Color.White else ink,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
+                                }
+                            }
                         }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            categories.forEach { cat -> DropdownMenuItem(text = { Text(if (english) cat.titleEn else cat.titleMr) }, onClick = { selectedId = cat.id; weekly = false; expanded = false }) }
-                            DropdownMenuItem(text = { Text(if (english) "+ Add category" else "+ नवीन प्रकार") }, onClick = { expanded = false; addDialog = true })
-                        }
+                        Surface(onClick={addDialog=true},shape=CircleShape,color=Gold.copy(alpha=.2f)) { Icon(Icons.Default.Add,null,tint=Navy,modifier=Modifier.padding(11.dp).size(18.dp)) }
                     }
                 }
 
@@ -187,7 +193,7 @@ fun CounterApp(repo: CounterRepository) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(if (english) "Last 7 days" else "मागील ७ दिवस", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.height(18.dp))
-                        WeeklyChart(days.map { it.total }, Modifier.fillMaxWidth().height(210.dp))
+                        WeeklyChart(days, Modifier.fillMaxWidth().height(210.dp))
                         Text(if (english) "Daily total" else "दररोजची मोजणी")
                         if (isBaby) Text((if (english) "Average time to 10 movements: " else "१० हालचालींसाठी सरासरी वेळ: ") + (average?.let { "%.1f min".format(it / 60000.0) } ?: "—"))
                         Spacer(Modifier.height(16.dp))
@@ -386,20 +392,62 @@ private fun BabyMovementScreen(
 }
 
 @Composable
-private fun WeeklyChart(values: List<Int>, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val maxValue = (values.maxOrNull() ?: 0).coerceAtLeast(1)
-        val gap = size.width / 14f
-        val barWidth = size.width / 18f
-        values.forEachIndexed { index, value ->
-            val height = size.height * value / maxValue.toFloat() * .85f
-            val left = gap + index * gap * 2
-            drawRoundRect(Gold, androidx.compose.ui.geometry.Offset(left, size.height - height), androidx.compose.ui.geometry.Size(barWidth, height), androidx.compose.ui.geometry.CornerRadius(12f))
+private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,mantra:Boolean,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
+    val progress=if(goal>0) (count.toFloat()/goal).coerceIn(0f,1f) else 0f
+    Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally) {
+        Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(26.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                Box(Modifier.size(58.dp).background(if(mantra) Color(0xFFEDE4FA) else Color(0xFFDDF1E8),CircleShape),contentAlignment=Alignment.Center) {
+                    Icon(if(mantra) Icons.Default.SelfImprovement else Icons.Default.DirectionsWalk,null,tint=if(mantra) Color(0xFF7855A6) else Color(0xFF398A68),modifier=Modifier.size(30.dp))
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(if(english) "TODAY" else "आज",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelMedium,fontWeight=FontWeight.Bold)
+                Text(count.toString(),color=ink,style=MaterialTheme.typography.displayLarge,fontWeight=FontWeight.ExtraBold)
+                Text(if(mantra) if(english) "CHANTS" else "जप" else if(english) "STEPS" else "पावले",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+                if(mantra) {
+                    Text((count/108).toString()+" "+(if(english) "mala" else "माळ")+" · "+(count%108)+"/108",color=Gold,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=9.dp))
+                    Row(Modifier.padding(top=8.dp),horizontalArrangement=Arrangement.Center) { repeat(12) { index -> Box(Modifier.padding(3.dp).size(11.dp).background(if(index<count%108*12/108) Gold else Color(0xFFE8E1D7),CircleShape)) } }
+                } else {
+                    Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                        Text(if(english) "DAILY GOAL" else "दैनिक लक्ष्य",color=ink.copy(alpha=.6f),style=MaterialTheme.typography.labelSmall)
+                        Text(count.toString()+" / "+goal,color=ink,fontWeight=FontWeight.Bold)
+                    }
+                    LinearProgressIndicator(progress={progress},modifier=Modifier.fillMaxWidth().padding(top=8.dp).height(8.dp).clip(CircleShape),color=Color(0xFF55A886),trackColor=Color(0xFFDDEBE3))
+                }
+            }
         }
-        drawLine(Navy.copy(alpha = .25f), androidx.compose.ui.geometry.Offset(0f, size.height), androidx.compose.ui.geometry.Offset(size.width, size.height), strokeWidth = 2f, cap = StrokeCap.Round)
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.size(214.dp).background(Brush.linearGradient(if(mantra) listOf(Color(0xFFE9DDF8),Color(0xFFD8C4F0)) else listOf(Color(0xFFDDF1E8),Color(0xFFBDE2D0))),CircleShape).clickable(onClick=onTap),contentAlignment=Alignment.Center) {
+            Column(horizontalAlignment=Alignment.CenterHorizontally) {
+                Icon(if(mantra) Icons.Default.SelfImprovement else Icons.Default.DirectionsWalk,null,tint=ink,modifier=Modifier.size(36.dp))
+                Text("+1",color=ink,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.ExtraBold)
+                Text(if(english) "TAP TO ADD" else "मोजणी वाढवा",color=ink,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick=onUndo,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Remove,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Undo" else "मागे घ्या") }
+            OutlinedButton(onClick=onReset,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Refresh,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Reset" else "रीसेट") }
+        }
+        Spacer(Modifier.weight(.8f))
     }
 }
 
+@Composable
+private fun WeeklyChart(days: List<DayTotal>, modifier: Modifier = Modifier) {
+    val maxValue=(days.maxOfOrNull{it.total} ?: 0).coerceAtLeast(1)
+    Row(modifier, horizontalArrangement=Arrangement.spacedBy(6.dp), verticalAlignment=Alignment.Bottom) {
+        days.forEach { day ->
+            Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Bottom) {
+                Text(day.total.toString(),color=Navy,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+                Spacer(Modifier.height(5.dp))
+                Box(Modifier.fillMaxWidth(.72f).weight(1f,false).height((145f*day.total/maxValue).coerceAtLeast(if(day.total>0) 8f else 3f).dp).clip(RoundedCornerShape(topStart=8.dp,topEnd=8.dp)).background(if(day.total==maxValue) Gold else Color(0xFF9BB6D3)))
+                Spacer(Modifier.height(7.dp))
+                Text(day.date.takeLast(2),color=Navy.copy(alpha=.65f),style=MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
 
 @Composable
 private fun MonthlyHistoryScreen(
