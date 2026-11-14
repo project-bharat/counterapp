@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
@@ -276,8 +277,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 Text(if (english) "TODAY" else "आज", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 Text(if (english) "Chants" else "जप", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
-            Row(Modifier.padding(start = 8.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (english) "Auto count" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
+            Row(Modifier.padding(start = 8.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (english) "Auto count" else "स्वयंचलित मोजणी", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 Switch(checked = automatic, onCheckedChange = { enabled ->
                     if (!enabled) stopRecognition()
                     else {
@@ -312,12 +313,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         }
                     }
                 }
-                Surface(modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFFF5F0FA), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDCCBEF))) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (english) "SELECTED JAPA" else "निवडलेला जप", color = Color(0xFF80639D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        Text(target, color = Color(0xFF38234F), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
-                    }
-                }
+                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp))
                 val manualInteraction = remember { MutableInteractionSource() }
                 val manualPressed by manualInteraction.collectIsPressedAsState()
                 val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
@@ -338,10 +334,31 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f)) {
+                        Row(Modifier.padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(onClick = {
+                                if (!running) {
+                                    language = "hi"
+                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari }
+                                }
+                            }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "hi") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "hi") MaterialTheme.colorScheme.onPrimary else ink) {
+                                Text("अ", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
+                            }
+                            Surface(onClick = {
+                                if (!running) {
+                                    language = "en"
+                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin }
+                                }
+                            }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "en") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "en") MaterialTheme.colorScheme.onPrimary else ink) {
+                                Text("A", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                     Box {
-                        OutlinedButton(onClick = { presetMenu = true }) {
+                        OutlinedButton(onClick = { presetMenu = true }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 8.dp)) {
                             Text(if (english) "Choose mantra" else "मंत्र निवडा")
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
                         DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
                             chantPresets.forEach { preset ->
@@ -353,16 +370,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             }
                         }
                     }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = language == "hi", onClick = {
-                        language = "hi"
-                        chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari }
-                    }, label = { Text(if (english) "Devanagari" else "देवनागरी") }, enabled = !running)
-                    FilterChip(selected = language == "en", onClick = {
-                        language = "en"
-                        chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin }
-                    }, label = { Text("English") }, enabled = !running)
                 }
                 if (automatic) {
                     Surface(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
