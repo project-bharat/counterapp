@@ -1,5 +1,3 @@
-import org.gradle.api.tasks.Copy
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -23,18 +21,8 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
-    sourceSets["main"].res.srcDir(layout.buildDirectory.dir("generated/res/countericon"))
 }
 
-tasks.register<Copy>("generateCounterIcon") {
-    from(rootProject.file("countericon.png"))
-    into(layout.buildDirectory.dir("generated/res/countericon/drawable-nodpi"))
-    rename { "counter_icon.png" }
-}
-
-tasks.named("preBuild").configure {
-    dependsOn("generateCounterIcon")
-}
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
