@@ -348,11 +348,21 @@ private fun BabyMovementScreen(
                             drawCircle(tapSurface, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx()))
                             drawArc(Color(0xFFE7A33C), -90f, 360f*progress, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx(), cap=StrokeCap.Round))
                         }
-                        Box(Modifier.size(178.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(listOf(Color(0xFFFFE6DD),Color(0xFFFFC9B9))),CircleShape).clickable { tapScope.launch { tapScale.animateTo(.90f, tween(70)); tapScale.animateTo(1f, tween(210)) }; onTap(activeSession.id) }, contentAlignment=Alignment.Center) {
-                            Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.PregnantWoman, null, tint=Color(0xFFC65F68), modifier=Modifier.size(34.dp))
-                                Text("+1", color=Color(0xFF7F3546), style=MaterialTheme.typography.displaySmall, fontWeight=FontWeight.ExtraBold)
-                                Text(if (english) "TAP MOVEMENT" else "हालचाल मोजा", color=Color(0xFF7F3546), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                        val tapInteraction = remember { MutableInteractionSource() }
+                        Box(
+                            Modifier.size(178.dp)
+                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
+                                .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
+                                .clickable(interactionSource = tapInteraction, indication = null) {
+                                    tapScope.launch { tapScale.animateTo(1.10f, tween(110)); tapScale.animateTo(1f, tween(260)) }
+                                    onTap(activeSession.id)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(48.dp))
+                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                                Text(if (english) "TAP MOVEMENT" else "हालचाल मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -381,10 +391,17 @@ private fun BabyMovementScreen(
                 }
             }
             if (activeSession.movementCount >= 10) {
-                Surface(Modifier.fillMaxWidth().padding(top=9.dp), shape=RoundedCornerShape(15.dp), color=Color(0xFFE5F2E8)) {
-                    Row(Modifier.padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle,null,tint=Color(0xFF39865B)); Spacer(Modifier.width(7.dp))
-                        Text(if (english) "10 movements reached · Keep observing" else "१० हालचाली पूर्ण · निरीक्षण सुरू ठेवा", color=Color(0xFF286342), style=MaterialTheme.typography.labelMedium)
+                Surface(Modifier.fillMaxWidth().padding(top = 9.dp), shape = RoundedCornerShape(15.dp), color = Color(0xFFE5F2E8)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF238451))
+                            Spacer(Modifier.width(7.dp))
+                            Text(if (english) "10+ movements" else "१०+ हालचाली", color = Color(0xFF238451), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.weight(1f))
+                            Text(activeSession.movementCount.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        }
+                        LinearProgressIndicator(progress = { 1f }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(7.dp).clip(CircleShape), color = Color(0xFF2E9B63), trackColor = Color(0xFFB9DDC8))
+                        Text(if (english) "10 reached · continue recording" else "१० पूर्ण · हालचालींची नोंद सुरू ठेवा", color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 5.dp))
                     }
                 }
             }
@@ -472,7 +489,8 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
             }
         }
         Spacer(Modifier.weight(1f))
-        Box(Modifier.size(214.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(if(mantra) listOf(Color(0xFFE9DDF8),Color(0xFFD8C4F0)) else listOf(Color(0xFFDDF1E8),Color(0xFFBDE2D0))),CircleShape).clickable { tapScope.launch { tapScale.animateTo(.91f, tween(75)); tapScale.animateTo(1f, tween(180)) }; onTap() },contentAlignment=Alignment.Center) {
+        val tapInteraction = remember { MutableInteractionSource() }
+        Box(Modifier.size(214.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(if(mantra) listOf(Color(0xFFE9DDF8),Color(0xFFD8C4F0)) else listOf(Color(0xFFDDF1E8),Color(0xFFBDE2D0))),CircleShape).clickable(interactionSource = tapInteraction, indication = null) { tapScope.launch { tapScale.animateTo(.90f, tween(75)); tapScale.animateTo(1.08f, tween(110)); tapScale.animateTo(1f, tween(180)) }; onTap() },contentAlignment=Alignment.Center) {
             Column(horizontalAlignment=Alignment.CenterHorizontally) {
                 Icon(if(mantra) Icons.Default.SelfImprovement else Icons.Default.DirectionsWalk,null,tint=ink,modifier=Modifier.size(36.dp))
                 Text("+1",color=ink,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.ExtraBold)
