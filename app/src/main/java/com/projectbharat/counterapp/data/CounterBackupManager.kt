@@ -6,7 +6,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.time.LocalDate
 
 object CounterBackupManager {
     private const val FORMAT_VERSION = 1
@@ -76,33 +75,7 @@ object CounterBackupManager {
                 o.stringOrNull("strength"), o.stringOrNull("note"))
         }
 
-        val categoryIds = categories.map { it.id }
-        val sessionIds = sessions.map { it.id }
-        val categoryIdSet = categoryIds.toSet()
-        val sessionById = sessions.associateBy { it.id }
-
-        require(categoryIds.all { it > 0 } && categoryIdSet.size == categoryIds.size) {
-            "Backup contains invalid or duplicate counter IDs"
-        }
-        require(categories.all {
-            it.titleMr.isNotBlank() && it.titleEn.isNotBlank() && it.goal >= 0
-        }) { "Backup contains invalid counter details" }
-        require(sessionIds.all { it > 0 } && sessionIds.toSet().size == sessionIds.size) {
-            "Backup contains invalid or duplicate session IDs"
-        }
-        require(sessions.all {
-            it.categoryId in categoryIdSet &&
-                it.movementCount >= 0 &&
-                (it.endedAt == null || it.endedAt >= it.startedAt) &&
-                (it.timeToTenMs == null || it.timeToTenMs >= 0) &&
-                validDate(it.date)
-        }) { "Backup contains invalid baby movement sessions" }
-        require(logs.all {
-            it.id > 0 && it.categoryId in categoryIdSet && it.count > 0 &&
-                it.timestamp >= 0 && validDate(it.date) &&
-                (it.sessionId == null || sessionById[it.sessionId]?.categoryId == it.categoryId)
-        }) { "Backup contains invalid counter records" }
-
+        BackupSnapshotValidator.validate(categories, logs, sessions)
         CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions)
     }
 
@@ -126,7 +99,6 @@ object CounterBackupManager {
         }
     }
 
-    private fun validDate(value: String): Boolean = runCatching { LocalDate.parse(value) }.isSuccess
     private fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
     private fun JSONObject.putNullable(key: String, value: Any?): JSONObject = put(key, value ?: JSONObject.NULL)
     private fun JSONObject.longOrNull(key: String): Long? = if (isNull(key) || !has(key)) null else getLong(key)
