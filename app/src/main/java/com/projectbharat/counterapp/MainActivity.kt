@@ -267,7 +267,7 @@ fun CounterApp(repo: CounterRepository) {
                         },
                         onUndo = { sessionId -> scope.launch { vm.undoMovement(sessionId) } },
                         onFinish = { finishDialog = true },
-                        onAutoMovement = { sessionId -> onTap(sessionId) }
+                        onAutoMovement = { sessionId -> scope.launch { vm.addMovement(selected.id, sessionId) } }
                     )
                 } else if (selected?.kind == "STEPS") {
                     AutoStepCounterScreen(
