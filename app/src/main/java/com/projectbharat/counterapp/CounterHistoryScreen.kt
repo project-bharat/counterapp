@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.projectbharat.counterapp.data.CounterLog
+import com.projectbharat.counterapp.data.DayTotal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -27,6 +28,7 @@ fun CounterHistoryScreen(
     ink: Color,
     date: LocalDate,
     logs: List<CounterLog>,
+    days: List<DayTotal>,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onUpdate: (CounterLog) -> Unit,
@@ -36,7 +38,22 @@ fun CounterHistoryScreen(
     var deleting by remember { mutableStateOf<CounterLog?>(null) }
     val total = logs.sumOf { it.count }
     Column(Modifier.fillMaxSize()) {
-        Text(if (english) "COUNTER HISTORY" else "मोजणीचा इतिहास", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(if (english) "HISTORY & ANALYTICS" else "इतिहास व विश्लेषण", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text(if (english) "7-day total" else "७ दिवसांची एकूण मोजणी", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                        Text(days.sumOf { it.total }.toString(), color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(if (english) "Daily average" else "दररोज सरासरी", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                        Text("%.1f".format(days.sumOf { it.total }.toDouble() / 7.0), color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                WeeklyChart(days, Modifier.fillMaxWidth().height(92.dp).padding(top = 8.dp))
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             TextButton(onClick = onPrevious) { Text("‹ " + if (english) "Previous" else "मागील") }
             Text(date.format(DateTimeFormatter.ofPattern("dd MMM yyyy")), color = ink, fontWeight = FontWeight.SemiBold)
