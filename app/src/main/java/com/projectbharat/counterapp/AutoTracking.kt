@@ -61,8 +61,12 @@ import kotlin.math.sqrt
 
 private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiver) {
     val filter = IntentFilter(TRACKING_STATE_CHANGED)
-    if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-    else @Suppress("DEPRECATION") context.registerReceiver(receiver, filter)
+    if (Build.VERSION.SDK_INT >= 33) {
+        context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+        @Suppress("DEPRECATION")
+        context.registerReceiver(receiver, filter)
+    }
 }
 
 @Composable
