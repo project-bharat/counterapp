@@ -15,9 +15,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -80,10 +77,6 @@ class StepTrackingService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var sensorManager: SensorManager
     private val motionValidator = StepMotionValidator()
-    private val gpsVerifier = GpsWalkVerifier()
-    private lateinit var locationManager: LocationManager
-    private var gpsListener: LocationListener? = null
-    @Volatile private var pendingValidatedSteps = 0
     private var categoryId = -1L
     private var today = ""
     @Volatile private var loggedToday = 0
@@ -91,7 +84,6 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onCreate() {
         super.onCreate()
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -103,8 +95,7 @@ class StepTrackingService : Service(), SensorEventListener {
         }
         categoryId = intent?.getLongExtra(EXTRA_CATEGORY_ID, -1L) ?: state.getLong("step_category", -1L)
         if (categoryId <= 0 || (Build.VERSION.SDK_INT >= 29 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED)) {
             stopSelf(); return START_NOT_STICKY
         }
         state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).putBoolean("steps_running", true).apply()
@@ -112,9 +103,7 @@ class StepTrackingService : Service(), SensorEventListener {
             "Walking detection is active",
             TrackingNotifications.stopPending(this, StepTrackingService::class.java, TrackingNotifications.STEP_ID))
         if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        else if (Build.VERSION.SDK_INT >= 29) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
         else ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
 
         val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
@@ -124,42 +113,9 @@ class StepTrackingService : Service(), SensorEventListener {
             stopSelf(); return START_NOT_STICKY
         }
         today = LocalDate.now().toString()
-        scope.launch {
-            loggedToday = CounterDatabase.get(this@StepTrackingService).dao().countNow(categoryId, today)
-            pendingValidatedSteps = 0
-            sensorManager.registerListener(this@StepTrackingService, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-            sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_GAME)
-            val listener = object : LocationListener {
-                override fun onLocationChanged(location: Location) {
-                    val confirmed = gpsVerifier.acceptLocation(location.latitude, location.longitude,
-                        location.accuracy, System.currentTimeMillis(), pendingValidatedSteps)
-                    if (confirmed <= 0) return
-                    pendingValidatedSteps = (pendingValidatedSteps - confirmed).coerceAtLeast(0)
-                    val dateNow = LocalDate.now().toString()
-                    if (dateNow != today) { today = dateNow; loggedToday = 0 }
-                    loggedToday += confirmed
-                    scope.launch {
-                        CounterDatabase.get(this@StepTrackingService).dao().addLog(
-                            CounterLog(date = dateNow, timestamp = System.currentTimeMillis(), categoryId = categoryId,
-                                count = confirmed, note = "GPS_VERIFIED_WALK_STEP")
-                        )
-                        sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                            .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", confirmed))
-                    }
-                }
-                @Deprecated("Deprecated in Java") override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
-                override fun onProviderEnabled(provider: String) = Unit
-                override fun onProviderDisabled(provider: String) = Unit
-            }
-            gpsListener = listener
-            try {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener, Looper.getMainLooper())
-                locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let(listener::onLocationChanged)
-            } catch (error: SecurityException) {
-                Log.w("CounterAppSteps", "GPS permission was not available", error)
-                stopSelf()
-            }
-        }
+        today = LocalDate.now().toString()
+        sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+        sensorManager.registerListener(this, detector, SensorManager.SENSOR_DELAY_GAME)
         sendState(true)
         return START_NOT_STICKY
     }
@@ -171,14 +127,22 @@ class StepTrackingService : Service(), SensorEventListener {
         }
         if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR) return
         val accepted = motionValidator.acceptStepDetector(event.timestamp)
-        if (accepted > 0) pendingValidatedSteps = (pendingValidatedSteps + accepted).coerceAtMost(30)
+        if (accepted > 0) {
+            val dateNow = LocalDate.now().toString()
+            scope.launch {
+                CounterDatabase.get(this@StepTrackingService).dao().addLog(
+                    CounterLog(date = dateNow, timestamp = System.currentTimeMillis(), categoryId = categoryId,
+                        count = accepted, note = "MOTION_VALIDATED_STEP")
+                )
+                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                    .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", accepted))
+            }
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     override fun onDestroy() {
         sensorManager.unregisterListener(this)
-        gpsListener?.let { runCatching { locationManager.removeUpdates(it) } }
-        gpsListener = null
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).putBoolean("steps_enabled", false).apply()
         sendState(false)
         scope.cancel()
