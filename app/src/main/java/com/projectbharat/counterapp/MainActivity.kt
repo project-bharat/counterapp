@@ -589,18 +589,28 @@ private fun BabyMovementScreen(
         } else {
             Column(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 sessions.forEach { session ->
-                    Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(17.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
-                            Box(Modifier.size(40.dp).background(Color(0xFFFFE8DC),CircleShape),contentAlignment=Alignment.Center) { Icon(Icons.Default.Favorite,null,tint=Color(0xFFC65F68)) }
+                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(40.dp).background(Color(0xFFFFE8DC), CircleShape), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Favorite, null, tint = Color(0xFFC65F68))
+                            }
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(periodLabel(session.dayPeriod,english) + " · " + sessionTime(session.startedAt), color=ink, fontWeight=FontWeight.Bold)
-                                val duration=((session.endedAt ?: minOf(session.startedAt+CounterRepository.TWO_HOURS_MS,System.currentTimeMillis()))-session.startedAt).coerceAtLeast(0)/60000
-                                Text(duration.toString()+" min · "+(if(session.endedAt!=null || System.currentTimeMillis()>=session.startedAt+CounterRepository.TWO_HOURS_MS) if(english) "Completed" else "पूर्ण" else if(english) "In progress" else "सुरू"), color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall)
+                                Text(periodLabel(session.dayPeriod, english) + " · " + sessionTime(session.startedAt),
+                                    color = ink, fontWeight = FontWeight.Bold)
+                                val duration = ((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS,
+                                    System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000
+                                Text(duration.toString() + " min · " +
+                                    (if (session.endedAt != null || System.currentTimeMillis() >= session.startedAt + CounterRepository.TWO_HOURS_MS)
+                                        if (english) "Completed" else "पूर्ण"
+                                     else if (english) "In progress" else "सुरू"),
+                                    color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
                             }
-                            Text(session.movementCount.toString(), color=Gold, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
+                            Text(session.movementCount.toString(), color = Gold,
+                                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                         }
-                    
+                    }
                 }
             }
         }
