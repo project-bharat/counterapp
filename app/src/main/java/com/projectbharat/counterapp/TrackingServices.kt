@@ -74,12 +74,10 @@ private object TrackingNotifications {
 class StepTrackingService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var sensorManager: SensorManager
+    private val motionValidator = StepMotionValidator()
     private var categoryId = -1L
     private var today = ""
-    private var baseline = -1L
-    private var lastRaw = -1L
     @Volatile private var loggedToday = 0
-    private val prefs by lazy { getSharedPreferences("step_sensor_state", MODE_PRIVATE) }
 
     override fun onCreate() {
         super.onCreate()
@@ -100,66 +98,48 @@ class StepTrackingService : Service(), SensorEventListener {
         }
         state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).putBoolean("steps_running", true).apply()
         val notification = TrackingNotifications.show(this, TrackingNotifications.STEP_ID, "CounterApp · Steps",
-            "Automatic step tracking is active",
+            "Walking detection is active",
             TrackingNotifications.stopPending(this, StepTrackingService::class.java, TrackingNotifications.STEP_ID))
         if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
         else ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
 
-        val sensor = (getSystemService(SENSOR_SERVICE) as SensorManager).getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        if (sensor == null) { state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply(); stopSelf(); return START_NOT_STICKY }
+        val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (detector == null || accelerometer == null) {
+            state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
+            stopSelf(); return START_NOT_STICKY
+        }
         today = LocalDate.now().toString()
-        val key = "state_" + categoryId + "_" + today
-        baseline = prefs.getLong(key + "_baseline", -1L)
-        lastRaw = prefs.getLong(key + "_last_raw", -1L)
         scope.launch {
             loggedToday = CounterDatabase.get(this@StepTrackingService).dao().countNow(categoryId, today)
-            sensorManager.registerListener(this@StepTrackingService, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-            sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let {
-                sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL)
-            }
+            sensorManager.registerListener(this@StepTrackingService, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_GAME)
         }
         sendState(true)
         return START_NOT_STICKY
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_STEP_DETECTOR) {
-            sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName).putExtra(EXTRA_TRACKING_KIND, "step_pulse"))
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            motionValidator.addAcceleration(event.timestamp, event.values[0], event.values[1], event.values[2])
             return
         }
-        if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
-        val raw = event.values.firstOrNull()?.toLong() ?: return
+        if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR) return
+        val accepted = motionValidator.acceptStepDetector(event.timestamp)
+        if (accepted <= 0) return
         val dateNow = LocalDate.now().toString()
-        val key = "state_" + categoryId + "_" + dateNow
         if (dateNow != today) {
             today = dateNow
             loggedToday = 0
-            baseline = raw
-            lastRaw = raw
-            prefs.edit().putLong(key + "_baseline", baseline).putLong(key + "_last_raw", raw).apply()
-            return
         }
-        if (baseline < 0L) {
-            baseline = raw
-            lastRaw = raw
-            prefs.edit().putLong(key + "_baseline", baseline).putLong(key + "_last_raw", raw).apply()
-            return
-        }
-        if (lastRaw >= 0L && raw < lastRaw) baseline = raw - loggedToday // reboot: preserve today's saved total
-        val sensorTotal = (raw - baseline).coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        val delta = sensorTotal - loggedToday
-        lastRaw = raw
-        prefs.edit().putLong(key + "_baseline", baseline).putLong(key + "_last_raw", raw).apply()
-        if (delta > 0) {
-            loggedToday = sensorTotal
-            scope.launch {
-                CounterDatabase.get(this@StepTrackingService).dao().addLog(
-                    CounterLog(date = dateNow, timestamp = System.currentTimeMillis(), categoryId = categoryId,
-                        count = delta, note = "TYPE_STEP_COUNTER")
-                )
-                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                    .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", delta))
-            }
+        loggedToday += accepted
+        scope.launch {
+            CounterDatabase.get(this@StepTrackingService).dao().addLog(
+                CounterLog(date = dateNow, timestamp = System.currentTimeMillis(), categoryId = categoryId,
+                    count = accepted, note = "VALIDATED_STEP_DETECTOR")
+            )
+            sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", accepted))
         }
     }
 
@@ -182,7 +162,6 @@ class StepTrackingService : Service(), SensorEventListener {
         fun stop(context: Context) { context.stopService(Intent(context, StepTrackingService::class.java)) }
     }
 }
-
 class ChantRecognitionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var recording = false
