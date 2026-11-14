@@ -79,7 +79,6 @@ class StepTrackingService : Service(), SensorEventListener {
     private val motionValidator = StepMotionValidator()
     private var categoryId = -1L
     private var today = ""
-    @Volatile private var loggedToday = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -108,11 +107,10 @@ class StepTrackingService : Service(), SensorEventListener {
 
         val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
         val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (detector == null || accelerometer == null || !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        if (detector == null || accelerometer == null) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
             stopSelf(); return START_NOT_STICKY
         }
-        today = LocalDate.now().toString()
         today = LocalDate.now().toString()
         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
         sensorManager.registerListener(this, detector, SensorManager.SENSOR_DELAY_GAME)
@@ -240,7 +238,7 @@ class ChantRecognitionService : Service() {
                         if (matches > 0) {
                             scope.launch {
                                 CounterDatabase.get(this@ChantRecognitionService).dao().incrementMantraDaily(
-                                    categoryId, LocalDate.now().toString(), mantra
+                                    categoryId, LocalDate.now().toString(), mantra, matches
                                 )
                                 sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
                                     .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
