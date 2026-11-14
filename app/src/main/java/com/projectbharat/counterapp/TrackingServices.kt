@@ -87,13 +87,17 @@ class StepTrackingService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) { stopSelf(); return START_NOT_STICKY }
-        categoryId = intent?.getLongExtra(EXTRA_CATEGORY_ID, -1L) ?: -1L
+        val state = getSharedPreferences("tracking_state", MODE_PRIVATE)
+        if (intent?.action == ACTION_STOP) {
+            state.edit().putBoolean("steps_enabled", false).apply()
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        categoryId = intent?.getLongExtra(EXTRA_CATEGORY_ID, -1L) ?: state.getLong("step_category", -1L)
         if (categoryId <= 0 || (Build.VERSION.SDK_INT >= 29 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED)) {
             stopSelf(); return START_NOT_STICKY
         }
-        val state = getSharedPreferences("tracking_state", MODE_PRIVATE)
         state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).apply()
         val notification = TrackingNotifications.show(this, TrackingNotifications.STEP_ID, "CounterApp · Steps",
             "Automatic step tracking is active",
@@ -107,10 +111,12 @@ class StepTrackingService : Service(), SensorEventListener {
         val key = "state_" + categoryId + "_" + today
         baseline = prefs.getLong(key + "_baseline", -1L)
         lastRaw = prefs.getLong(key + "_last_raw", -1L)
-        scope.launch { loggedToday = CounterDatabase.get(this@StepTrackingService).dao().countNow(categoryId, today) }
-        sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-        sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        scope.launch {
+            loggedToday = CounterDatabase.get(this@StepTrackingService).dao().countNow(categoryId, today)
+            sensorManager.registerListener(this@StepTrackingService, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+            sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)?.let {
+                sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL)
+            }
         }
         sendState(true)
         return START_STICKY
@@ -136,7 +142,6 @@ class StepTrackingService : Service(), SensorEventListener {
         if (baseline < 0L) {
             baseline = raw
             lastRaw = raw
-            scope.launch { loggedToday = CounterDatabase.get(this@StepTrackingService).dao().countNow(categoryId, today) }
             prefs.edit().putLong(key + "_baseline", baseline).putLong(key + "_last_raw", raw).apply()
             return
         }
@@ -161,7 +166,6 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     override fun onDestroy() {
         sensorManager.unregisterListener(this)
-        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_enabled", false).apply()
         sendState(false)
         scope.cancel()
         super.onDestroy()
