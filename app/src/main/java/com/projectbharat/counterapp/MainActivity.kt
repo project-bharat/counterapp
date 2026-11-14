@@ -77,6 +77,12 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
+    override fun onStop() {
+        StepTrackingService.stop(this)
+        ChantRecognitionService.stop(this)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DailyReminderScheduler.rescheduleAll(this)
