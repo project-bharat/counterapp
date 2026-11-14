@@ -927,8 +927,8 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
 
     fun tableHeader(canvas: android.graphics.Canvas, top: Float): Float {
         canvas.drawRoundRect(android.graphics.RectF(36f, top, 559f, top + 28f), 7f, 7f, paint(navy, 9f, true))
-        val labels = if (english) listOf("DATE", "PERIOD", "START", "METHOD", "MOVES", "TIME TO 10")
-                     else listOf("दिनांक", "वेळ", "सुरुवात", "पद्धत", "हालचाली", "१० साठी वेळ")
+        val labels = if (english) listOf("DATE", "PERIOD", "START", "METHOD", "MOVES", "TIME / DURATION")
+                     else listOf("दिनांक", "वेळ", "सुरुवात", "पद्धत", "हालचाली", "वेळ / कालावधी")
         labels.forEachIndexed { i, label -> canvas.drawText(label, xs[i] + 7f, top + 18f, headPaint) }
         return top + 28f
     }
