@@ -12,6 +12,9 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -339,6 +342,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
 @Composable
 fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink: Color, onDetected: () -> Unit) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val manager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     val linear = remember { manager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) }
     val gyro = remember { manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
@@ -348,7 +352,7 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
     var candidatePending by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
-    DisposableEffect(enabled, activeSessionId, linear, gyro) {
+    DisposableEffect(enabled, activeSessionId, linear, gyro, lifecycleOwner) {
         if (enabled && activeSessionId != null && linear != null) {
             val startedAt = System.currentTimeMillis()
             val samples = ArrayList<Float>()
@@ -395,12 +399,30 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                 }
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
             }
-            manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
-            gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
+            var registered = false
+            val registerSensors = {
+                if (!registered) {
+                    manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
+                    gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
+                    registered = true
+                }
+            }
+            val lifecycleObserver = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> registerSensors()
+                    Lifecycle.Event.ON_STOP -> { manager.unregisterListener(listener); registered = false }
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) registerSensors()
             calibrated = false
             candidatePending = false
             status = if (english) "Keep phone still for 8-second baseline…" else "८ सेकंद फोन स्थिर ठेवा…"
-            onDispose { manager.unregisterListener(listener) }
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+                manager.unregisterListener(listener)
+            }
         } else {
             calibrated = false
             onDispose { }
