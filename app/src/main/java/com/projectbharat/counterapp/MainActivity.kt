@@ -240,10 +240,10 @@ fun CounterApp(repo: CounterRepository) {
     LaunchedEffect(latestSession?.id, clock) { latestSession?.let { val limit = CounterRepository.TWO_HOURS_MS; if (it.endedAt == null && clock >= it.startedAt + limit) vm.completeSession(it.id) } }
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
     val isBaby = selected?.kind == "BABY"
-    val activeSession = latestSession?.takeIf { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; it.endedAt == null && clock < it.startedAt + limit }
-    val resumableSession = latestSession?.takeIf { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; it.endedAt != null && clock < it.startedAt + limit }
-    val lockedSession = latestSession?.takeIf { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; clock < it.startedAt + limit }
-    val remainingMs = activeSession?.let { val limit = if (it.trackingMode == "ONE_HOUR") CounterRepository.ONE_HOUR_MS else CounterRepository.TWO_HOURS_MS; (it.startedAt + limit - clock).coerceAtLeast(0L) } ?: 0L
+    val activeSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt == null && clock < it.startedAt + limit }
+    val resumableSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt != null && clock < it.startedAt + limit }
+    val lockedSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; clock < it.startedAt + limit }
+    val remainingMs = activeSession?.let { val limit = CounterRepository.TWO_HOURS_MS; (it.startedAt + limit - clock).coerceAtLeast(0L) } ?: 0L
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
@@ -515,8 +515,8 @@ private fun BabyMovementScreen(
                     Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(if (english) "2-hour movement session" else "२ तासांचे हालचाल सत्र", color = Gold, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (english) "Auto detect" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall)
+                Row(Modifier.padding(end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (english) "Auto count" else "स्वयंचलित मोजणी", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                     Switch(checked = autoDetect, onCheckedChange = { autoDetect = it })
                 }
             }
@@ -571,7 +571,6 @@ private fun BabyMovementScreen(
                         TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
                             Icon(Icons.Default.Undo, null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo" else "मागे")
                         }
-                        TextButton(onClick = onFinish) { Text(if (english) "Finish session" else "सत्र पूर्ण करा") }
                     }
                 }
             }
@@ -580,15 +579,6 @@ private fun BabyMovementScreen(
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
                     Text(if (english) "Baby movement" else "बाळाची हालचाल", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    if (false) {
-                        Surface(Modifier.fillMaxWidth().padding(top = 14.dp), shape = RoundedCornerShape(16.dp), color = Color(0xFFEAF1FA)) {
-                            Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(if (english) "1-HOUR COUNT COMPLETED" else "१ तासाची मोजणी पूर्ण", color = Color(0xFF315E8A), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                Text(latestSession.movementCount.toString(), color = Color(0xFF315E8A), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
-                                Text(if (english) "Movements recorded in one hour" else "एका तासात नोंदवलेल्या हालचाली", color = Color(0xFF315E8A), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
                     if (latestSession != null && latestSession.timeToTenMs != null) {
                         Surface(Modifier.fillMaxWidth().padding(top = 14.dp), shape = RoundedCornerShape(16.dp), color = Color(0xFFE8F4EC)) {
                             Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
