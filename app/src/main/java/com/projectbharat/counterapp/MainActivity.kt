@@ -21,6 +21,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -325,6 +327,8 @@ private fun BabyMovementScreen(
     val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
     val tapScale = remember { Animatable(1f) }
     val tapScope = rememberCoroutineScope()
+    val babyMotion = rememberInfiniteTransition(label = "babyMotion")
+    val babyBob by babyMotion.animateFloat(initialValue = -4f, targetValue = 4f, animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "babyBob")
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         if (activeSession != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -351,10 +355,10 @@ private fun BabyMovementScreen(
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
                             Modifier.size(178.dp)
-                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
+                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value, translationY = babyBob.dp.toPxSafe())
                                 .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
-                                    tapScope.launch { tapScale.animateTo(1.10f, tween(110)); tapScale.animateTo(1f, tween(260)) }
+                                    tapScope.launch { tapScale.animateTo(1.16f, tween(110)); tapScale.animateTo(1f, tween(260)) }
                                     onTap(activeSession.id)
                                 },
                             contentAlignment = Alignment.Center
