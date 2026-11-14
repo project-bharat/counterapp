@@ -257,7 +257,7 @@ abstract class CounterDatabase : RoomDatabase() {
         }
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("CREATE TABLE IF NOT EXISTS baby_detections (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sessionId INTEGER NOT NULL, timestamp INTEGER NOT NULL, magnitude REAL NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING')")
+                db.execSQL("CREATE TABLE IF NOT EXISTS baby_detections (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sessionId INTEGER NOT NULL, timestamp INTEGER NOT NULL, magnitude REAL NOT NULL, status TEXT NOT NULL)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_detections_sessionId ON baby_detections(sessionId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_baby_detections_timestamp ON baby_detections(timestamp)")
             }
