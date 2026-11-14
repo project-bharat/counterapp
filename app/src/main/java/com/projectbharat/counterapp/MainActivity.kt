@@ -88,7 +88,7 @@ import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     override fun onStop() {
-        StepTrackingService.stop(this)
+        // Keep the step foreground service alive; stop microphone recognition when the app leaves the foreground.
         ChantRecognitionService.stop(this)
         super.onStop()
     }
@@ -96,10 +96,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        stopService(Intent(this, StepTrackingService::class.java))
         stopService(Intent(this, ChantRecognitionService::class.java))
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
-            .putBoolean("steps_running", false).putBoolean("steps_enabled", false).putBoolean("chant_enabled", false).apply()
+            .putBoolean("chant_enabled", false).apply()
         DailyReminderScheduler.rescheduleAll(this)
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
@@ -427,7 +426,7 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected?.kind == "STEPS") {
                     AutoStepCounterScreen(
-                        categoryId = selected.id, count = count, english = english, ink = ink
+                        categoryId = selected.id, count = count, days = days, english = english, ink = ink
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
