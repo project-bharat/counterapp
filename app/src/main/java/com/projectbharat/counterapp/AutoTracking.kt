@@ -193,10 +193,10 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) {
-        mutableStateOf(prefs.getString("target_$categoryId", if (english) "राम" else "राम") ?: "राम")
+        mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम")
     }
     var language by remember(categoryId) {
-        mutableStateOf(prefs.getString("language_$categoryId", "hi") ?: "hi")
+        mutableStateOf(prefs.getString("language_$categoryId", if (english) "en" else "hi") ?: "hi")
     }
     var automatic by remember { mutableStateOf(false) }
     var running by remember { mutableStateOf(false) }
