@@ -92,7 +92,7 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
 }
 
 @Composable
-fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color) {
+fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, english: Boolean, ink: Color) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null && sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null }
@@ -145,7 +145,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
             }
         }
         registerTrackingReceiver(context, receiver)
-        onDispose { context.unregisterReceiver(receiver); StepTrackingService.stop(context) }
+        onDispose { context.unregisterReceiver(receiver) }
     }
     LaunchedEffect(Unit) {
         while (true) {
@@ -172,7 +172,15 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                 Spacer(Modifier.height(14.dp))
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
                 Text(if (english) "steps today" else "आजची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(12.dp))
+                Text(if (english) "LAST 7 DAYS" else "मागील ७ दिवस", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                val totalsByDate = days.associate { it.date to it.total }
+                val walkWeek = (6 downTo 0).map { offset ->
+                    val date = LocalDate.now().minusDays(offset.toLong())
+                    DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0)
+                }
+                WeeklyChart(walkWeek, Modifier.fillMaxWidth().height(112.dp))
+                Spacer(Modifier.height(8.dp))
                 when {
                     !available -> Text(if (english) "This phone has no step-counter sensor" else "या फोनमध्ये स्टेप काउंटर सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
                     !permissionGranted -> Text(if (english) "Allow physical activity access to count automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
@@ -230,8 +238,15 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var matchedCount by remember { mutableIntStateOf(0) }
     var presetMenu by remember { mutableStateOf(false) }
     var addMantraDialog by remember { mutableStateOf(false) }
-    var newMantra by remember { mutableStateOf("") }
-    var customMantras by remember(categoryId) { mutableStateOf(prefs.getStringSet("custom_mantras_$categoryId", emptySet()).orEmpty().toList()) }
+    var newMantraMr by remember { mutableStateOf("") }
+    var newMantraEn by remember { mutableStateOf("") }
+    var customMantras by remember(categoryId) {
+        mutableStateOf(prefs.getStringSet("custom_mantras_$categoryId", emptySet()).orEmpty().map { saved ->
+            val parts = saved.split("\\u001F", limit = 2)
+            if (parts.size == 2) ChantPreset(parts[1], parts[0], parts[1])
+            else ChantPreset(saved, saved, saved)
+        })
+    }
 
     val stopRecognition = {
         ChantRecognitionService.stop(context)
@@ -357,7 +372,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             Surface(onClick = {
                                 if (!running) {
                                     language = "hi"
-                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari; onMantraChange(target) }
+                                    (chantPresets + customMantras).firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari; onMantraChange(target) }
                                 }
                             }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "hi") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "hi") MaterialTheme.colorScheme.onPrimary else ink) {
                                 Text("अ", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
@@ -365,7 +380,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             Surface(onClick = {
                                 if (!running) {
                                     language = "en"
-                                    chantPresets.firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin; onMantraChange(target) }
+                                    (chantPresets + customMantras).firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin; onMantraChange(target) }
                                 }
                             }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "en") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "en") MaterialTheme.colorScheme.onPrimary else ink) {
                                 Text("A", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
