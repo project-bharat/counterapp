@@ -574,6 +574,15 @@ private fun BabyMovementScreen(
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
                     Text(if (english) "Baby movement" else "बाळाची हालचाल", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    if (latestSession != null && latestSession.endedAt != null && latestSession.trackingMode == "ONE_HOUR") {
+                        Surface(Modifier.fillMaxWidth().padding(top = 14.dp), shape = RoundedCornerShape(16.dp), color = Color(0xFFEAF1FA)) {
+                            Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(if (english) "1-HOUR COUNT COMPLETED" else "१ तासाची मोजणी पूर्ण", color = Color(0xFF315E8A), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text(latestSession.movementCount.toString(), color = Color(0xFF315E8A), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                                Text(if (english) "Movements recorded in one hour" else "एका तासात नोंदवलेल्या हालचाली", color = Color(0xFF315E8A), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                     if (latestSession != null && latestSession.endedAt != null && latestSession.trackingMode == "TEN_MOVEMENTS" && latestSession.movementCount >= 10) {
                         Surface(Modifier.fillMaxWidth().padding(top = 14.dp), shape = RoundedCornerShape(16.dp), color = Color(0xFFE8F4EC)) {
                             Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -664,7 +673,7 @@ private fun BabyMovementScreen(
         Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
             Column(Modifier.padding(13.dp)) {
                 Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text(if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Follow the counting method recommended by your maternity-care professional." else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे यांची नोंद करा. तुमच्या डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.", color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                Text(if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Guidance differs; follow your maternity-care professional's recommended method." else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे मोजा. डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.", color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 Text(if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer." else "हालचाली नेहमीपेक्षा कमी किंवा वेगळ्या वाटल्यास वेळ संपण्याची वाट न पाहता त्वरित डॉक्टरांशी संपर्क साधा.", color = Color(0xFF9A5B36), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
                 TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Know how · Cleveland Clinic" else "अधिक जाणून घ्या · Cleveland Clinic") }
             }

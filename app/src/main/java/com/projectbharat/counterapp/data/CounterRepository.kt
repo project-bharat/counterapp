@@ -81,7 +81,8 @@ class CounterRepository(private val dao: CounterDao) {
     suspend fun confirmBabyDetection(id: Long) {
         val detection = dao.pendingDetection(id) ?: return
         val session = dao.babySession(detection.sessionId) ?: return
-        val sessionEnd = minOf(session.endedAt ?: (session.startedAt + TWO_HOURS_MS), session.startedAt + TWO_HOURS_MS)
+        if (session.trackingMode == "TEN_MOVEMENTS" && session.movementCount >= 10) return
+        val sessionEnd = minOf(session.endedAt ?: (session.startedAt + sessionLimit(session)), session.startedAt + sessionLimit(session))
         if (detection.timestamp < session.startedAt || detection.timestamp > sessionEnd) return
         dao.confirmDetection(id, CounterLog(date = session.date, timestamp = detection.timestamp, categoryId = session.categoryId), detection.timestamp - session.startedAt)
         val refreshed = dao.babySession(session.id) ?: return
@@ -116,7 +117,7 @@ class CounterRepository(private val dao: CounterDao) {
     suspend fun addBabyMovement(categoryId: Long, sessionId: Long, strength: String?) {
         val now = System.currentTimeMillis()
         val session = dao.babySession(sessionId) ?: return
-        if (session.endedAt != null || now >= session.startedAt + TWO_HOURS_MS) return
+        if (session.endedAt != null || now >= session.startedAt + sessionLimit(session)) return
         dao.addBabyMovementAtomically(
             CounterLog(
                 date = session.date,
