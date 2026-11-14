@@ -51,6 +51,15 @@ interface CounterDao {
     @Insert
     suspend fun addCategory(category: CounterCategory): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCategories(items: List<CounterCategory>)
+
+    @Query("SELECT * FROM categories ORDER BY id")
+    suspend fun allCategories(): List<CounterCategory>
+
+    @Query("DELETE FROM categories")
+    suspend fun deleteAllCategories()
+
     @Update
     suspend fun updateCategory(category: CounterCategory)
 
@@ -65,6 +74,15 @@ interface CounterDao {
 
     @Insert
     suspend fun addLog(log: CounterLog): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLogs(items: List<CounterLog>)
+
+    @Query("SELECT * FROM counter_logs ORDER BY id")
+    suspend fun allLogs(): List<CounterLog>
+
+    @Query("DELETE FROM counter_logs")
+    suspend fun deleteAllLogs()
 
     @Update
     suspend fun updateLog(log: CounterLog)
@@ -107,6 +125,25 @@ interface CounterDao {
 
     @Insert
     suspend fun insertBabySession(session: BabySession): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBabySessions(items: List<BabySession>)
+
+    @Query("SELECT * FROM baby_sessions ORDER BY id")
+    suspend fun allBabySessions(): List<BabySession>
+
+    @Query("DELETE FROM baby_sessions")
+    suspend fun deleteAllBabySessions()
+
+    @Transaction
+    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>) {
+        deleteAllLogs()
+        deleteAllBabySessions()
+        deleteAllCategories()
+        insertCategories(categories)
+        if (sessions.isNotEmpty()) insertBabySessions(sessions)
+        if (logs.isNotEmpty()) insertLogs(logs)
+    }
 
     @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND endedAt IS NULL AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
     suspend fun activeBabySession(categoryId: Long, lockStart: Long): BabySession?
