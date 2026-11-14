@@ -198,10 +198,12 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (weekly) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (english) "Last 7 days" else "मागील ७ दिवस", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(18.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatTile(if (english) "TOTAL" else "एकूण", days.sumOf { it.total }.toString(), ink, Modifier.weight(1f))
+                            StatTile(if (english) "DAILY AVG" else "दररोज सरासरी", "%.1f".format(days.sumOf { it.total }.toDouble() / 7.0), ink, Modifier.weight(1f))
+                        }
+                        Spacer(Modifier.height(14.dp))
                         WeeklyChart(days, Modifier.fillMaxWidth().height(210.dp))
-                        Text(if (english) "Daily total" else "दररोजची मोजणी")
                         if (isBaby) Text((if (english) "Average time to 10 movements: " else "१० हालचालींसाठी सरासरी वेळ: ") + (average?.let { "%.1f min".format(it / 60000.0) } ?: "—"))
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = {
@@ -245,6 +247,10 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 }
             }
+            Text(if (english) "Designed & developed by Bharat Rasave" else "निर्मिती व संकल्पना · Bharat Rasave",
+                color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
 
@@ -452,6 +458,16 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
             OutlinedButton(onClick=onReset,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Refresh,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Reset" else "रीसेट") }
         }
         Spacer(Modifier.weight(.8f))
+    }
+}
+
+@Composable
+private fun StatTile(label: String, value: String, ink: Color, modifier: Modifier = Modifier) {
+    Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp)) {
+            Text(label, color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text(value, color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        }
     }
 }
 
