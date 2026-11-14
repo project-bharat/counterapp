@@ -77,7 +77,7 @@ object CounterBackupManager {
             BabySession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"),
                 o.getLong("startedAt"), o.longOrNull("endedAt"), o.getString("dayPeriod"),
                 o.optInt("movementCount", 0), o.longOrNull("timeToTenMs"),
-                o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TEN_MOVEMENTS"))
+                o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TWO_HOURS"))
         }
 
         val detections = (0 until detectionArray.length()).map { i ->
