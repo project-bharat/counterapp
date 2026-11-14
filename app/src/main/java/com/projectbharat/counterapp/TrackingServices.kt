@@ -301,8 +301,10 @@ class ChantRecognitionService : Service() {
             }
         } catch (error: Exception) {
             Log.e("CounterAppVosk", "Offline chant recognition stopped", error)
-            sendState(false, error.message ?: "Speech engine error")
-            stopSelf()
+            if (!stopRequested) {
+                sendState(false, error.message ?: "Speech engine error")
+                stopSelf()
+            }
         } finally {
             recording = false
             try { audioRecord?.stop() } catch (_: Exception) { }
@@ -349,12 +351,32 @@ class ChantRecognitionService : Service() {
 
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
         val zipFile = File(cacheDir, modelName + ".zip")
+        val existingBytes = if (zipFile.exists()) zipFile.length() else 0L
         val connection = URL(modelUrl).openConnection() as HttpURLConnection
         connection.connectTimeout = 20000; connection.readTimeout = 60000; connection.instanceFollowRedirects = true
         try {
+            if (existingBytes > 0L) connection.setRequestProperty("Range", "bytes=$existingBytes-")
             connection.connect()
-            if (connection.responseCode !in 200..299) throw IllegalStateException("Model download failed (" + connection.responseCode + ")")
-            connection.inputStream.use { input -> FileOutputStream(zipFile).use { output -> input.copyTo(output) } }
+            val response = connection.responseCode
+            if (response == HttpURLConnection.HTTP_REQUESTED_RANGE_NOT_SATISFIABLE && existingBytes > 0L) {
+                connection.disconnect()
+                zipFile.delete()
+                downloadAndExtractModel(modelUrl, modelName, target)
+                return
+            }
+            if (response !in 200..299) throw IllegalStateException("Model download failed (" + response + ")")
+            val append = response == HttpURLConnection.HTTP_PARTIAL && existingBytes > 0L
+            connection.inputStream.use { input ->
+                FileOutputStream(zipFile, append).use { output ->
+                    val chunk = ByteArray(64 * 1024)
+                    while (true) {
+                        if (Thread.currentThread().isInterrupted || stopRequested) throw InterruptedException("Model preparation paused")
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        output.write(chunk, 0, read)
+                    }
+                }
+            }
         } finally { connection.disconnect() }
         val staging = File(filesDir, modelName + "_extract").apply { deleteRecursively(); mkdirs() }
         ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zip ->
