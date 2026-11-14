@@ -89,7 +89,7 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val state = getSharedPreferences("tracking_state", MODE_PRIVATE)
         if (intent?.action == ACTION_STOP) {
-            state.edit().putBoolean("steps_enabled", false).apply()
+            state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -98,7 +98,7 @@ class StepTrackingService : Service(), SensorEventListener {
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED)) {
             stopSelf(); return START_NOT_STICKY
         }
-        state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).apply()
+        state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).putBoolean("steps_running", true).apply()
         val notification = TrackingNotifications.show(this, TrackingNotifications.STEP_ID, "CounterApp · Steps",
             "Automatic step tracking is active",
             TrackingNotifications.stopPending(this, StepTrackingService::class.java, TrackingNotifications.STEP_ID))
@@ -106,7 +106,7 @@ class StepTrackingService : Service(), SensorEventListener {
         else ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
 
         val sensor = (getSystemService(SENSOR_SERVICE) as SensorManager).getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        if (sensor == null) { state.edit().putBoolean("steps_enabled", false).apply(); stopSelf(); return START_NOT_STICKY }
+        if (sensor == null) { state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply(); stopSelf(); return START_NOT_STICKY }
         today = LocalDate.now().toString()
         val key = "state_" + categoryId + "_" + today
         baseline = prefs.getLong(key + "_baseline", -1L)
@@ -166,6 +166,7 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     override fun onDestroy() {
         sensorManager.unregisterListener(this)
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).apply()
         sendState(false)
         scope.cancel()
         super.onDestroy()
@@ -204,7 +205,7 @@ class ChantRecognitionService : Service() {
         val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "CounterApp · Japa",
             "Microphone active for “" + mantra + "”",
             TrackingNotifications.stopPending(this, ChantRecognitionService::class.java, TrackingNotifications.CHANT_ID))
-        if (Build.VERSION.SDK_INT >= 29) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).apply()
         sendState(true, "Preparing offline speech model")
