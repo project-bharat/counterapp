@@ -289,7 +289,8 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
-                        categoryId = selected.id, count = count, english = english, ink = ink
+                        categoryId = selected.id, count = count, english = english, ink = ink,
+                        onManualCount = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.add(selected.id, null) } }
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
