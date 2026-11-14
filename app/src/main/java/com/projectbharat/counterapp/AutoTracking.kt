@@ -371,8 +371,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         }
                     }
                 }
-                if (automatic) {                    }
-                }
                 if (automatic) {
                     Surface(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(14.dp), color = Color(0xFFF3EFF8)) {
                         Column(Modifier.padding(12.dp)) {
@@ -396,12 +394,10 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         if (automatic && !running && status.isNotBlank() && status != "Stopped" && status != "थांबवले") {
                             TextButton(onClick = startService) { Text(if (english) "Resume" else "पुन्हा सुरू करा") }
                         }
-                        androidx.compose.material3.Button(
-                            onClick = stopRecognition,
-                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFFFE7E7), contentColor = Color(0xFFB3261E)
-                            )
-                        ) { Text(if (english) "Stop" else "थांबवा") }
+                        Surface(onClick = stopRecognition, shape = RoundedCornerShape(12.dp), color = Color(0xFFFFE7E7)) {
+                            Text(if (english) "Stop" else "थांबवा", color = Color(0xFFB3261E), fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+                        }
                     }
                 }
             }
