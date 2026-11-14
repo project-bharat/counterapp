@@ -234,9 +234,14 @@ class ChantRecognitionService : Service() {
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
             model = Model(modelDir.absolutePath)
-            val grammarPhrases = linkedSetOf(mantra)
+            val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
+            val grammarPhrases = linkedSetOf(mantra, cleanMantra)
             if (language == "hi") {
-                grammarPhrases.add(mantra.replace("ॐ", "ओम").replace("नमः", "नम"))
+                grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
+                grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
+            } else {
+                grammarPhrases.add(cleanMantra.replace("Aum", "Om").replace("aum", "om"))
+                grammarPhrases.add(cleanMantra.replace("Shivaaya", "Shivaya").replace("shivaaya", "shivaya"))
             }
             val grammarJson = JSONArray()
             grammarPhrases.forEach { grammarJson.put(it) }
@@ -307,15 +312,36 @@ class ChantRecognitionService : Service() {
     private fun countPhrase(transcript: String, phrase: String): Int {
         if (transcript.isBlank() || phrase.isBlank()) return 0
         val normalize = { value: String ->
-            value.lowercase(Locale.ROOT).replace("ॐ", "ओम").replace("aum", "om")
+            value.lowercase(Locale.ROOT)
+                .replace("ॐ", "ओम")
+                .replace("aum", "om")
+                .replace("shivaaya", "shivaya")
+                .replace("namaha", "namah")
+                .replace("tryambakam", "tryambakam")
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .replace(Regex("\\s+"), " ").trim()
         }
         val text = normalize(transcript)
         val target = normalize(phrase)
         if (target.isBlank()) return 0
-        return Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(target) + "(?![\\p{L}\\p{N}])")
+        val exact = Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(target) + "(?![\\p{L}\\p{N}])")
             .findAll(text).count()
+        if (exact > 0) return exact
+
+        // Longer Sanskrit verses often lose one or two syllables in speech recognition.
+        // Accept a single near-complete ordered match, but keep short mantras exact.
+        val expected = target.split(" ").filter { it.isNotBlank() }
+        val spoken = text.split(" ").filter { it.isNotBlank() }
+        if (expected.size < 5 || spoken.isEmpty() || expected.first() != spoken.first()) return 0
+        var i = 0
+        var j = 0
+        var matchedTokens = 0
+        while (i < expected.size && j < spoken.size) {
+            if (expected[i] == spoken[j]) { matchedTokens++; i++; j++ }
+            else if (j + 1 < spoken.size && expected[i] == spoken[j + 1]) j++
+            else i++
+        }
+        return if (matchedTokens.toDouble() / expected.size >= 0.78) 1 else 0
     }
 
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
