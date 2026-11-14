@@ -110,6 +110,10 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     val archivedCategories = repo.archivedCategories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun count(id: Long) = repo.today(id)
     fun logsForDay(id: Long, date: LocalDate) = repo.logsForDay(id, date)
+    fun mantraLogsForDay(id: Long, date: LocalDate) = repo.mantraLogsForDay(id, date)
+    fun mantraToday(id: Long, mantra: String) = repo.mantraToday(id, mantra)
+    fun mantraWeek(id: Long, mantra: String) = repo.mantraWeek(id, mantra)
+    suspend fun addMantra(id: Long, mantra: String) = repo.addMantraCount(id, mantra)
     suspend fun updateLog(log: CounterLog) = repo.updateLog(log)
     suspend fun deleteLog(id: Long) = repo.deleteLog(id)
     fun week(id: Long) = repo.week(id)
@@ -184,6 +188,7 @@ fun CounterApp(repo: CounterRepository) {
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var mantraTarget by remember { mutableStateOf(context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_1", "राम") ?: "राम") }
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
     }
@@ -223,11 +228,23 @@ fun CounterApp(repo: CounterRepository) {
     LaunchedEffect(Unit) { while (true) { delay(1000); clock = System.currentTimeMillis() } }
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
 
-    val countFlow = remember(selected?.id) { selected?.let { vm.count(it.id) } ?: flowOf(0) }
-    val weekFlow = remember(selected?.id) { selected?.let { vm.week(it.id) } ?: flowOf(emptyList()) }
+    LaunchedEffect(selected?.id, selected?.kind) {
+        if (selected?.kind == "MANTRA") {
+            mantraTarget = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
+                .getString("target_${selected.id}", "राम") ?: "राम"
+        }
+    }
+    val countFlow = remember(selected?.id, selected?.kind, mantraTarget) {
+        selected?.let { if (it.kind == "MANTRA") vm.mantraToday(it.id, mantraTarget) else vm.count(it.id) } ?: flowOf(0)
+    }
+    val weekFlow = remember(selected?.id, selected?.kind, mantraTarget) {
+        selected?.let { if (it.kind == "MANTRA") vm.mantraWeek(it.id, mantraTarget) else vm.week(it.id) } ?: flowOf(emptyList())
+    }
     val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
-    val historyLogsFlow = remember(selected?.id, historyDate) { selected?.let { vm.logsForDay(it.id, historyDate) } ?: flowOf(emptyList()) }
+    val historyLogsFlow = remember(selected?.id, selected?.kind, historyDate) {
+        selected?.let { if (it.kind == "MANTRA") vm.mantraLogsForDay(it.id, historyDate) else vm.logsForDay(it.id, historyDate) } ?: flowOf(emptyList())
+    }
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
     val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
@@ -412,7 +429,8 @@ fun CounterApp(repo: CounterRepository) {
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
                         categoryId = selected.id, count = count, english = english, ink = ink,
-                        onManualCount = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.add(selected.id, null) } }
+                        onMantraChange = { mantra -> mantraTarget = mantra },
+                        onManualCount = { mantra -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.addMantra(selected.id, mantra) } }
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
@@ -424,7 +442,7 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 }
                 if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
-                    if (historyLogs.isNotEmpty()) {
+                    if (selected.kind != "MANTRA" && historyLogs.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             historyLogs.take(2).forEach { item ->
