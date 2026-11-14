@@ -29,6 +29,11 @@ class CounterRepository(private val dao: CounterDao) {
     fun babySessionsForDay(categoryId: Long, date: String = LocalDate.now().toString()) =
         dao.babySessionsForDay(categoryId, date)
 
+    fun averageBabyTimeToTen(categoryId: Long): Flow<Double?> {
+        val today = LocalDate.now()
+        return dao.averageBabyTimeToTen(categoryId, today.minusDays(6).toString(), today.toString())
+    }
+
     fun latestBabySession(categoryId: Long): Flow<BabySession?> =
         dao.latestSessionFlow(categoryId, System.currentTimeMillis() - TWO_HOURS_MS)
 
@@ -66,7 +71,7 @@ class CounterRepository(private val dao: CounterDao) {
                 sessionId = sessionId
             )
         )
-        dao.incrementBabySession(sessionId)
+        dao.incrementBabySession(sessionId, now - session.startedAt)
     }
 
     suspend fun undoBabyMovement(sessionId: Long) {
