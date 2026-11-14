@@ -114,6 +114,10 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     fun sessions(id: Long, date: String) = repo.babySessionsForDay(id, date)
     fun monthSessions(id: Long, month: LocalDate) = repo.babySessionsForMonth(id, month)
     fun latestSession(id: Long) = repo.latestBabySession(id)
+    fun detections(sessionId: Long) = repo.babyDetections(sessionId)
+    suspend fun recordDetection(sessionId: Long, timestamp: Long, magnitude: Float) = repo.recordBabyDetection(sessionId, timestamp, magnitude)
+    suspend fun confirmDetection(id: Long) = repo.confirmBabyDetection(id)
+    suspend fun dismissDetection(id: Long) = repo.dismissBabyDetection(id)
     suspend fun startSession(id: Long) = repo.startBabySession(id)
     suspend fun addMovement(id: Long, sessionId: Long) = repo.addBabyMovement(id, sessionId, null)
     suspend fun undoMovement(sessionId: Long) = repo.undoBabyMovement(sessionId)
@@ -211,6 +215,8 @@ fun CounterApp(repo: CounterRepository) {
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
     val latestSession by latestFlow.collectAsStateWithLifecycle(null)
+    val detectionFlow = remember(activeSession?.id) { activeSession?.let { vm.detections(it.id) } ?: flowOf(emptyList()) }
+    val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     LaunchedEffect(latestSession?.id, clock) { latestSession?.let { if (it.endedAt == null && clock >= it.startedAt + CounterRepository.TWO_HOURS_MS) vm.completeSession(it.id) } }
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
     val isBaby = selected?.kind == "BABY"
@@ -347,7 +353,9 @@ fun CounterApp(repo: CounterRepository) {
                         },
                         onUndo = { sessionId -> scope.launch { vm.undoMovement(sessionId) } },
                         onFinish = { finishDialog = true },
-                        onAutoMovement = { sessionId -> scope.launch { vm.addMovement(selected.id, sessionId) } }
+                        onAutoMovement = { sessionId, timestamp, magnitude -> scope.launch { vm.recordDetection(sessionId, timestamp, magnitude) } },
+                        onConfirmDetections = { ids -> scope.launch { ids.forEach { vm.confirmDetection(it) } } },
+                        onDismissDetections = { ids -> scope.launch { ids.forEach { vm.dismissDetection(it) } } }
                     )
                 } else if (selected?.kind == "STEPS") {
                     AutoStepCounterScreen(
@@ -427,9 +435,9 @@ fun CounterApp(repo: CounterRepository) {
 @Composable
 private fun BabyMovementScreen(
     english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
-    lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, historyDate: LocalDate,
+    lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, historyDate: LocalDate,
     onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onTap: (Long) -> Unit,
-    onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long) -> Unit
+    onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long, Long, Float) -> Unit,\n    onConfirmDetections: (List<Long>) -> Unit, onDismissDetections: (List<Long>) -> Unit
 ) {
     val elapsed = activeSession?.let { (System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) } ?: 0L
     val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
@@ -540,7 +548,7 @@ private fun BabyMovementScreen(
         activeSession?.let { session ->
             ExperimentalBabyMotionControl(
                 activeSessionId = session.id, english = english, ink = ink,
-                onDetected = { onAutoMovement(session.id) }
+                onDetected = { timestamp, magnitude -> onAutoMovement(session.id, timestamp, magnitude) }
             )
         }
         Spacer(Modifier.height(12.dp))
