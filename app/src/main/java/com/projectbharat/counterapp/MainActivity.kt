@@ -99,6 +99,9 @@ class MainActivity : ComponentActivity() {
 class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     val categories = repo.categories.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     fun count(id: Long) = repo.today(id)
+    fun logsForDay(id: Long, date: LocalDate) = repo.logsForDay(id, date)
+    suspend fun updateLog(log: CounterLog) = repo.updateLog(log)
+    suspend fun deleteLog(id: Long) = repo.deleteLog(id)
     fun week(id: Long) = repo.week(id)
     fun average(id: Long) = repo.average(id)
     fun averageBabyTimeToTen(id: Long) = repo.averageBabyTimeToTen(id)
@@ -168,12 +171,14 @@ fun CounterApp(repo: CounterRepository) {
     val weekFlow = remember(selected?.id) { selected?.let { vm.week(it.id) } ?: flowOf(emptyList()) }
     val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
+    val historyLogsFlow = remember(selected?.id, historyDate) { selected?.let { vm.logsForDay(it.id, historyDate) } ?: flowOf(emptyList()) }
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
     val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
     val average by averageFlow.collectAsStateWithLifecycle(null)
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
+    val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
     val latestSession by latestFlow.collectAsStateWithLifecycle(null)
     LaunchedEffect(latestSession?.id, clock) { latestSession?.let { if (it.endedAt == null && clock >= it.startedAt + CounterRepository.TWO_HOURS_MS) vm.completeSession(it.id) } }
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
@@ -249,6 +254,14 @@ fun CounterApp(repo: CounterRepository) {
                         onPrevious = { historyMonth = historyMonth.minusMonths(1) },
                         onNext = { if (historyMonth.isBefore(LocalDate.now().withDayOfMonth(1))) historyMonth = historyMonth.plusMonths(1) },
                         onExportPdf = { exportMonthlyPdf(context, selected.titleMr, selected.titleEn, historyMonth, monthSessions, english) }
+                    )
+                } else if (monthlyHistory && selected != null) {
+                    CounterHistoryScreen(
+                        english = english, ink = ink, date = historyDate, logs = historyLogs,
+                        onPrevious = { historyDate = historyDate.minusDays(1) },
+                        onNext = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
+                        onUpdate = { log -> scope.launch { vm.updateLog(log) } },
+                        onDelete = { log -> scope.launch { vm.deleteLog(log.id) } }
                     )
                 } else if (weekly) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
