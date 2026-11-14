@@ -1,19 +1,16 @@
 package com.projectbharat.counterapp
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +32,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -47,9 +45,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,208 +57,168 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import java.time.LocalDate
-import java.util.Locale
-import java.util.regex.Pattern
+import kotlin.math.sqrt
+
+private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiver) {
+    val filter = IntentFilter(TRACKING_STATE_CHANGED)
+    if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    else @Suppress("DEPRECATION") context.registerReceiver(receiver, filter)
+}
 
 @Composable
-fun AutoStepCounterScreen(
-    categoryId: Long,
-    count: Int,
-    english: Boolean,
-    ink: Color,
-    onDelta: (Int) -> Unit
-) {
+fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val stepSensor = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) }
+    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null }
     var permissionGranted by remember {
-        mutableStateOf(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+        mutableStateOf(Build.VERSION.SDK_INT < 29 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
     }
-    var sensorTotal by remember { mutableIntStateOf(count) }
-    var sensorStatus by remember { mutableStateOf("WAITING") }
-    var today by remember { mutableStateOf(LocalDate.now().toString()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000)
-            val dateNow = LocalDate.now().toString()
-            if (dateNow != today) today = dateNow
+    var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_enabled", false)) }
+    var message by remember { mutableStateOf("") }
+
+    val startService = {
+        try {
+            StepTrackingService.start(context, categoryId)
+            running = true
+            message = if (english) "Tracking active" else "मोजणी सुरू"
+        } catch (error: Exception) {
+            message = error.message ?: if (english) "Could not start tracking" else "मोजणी सुरू झाली नाही"
         }
     }
-    val latestCount by rememberUpdatedState(count)
-    val latestOnDelta by rememberUpdatedState(onDelta)
-    var submitted by remember(categoryId, today) { mutableIntStateOf(count) }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        startService()
+    }
+    val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
+        if (granted) {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else startService()
+        } else message = if (english) "Activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
     }
 
-    DisposableEffect(stepSensor, permissionGranted, categoryId, today) {
-        if (permissionGranted && stepSensor != null) {
-            val prefs = context.getSharedPreferences("auto_tracking", Context.MODE_PRIVATE)
-            val baselineKey = "steps_baseline_${categoryId}_${today}"
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent) {
-                    val raw = event.values.firstOrNull()?.toInt() ?: return
-                    val baseline = prefs.getInt(baselineKey, -1)
-                    if (baseline < 0) {
-                        prefs.edit().putInt(baselineKey, raw).apply()
-                        sensorTotal = 0
-                        submitted = latestCount
-                        sensorStatus = "TRACKING"
-                        return
-                    }
-                    if (raw < baseline) {
-                        // The phone rebooted; the hardware counter restarted from zero.
-                        prefs.edit().putInt(baselineKey, 0).apply()
-                    }
-                    val todaySteps = (raw - if (raw < baseline) 0 else baseline).coerceAtLeast(0)
-                    sensorTotal = todaySteps
-                    val missing = todaySteps - submitted
-                    if (missing > 0) {
-                        latestOnDelta(missing)
-                        submitted += missing
-                    }
-                    sensorStatus = "TRACKING"
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                if (intent?.getStringExtra(EXTRA_TRACKING_KIND) == "steps" && intent.hasExtra("active")) {
+                    running = intent.getBooleanExtra("active", false)
                 }
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
             }
-            sensorManager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_NORMAL)
-            onDispose { sensorManager.unregisterListener(listener) }
-        } else {
-            onDispose { }
+        }
+        registerTrackingReceiver(context, receiver)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            running = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_enabled", running)
+            delay(1500)
         }
     }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(if (english) "STEPS TODAY" else "आजची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            Surface(shape = CircleShape, color = Color(0xFFE1F3E9)) {
-                Text(if (english) "● AUTO" else "● ऑटो", color = Color(0xFF16764E), modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Surface(shape = CircleShape, color = if (running) Color(0xFFE1F3E9) else Color(0xFFF1EAF7)) {
+                Text(if (running) if (english) "● AUTO ON" else "● सुरू" else if (english) "PAUSED" else "थांबले",
+                    color = if (running) Color(0xFF16764E) else Color(0xFF76528D),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
         Spacer(Modifier.height(18.dp))
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 32.dp, horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(shape = CircleShape, color = Color(0xFFE5F0FA), modifier = Modifier.size(76.dp)) {
                     Icon(Icons.Default.DirectionsWalk, null, tint = Color(0xFF3977A8), modifier = Modifier.padding(18.dp))
                 }
                 Spacer(Modifier.height(14.dp))
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                Text(if (english) "steps recorded" else "पावले नोंदवली", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(14.dp))
-                Text(if (english) "Sensor reading: $sensorTotal" else "सेन्सर मोजणी: $sensorTotal", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelMedium)
-                Text(
-                    when {
-                        stepSensor == null -> if (english) "Step counter sensor unavailable" else "या फोनमध्ये स्टेप सेन्सर उपलब्ध नाही"
-                        !permissionGranted -> if (english) "Allow activity recognition to count steps automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या"
-                        else -> if (english) "Counting automatically in the background" else "पावले आपोआप मोजली जात आहेत"
-                    },
-                    color = ink.copy(alpha = .6f), textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-                if (stepSensor != null && !permissionGranted) {
-                    Spacer(Modifier.height(14.dp))
-                    Button(onClick = { permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION) }) {
-                        Text(if (english) "Allow step tracking" else "परवानगी द्या")
-                    }
+                Text(if (english) "steps today" else "आजची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(20.dp))
+                when {
+                    !available -> Text(if (english) "This phone has no step-counter sensor" else "या फोनमध्ये स्टेप काउंटर सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
+                    !permissionGranted -> Text(if (english) "Allow physical activity access to count automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
+                    else -> Text(if (running) if (english) "Counting with the built-in sensor" else "फोनच्या सेन्सरने मोजणी सुरू आहे" else if (english) "Start to count without tapping" else "टॅप न करता मोजण्यासाठी सुरू करा", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
                 }
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    enabled = available,
+                    onClick = {
+                        if (running) { StepTrackingService.stop(context); running = false }
+                        else if (Build.VERSION.SDK_INT >= 29 && !permissionGranted) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                        else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        else startService()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow, null)
+                    Text(if (running) if (english) "Stop tracking" else "मोजणी थांबवा" else if (english) "Start step tracking" else "पावले मोजणे सुरू करा")
+                }
+                if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        Text(if (english) "Uses your phone's built-in step sensor. Keep the phone with you." else "फोनमधील अंगभूत स्टेप सेन्सर वापरतो. फोन जवळ ठेवा.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+        Text(if (english) "Uses TYPE_STEP_COUNTER and STEP_DETECTOR. Tracking continues with a notification." else "TYPE_STEP_COUNTER सेन्सर वापरतो. सूचना दिसत असताना मोजणी सुरू राहते.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
 @Composable
-fun AutoChantCounterScreen(
-    categoryId: Long,
-    count: Int,
-    english: Boolean,
-    ink: Color,
-    onRecognized: (Int) -> Unit
-) {
+fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color) {
     val context = LocalContext.current
-    var target by remember(categoryId, english) { mutableStateOf(if (english) "Ram" else "राम") }
-    var listening by remember { mutableStateOf(false) }
-    var permissionGranted by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+    var target by remember(categoryId) {
+        mutableStateOf(context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE).getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम")
     }
-    var lastHeard by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("IDLE") }
-    val latestTarget by rememberUpdatedState(target)
-    val latestOnRecognized by rememberUpdatedState(onRecognized)
-    val latestListening by rememberUpdatedState(listening)
-    val latestPermission by rememberUpdatedState(permissionGranted)
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        permissionGranted = granted
-        if (!granted) status = "PERMISSION"
+    var language by remember(categoryId) {
+        mutableStateOf(context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE).getString("language_$categoryId", if (english) "en" else "hi") ?: "hi")
     }
-    val available = remember { SpeechRecognizer.isRecognitionAvailable(context) }
-    val recognizer = remember {
-        if (available) SpeechRecognizer.createSpeechRecognizer(context) else null
-    }
-    val handler = remember { Handler(Looper.getMainLooper()) }
-    val speechIntent = remember(english) {
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (english) "en-IN" else "mr-IN")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (english) "en-IN" else "mr-IN")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+    var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)) }
+    var status by remember { mutableStateOf(if (running) if (english) "Listening" else "ऐकत आहे" else "") }
+
+    val startService = {
+        if (target.isNotBlank()) {
+            context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE).edit()
+                .putString("target_$categoryId", target.trim()).putString("language_$categoryId", language).apply()
+            try {
+                ChantRecognitionService.start(context, categoryId, target.trim(), language)
+                running = true
+                status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
+            } catch (error: Exception) {
+                status = error.message ?: if (english) "Could not start" else "सुरू झाले नाही"
+            }
         }
     }
-
-    DisposableEffect(recognizer, speechIntent, categoryId) {
-        if (recognizer != null) {
-            fun restart() {
-                if (latestListening && latestPermission) {
-                    handler.postDelayed({
-                        if (latestListening) {
-                            try { recognizer.startListening(speechIntent); status = "LISTENING" }
-                            catch (_: Exception) { status = "ERROR" }
-                        }
-                    }, 350L)
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { startService() }
+    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else startService()
+        } else status = if (english) "Microphone permission denied" else "मायक्रोफोन परवानगी नाकारली"
+    }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                if (intent?.getStringExtra(EXTRA_TRACKING_KIND) == "chant") {
+                    if (intent.hasExtra("active")) running = intent.getBooleanExtra("active", false)
+                    intent.getStringExtra("message")?.let { status = it }
                 }
             }
-            recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: android.os.Bundle?) { status = "LISTENING" }
-                override fun onBeginningOfSpeech() { status = "HEARING" }
-                override fun onRmsChanged(rmsdB: Float) = Unit
-                override fun onBufferReceived(buffer: ByteArray?) = Unit
-                override fun onEndOfSpeech() { status = "PROCESSING" }
-                override fun onError(error: Int) {
-                    if (latestListening) {
-                        status = "RETRYING"
-                        restart()
-                    }
-                }
-                override fun onResults(results: android.os.Bundle?) {
-                    val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    lastHeard = heard
-                    val phrase = latestTarget.trim()
-                    if (phrase.isNotEmpty() && heard.isNotEmpty()) {
-                        val matcher = Pattern.compile(Pattern.quote(phrase), Pattern.CASE_INSENSITIVE).matcher(heard)
-                        var matches = 0
-                        while (matcher.find()) matches++
-                        if (matches > 0) latestOnRecognized(matches)
-                    }
-                    restart()
-                }
-                override fun onPartialResults(partialResults: android.os.Bundle?) = Unit
-                override fun onEvent(eventType: Int, params: android.os.Bundle?) = Unit
-            })
         }
-        onDispose {
-            handler.removeCallbacksAndMessages(null)
-            recognizer?.destroy()
+        registerTrackingReceiver(context, receiver)
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            running = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", running)
+            delay(1500)
         }
     }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(if (english) "CHANTS TODAY" else "आजचा जप", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            Surface(shape = CircleShape, color = if (listening) Color(0xFFE1F3E9) else Color(0xFFF1EAF7)) {
-                Text(if (listening) if (english) "● LISTENING" else "● ऐकत आहे" else if (english) "VOICE OFF" else "आवाज बंद",
-                    color = if (listening) Color(0xFF16764E) else Color(0xFF76528D),
+            Surface(shape = CircleShape, color = if (running) Color(0xFFE1F3E9) else Color(0xFFF1EAF7)) {
+                Text(if (running) if (english) "● LISTENING" else "● ऐकत आहे" else if (english) "VOICE OFF" else "आवाज बंद",
+                    color = if (running) Color(0xFF16764E) else Color(0xFF76528D),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
@@ -269,55 +226,123 @@ fun AutoChantCounterScreen(
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Surface(shape = CircleShape, color = Color(0xFFF0E6FA), modifier = Modifier.size(76.dp)) {
-                    Icon(if (listening) Icons.Default.Mic else Icons.Default.MicOff, null, tint = Color(0xFF8657A7), modifier = Modifier.padding(19.dp))
+                    Icon(if (running) Icons.Default.Mic else Icons.Default.MicOff, null, tint = Color(0xFF8657A7), modifier = Modifier.padding(19.dp))
                 }
                 Spacer(Modifier.height(12.dp))
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                Text(if (english) "chants counted" else "जप मोजले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(18.dp))
-                OutlinedTextField(
-                    value = target, onValueChange = { target = it }, singleLine = true,
-                    label = { Text(if (english) "Word or mantra to count" else "मोजायचा शब्द / मंत्र") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(14.dp))
-                when {
-                    !available -> Text(if (english) "Speech recognition is unavailable on this device" else "या फोनवर आवाज ओळख उपलब्ध नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
-                    !permissionGranted -> Button(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Mic, null); Text(if (english) "Allow microphone" else "मायक्रोफोन परवानगी द्या")
-                    }
-                    else -> Button(
-                        onClick = {
-                            if (listening) {
-                                listening = false
-                                recognizer?.cancel()
-                                status = "IDLE"
-                            } else if (target.isNotBlank()) {
-                                listening = true
-                                try { recognizer?.startListening(speechIntent); status = "LISTENING" }
-                                catch (_: Exception) { status = "ERROR"; listening = false }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(if (listening) Icons.Default.Pause else Icons.Default.PlayArrow, null)
-                        Text(if (listening) if (english) "Stop auto count" else "मोजणी थांबवा" else if (english) "Start auto count" else "स्वयंचलित मोजणी सुरू")
-                    }
+                Text(if (english) "chants" else "जप", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(value = target, onValueChange = { target = it }, enabled = !running, singleLine = true,
+                    label = { Text(if (english) "Word / mantra" else "मोजायचा शब्द / मंत्र") }, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = language == "hi", onClick = { language = "hi"; if (!english) target = "राम" }, label = { Text(if (english) "Devanagari · Hindi model" else "देवनागरी") }, enabled = !running)
+                    FilterChip(selected = language == "en", onClick = { language = "en"; if (english) target = "Ram" }, label = { Text("English India") }, enabled = !running)
                 }
-                if (lastHeard.isNotBlank()) {
-                    Text((if (english) "Heard: " else "ऐकले: ") + lastHeard, color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 12.dp))
+                Text(if (language == "hi") {
+                    if (english) "Uses the Hindi offline model for Devanagari. Marathi-specific Vosk model is not currently listed." else "देवनागरीसाठी हिंदी ऑफलाइन मॉडेल. स्वतंत्र मराठी Vosk मॉडेल उपलब्ध नाही."
+                } else if (english) "English (India) offline model" else "इंग्रजी (भारत) ऑफलाइन मॉडेल",
+                    color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = {
+                    if (running) { ChantRecognitionService.stop(context); running = false; status = if (english) "Stopped" else "थांबवले" }
+                    else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+                        microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                    else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else startService()
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow, null)
+                    Text(if (running) if (english) "Stop auto count" else "मोजणी थांबवा" else if (english) "Start offline auto count" else "ऑफलाइन मोजणी सुरू करा")
                 }
-                Text(
-                    when (status) {
-                        "LISTENING", "HEARING" -> if (english) "Say the selected word clearly" else "निवडलेला शब्द स्पष्ट म्हणा"
-                        "PROCESSING", "RETRYING" -> if (english) "Recognising…" else "ओळखत आहे…"
-                        "ERROR" -> if (english) "Restart listening" else "पुन्हा ऐकणे सुरू करा"
-                        else -> if (english) "Only the selected word is counted" else "फक्त निवडलेला शब्द मोजला जाईल"
-                    },
-                    color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp)
-                )
+                if (status.isNotBlank()) Text(status, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 9.dp))
             }
         }
-        Text(if (english) "Speech recognition may use your device's speech service and may require internet. Review the recognised words." else "आवाज ओळखण्यासाठी फोनची Speech सेवा व इंटरनेट लागू शकते. ओळखलेले शब्द तपासा.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+        Text(if (english) "The first start downloads a speech model (about 36–42 MB). Later sessions run offline. Audio is processed in memory and is not saved." else "पहिल्यांदा ३६–४२ MB मॉडेल डाउनलोड होईल. पुढील मोजणी ऑफलाइन चालेल. आवाज साठवला जात नाही.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+@Composable
+fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink: Color, onDetected: () -> Unit) {
+    val context = LocalContext.current
+    val manager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    val linear = remember { manager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) }
+    val gyro = remember { manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
+    var enabled by remember(activeSessionId) { mutableStateOf(false) }
+    var calibrated by remember { mutableStateOf(false) }
+    var detections by remember { mutableIntStateOf(0) }
+    var status by remember { mutableStateOf("") }
+    val latestOnDetected by rememberUpdatedState(onDetected)
+
+    DisposableEffect(enabled, activeSessionId, linear, gyro) {
+        if (enabled && activeSessionId != null && linear != null) {
+            val startedAt = System.currentTimeMillis()
+            val samples = ArrayList<Float>()
+            var baseline = 0f
+            var threshold = 1.1f
+            var gyroMagnitude = 0f
+            var lastDetection = 0L
+            var calibratedLocal = false
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+                        val v = event.values
+                        gyroMagnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+                        return
+                    }
+                    if (event.sensor.type != Sensor.TYPE_LINEAR_ACCELERATION) return
+                    val v = event.values
+                    val magnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+                    if (!calibratedLocal) {
+                        samples.add(magnitude)
+                        if (System.currentTimeMillis() - startedAt >= 3000L && samples.size >= 20) {
+                            baseline = samples.average().toFloat()
+                            val variance = samples.map { (it - baseline) * (it - baseline) }.average().toFloat()
+                            threshold = maxOf(1.0f, baseline + 3f * sqrt(variance))
+                            calibratedLocal = true
+                            calibrated = true
+                            status = if (english) "Calibrated · experimental" else "कॅलिब्रेशन पूर्ण · प्रायोगिक"
+                        }
+                        return
+                    }
+                    baseline = baseline * 0.985f + magnitude * 0.015f
+                    val spike = magnitude > maxOf(threshold, baseline + 0.9f)
+                    val quietRotation = gyro == null || gyroMagnitude < 1.8f
+                    val now = System.currentTimeMillis()
+                    if (spike && quietRotation && now - lastDetection > 1400L) {
+                        lastDetection = now
+                        detections++
+                        latestOnDetected()
+                    }
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            }
+            manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
+            gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
+            calibrated = false
+            status = if (english) "Calibrating for 3 seconds…" else "३ सेकंद कॅलिब्रेशन…"
+            onDispose { manager.unregisterListener(listener) }
+        } else {
+            calibrated = false
+            onDispose { }
+        }
+    }
+
+    if (activeSessionId != null) {
+        Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (english) "Experimental motion assist" else "प्रायोगिक हालचाल ओळख", color = ink, fontWeight = FontWeight.SemiBold)
+                        Text(if (english) "Phone movement may cause false detections" else "फोन हलल्यास चुकीची नोंद होऊ शकते", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+                    }
+                    androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it })
+                }
+                if (enabled) {
+                    Text((if (english) "Detected: " else "ओळखले: ") + detections, color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(status.ifBlank { if (calibrated) "Calibrated" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
 }
