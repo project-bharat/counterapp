@@ -189,6 +189,7 @@ fun CounterApp(repo: CounterRepository) {
                     }
                 }
 
+                Box(Modifier.weight(1f)) {
                 if (monthlyHistory && isBaby && selected != null) {
                     MonthlyHistoryScreen(
                         english = english, ink = ink, month = historyMonth, sessions = monthSessions,
@@ -245,6 +246,7 @@ fun CounterApp(repo: CounterRepository) {
                         ink = ink, onTap = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.add(selected.id, null) } },
                         onUndo = { scope.launch { vm.undo(selected.id) } }, onReset = { resetDialog = true }
                     )
+                }
                 }
             }
             Text(if (english) "Designed & developed by Bharat Rasave" else "निर्मिती व संकल्पना · Bharat Rasave",
