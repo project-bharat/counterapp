@@ -66,6 +66,9 @@ interface CounterDao {
     @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
     suspend fun category(id: Long): CounterCategory?
 
+    @Query("UPDATE categories SET enabled = 0 WHERE id = :id")
+    suspend fun disableCategory(id: Long)
+
     @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date")
     fun todayCount(categoryId: Long, date: String): Flow<Int>
 
