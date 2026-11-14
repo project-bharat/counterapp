@@ -23,6 +23,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -258,7 +259,7 @@ fun CounterApp(repo: CounterRepository) {
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
                         onStart = { scope.launch { vm.startSession(selected.id) } },
                         onTap = { sessionId ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
                             scope.launch { vm.addMovement(selected.id, sessionId) }
                         },
