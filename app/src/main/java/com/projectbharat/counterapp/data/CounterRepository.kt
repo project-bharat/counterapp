@@ -7,8 +7,11 @@ class CounterRepository(private val dao: CounterDao) {
     val categories = dao.categories()
     suspend fun addCategory(mr: String, en: String) = dao.addCategory(CounterCategory(titleMr = mr, titleEn = en))
     fun today(categoryId: Long): Flow<Int> = dao.todayCount(categoryId, LocalDate.now().toString())
-    suspend fun add(categoryId: Long, strength: String?, duration: Long? = null) =
-        dao.addLog(CounterLog(date = LocalDate.now().toString(), timestamp = System.currentTimeMillis(), categoryId = categoryId, strength = strength, sessionDurationMs = duration))
+    suspend fun add(categoryId: Long, strength: String?, duration: Long? = null): Long {
+        val date = LocalDate.now().toString()
+        val next = dao.countNow(categoryId, date) + 1
+        return dao.addLog(CounterLog(date = date, timestamp = System.currentTimeMillis(), categoryId = categoryId, strength = strength, sessionDurationMs = if (next == 10) duration else null))
+    }
     suspend fun undo(categoryId: Long) {
         dao.latestLog(categoryId, LocalDate.now().toString())?.let { dao.deleteLog(it.id) }
     }
