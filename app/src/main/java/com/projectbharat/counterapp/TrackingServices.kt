@@ -24,6 +24,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
 import android.os.Bundle
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -150,7 +151,7 @@ class StepTrackingService : Service(), SensorEventListener {
             }
             gpsListener = listener
             try {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener)
+                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener, Looper.getMainLooper())
                 locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let(listener::onLocationChanged)
             } catch (error: SecurityException) {
                 Log.w("CounterAppSteps", "GPS permission was not available", error)

@@ -167,7 +167,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                 when {
                     !available -> Text(if (english) "This phone has no step-counter sensor" else "या फोनमध्ये स्टेप काउंटर सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
                     !permissionGranted -> Text(if (english) "Allow physical activity access to count automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
-                    else -> Text(if (running) if (english) "Counting with the built-in sensor" else "फोनच्या सेन्सरने मोजणी सुरू आहे" else if (english) "Start to count without tapping" else "टॅप न करता मोजण्यासाठी सुरू करा", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
+                    else -> Text(if (running) if (english) "GPS verifies forward movement before saving steps" else "पावले जतन करण्यापूर्वी GPS पुढील हालचाल तपासतो" else if (english) "Activity and precise location verify walking" else "चालण्याची खात्री करण्यासाठी हालचाल व अचूक लोकेशन वापरले जाते", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(
@@ -187,7 +187,7 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: C
                 if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        Text(if (english) "Uses TYPE_STEP_COUNTER and STEP_DETECTOR. Tracking continues with a notification." else "TYPE_STEP_COUNTER सेन्सर वापरतो. सूचना दिसत असताना मोजणी सुरू राहते.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
+        Text(if (english) "Uses Only motion-validated steps confirmed by GPS displacement are counted. GPS may be less reliable indoors." else "सेन्सरने ओळखलेली पावले GPS अंतराने पडताळल्यानंतरच मोजली जातात. घरात GPS कमी अचूक असू शकतो.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
