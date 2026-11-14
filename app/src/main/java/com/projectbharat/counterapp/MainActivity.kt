@@ -574,6 +574,15 @@ private fun BabyMovementScreen(
                 Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
                     Text(if (english) "Baby movement" else "बाळाची हालचाल", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    if (latestSession != null && latestSession.endedAt != null && latestSession.trackingMode == "TEN_MOVEMENTS" && latestSession.movementCount >= 10) {
+                        Surface(Modifier.fillMaxWidth().padding(top = 14.dp), shape = RoundedCornerShape(16.dp), color = Color(0xFFE8F4EC)) {
+                            Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(if (english) "10 MOVEMENTS COMPLETED" else "१० हालचाली पूर्ण", color = Color(0xFF246B48), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text("%.1f".format((latestSession.timeToTenMs ?: 0L) / 60000.0) + (if (english) " min" else " मिनिटे"), color = Color(0xFF246B48), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
+                                Text(if (english) "Time taken to feel 10 movements" else "१० हालचाली जाणवण्यासाठी लागलेला वेळ", color = Color(0xFF246B48), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
                     if (resumableSession != null) {
                         Spacer(Modifier.height(28.dp))
                         Button(onClick = { onResume(resumableSession.id) }, modifier = Modifier.height(46.dp)) {

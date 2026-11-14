@@ -23,6 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -292,8 +293,25 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
         }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                Text("${count / 108} ${if (english) "mala" else "माळ"} · ${count % 108}/108", color = Color(0xFFB17B28), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                val beadCount = if (count > 0 && count % 108 == 0) 108 else count % 108
+                val beadTint by animateColorAsState(if (count > 0 && count % 108 == 0) Color(0xFFB87928) else Color(0xFF7650A1), label = "beadCountTint")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(Modifier.weight(1.15f), shape = RoundedCornerShape(18.dp), color = Color(0xFFF4EFF9)) {
+                        Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text(beadCount.toString(), color = beadTint, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                                Text(" / 108", color = beadTint.copy(alpha = .7f), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                            }
+                            Text(if (english) "CURRENT MALA" else "सध्याची माळ", color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Surface(Modifier.weight(.85f), shape = RoundedCornerShape(18.dp), color = Color(0xFFFFF4E4)) {
+                        Column(Modifier.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text((count / 108).toString(), color = Color(0xFFB87928), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                            Text(if (english) "MALAS DONE" else "पूर्ण माळा", color = Color(0xFF9A6828), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
                 Surface(modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 2.dp), shape = RoundedCornerShape(18.dp), color = Color(0xFFF5F0FA), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDCCBEF))) {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(if (english) "SELECTED JAPA" else "निवडलेला जप", color = Color(0xFF80639D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
@@ -303,12 +321,13 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 val manualInteraction = remember { MutableInteractionSource() }
                 val manualPressed by manualInteraction.collectIsPressedAsState()
                 val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
+                val circleAccent by animateColorAsState(if (count > 0 && count % 108 == 0) Color(0xFFD5A24B) else Color(0xFFB895D7), label = "japaCircleAccent")
                 Box(
                     Modifier.padding(top = 16.dp).size(218.dp)
                         .graphicsLayer(scaleX = manualScale, scaleY = manualScale)
                         .shadow(12.dp, CircleShape)
                         .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
-                        .border(3.dp, Color(0xFFB895D7), CircleShape)
+                        .border(3.dp, circleAccent, CircleShape)
                         .clickable(interactionSource = manualInteraction, indication = null, onClick = onManualCount),
                     contentAlignment = Alignment.Center
                 ) {
@@ -319,17 +338,19 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                Box {
-                    OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (english) "Choose mantra" else "मंत्र निवडा")
-                    }
-                    DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                        chantPresets.forEach { preset ->
-                            DropdownMenuItem(text = { Text(if (language == "hi") preset.devanagari else preset.title, maxLines = 2) }, onClick = {
-                                target = if (language == "hi") preset.devanagari else preset.latin
-                                prefs.edit().putString("target_$categoryId", target).apply()
-                                presetMenu = false
-                            })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Box {
+                        OutlinedButton(onClick = { presetMenu = true }) {
+                            Text(if (english) "Choose mantra" else "मंत्र निवडा")
+                        }
+                        DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
+                            chantPresets.forEach { preset ->
+                                DropdownMenuItem(text = { Text(if (language == "hi") preset.devanagari else preset.title, maxLines = 2) }, onClick = {
+                                    target = if (language == "hi") preset.devanagari else preset.latin
+                                    prefs.edit().putString("target_$categoryId", target).apply()
+                                    presetMenu = false
+                                })
+                            }
                         }
                     }
                 }

@@ -94,7 +94,7 @@ class CounterRepository(private val dao: CounterDao) {
         require(trackingMode in setOf("TEN_MOVEMENTS", "ONE_HOUR")) { "Invalid baby movement tracking mode" }
         val now = System.currentTimeMillis()
         val previous = dao.latestBabySession(categoryId, now - TWO_HOURS_MS)
-        if (previous != null) return null
+        if (previous != null && now < previous.startedAt + sessionLimit(previous)) return null
         val time = LocalTime.now()
         val period = when (time.hour) {
             in 5..10 -> "MORNING"
