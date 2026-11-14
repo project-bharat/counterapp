@@ -158,11 +158,12 @@ interface CounterDao {
     suspend fun findMantraLog(categoryId: Long, date: String, note: String): CounterLog?
 
     @Transaction
-    suspend fun incrementMantraDaily(categoryId: Long, date: String, mantra: String) {
+    suspend fun incrementMantraDaily(categoryId: Long, date: String, mantra: String, amount: Int = 1) {
+        if (amount <= 0) return
         val note = "MANTRA:" + mantra
         val existing = findMantraLog(categoryId, date, note)
-        if (existing == null) addLog(CounterLog(date = date, timestamp = System.currentTimeMillis(), categoryId = categoryId, note = note))
-        else updateLog(existing.copy(count = existing.count + 1))
+        if (existing == null) addLog(CounterLog(date = date, timestamp = System.currentTimeMillis(), categoryId = categoryId, count = amount, note = note))
+        else updateLog(existing.copy(count = existing.count + amount))
     }
 
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY timestamp DESC, id DESC")
