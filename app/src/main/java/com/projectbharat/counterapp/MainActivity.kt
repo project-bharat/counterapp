@@ -102,6 +102,7 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun completeSession(sessionId: Long) = repo.completeExpiredBabySession(sessionId)
     suspend fun addCategory(mr: String, en: String) = repo.addCategory(mr, en)
     suspend fun add(id: Long, strength: String?, duration: Long? = null) = repo.add(id, strength, duration)
+    suspend fun addCount(id: Long, amount: Int) = repo.addCount(id, amount)
     suspend fun undo(id: Long) = repo.undo(id)
     suspend fun reset(id: Long) = repo.reset(id)
     class Factory(private val repo: CounterRepository) : ViewModelProvider.Factory {
@@ -266,6 +267,16 @@ fun CounterApp(repo: CounterRepository) {
                         },
                         onUndo = { sessionId -> scope.launch { vm.undoMovement(sessionId) } },
                         onFinish = { finishDialog = true }
+                    )
+                } else if (selected?.kind == "STEPS") {
+                    AutoStepCounterScreen(
+                        categoryId = selected.id, count = count, english = english, ink = ink,
+                        onDelta = { amount -> scope.launch { vm.addCount(selected.id, amount) } }
+                    )
+                } else if (selected?.kind == "MANTRA") {
+                    AutoChantCounterScreen(
+                        categoryId = selected.id, count = count, english = english, ink = ink,
+                        onRecognized = { amount -> scope.launch { vm.addCount(selected.id, amount) } }
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
