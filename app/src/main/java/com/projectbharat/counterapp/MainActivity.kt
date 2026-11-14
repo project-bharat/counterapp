@@ -506,6 +506,57 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
     }
 }
 
+
+@Composable
+private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
+    val context = LocalContext.current
+    val activity = context as? ComponentActivity
+    val settings = remember { mutableStateListOf<DailyReminder>().apply { addAll(DailyReminderScheduler.load(context)) } }
+    Column(Modifier.fillMaxSize()) {
+        Text(if (english) "DAILY REMINDERS" else "दैनिक स्मरणपत्रे", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(if (english) "Choose times that fit your routine." else "तुमच्या दिनक्रमानुसार वेळ निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
+            items(settings, key = { it.id }) { item ->
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(if (english) item.titleEn else item.titleMr, color = ink, fontWeight = FontWeight.SemiBold)
+                            Text("%02d:%02d".format(item.hour, item.minute), color = Color(0xFF39865B), style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.clickable {
+                                    TimePickerDialog(context, { _, hour, minute ->
+                                        val index = settings.indexOfFirst { it.id == item.id }
+                                        if (index >= 0) {
+                                            settings[index] = settings[index].copy(hour = hour, minute = minute)
+                                            DailyReminderScheduler.saveAndSchedule(context, settings.toList())
+                                        }
+                                    }, item.hour, item.minute, false).show()
+                                })
+                            Text(if (english) "Tap time to change" else "वेळ बदलण्यासाठी टॅप करा", color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall)
+                        }
+                        Switch(checked = item.enabled, onCheckedChange = { enabled ->
+                            val index = settings.indexOfFirst { it.id == item.id }
+                            if (index >= 0) {
+                                settings[index] = settings[index].copy(enabled = enabled)
+                                DailyReminderScheduler.saveAndSchedule(context, settings.toList())
+                                if (enabled && Build.VERSION.SDK_INT >= 33 && ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                    activity?.let { ActivityCompat.requestPermissions(it, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4101) }
+                                }
+                            }
+                        })
+                    }
+                }
+            }
+        }
+        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3DF)) {
+            Text(
+                if (english) "Baby movement reminders are optional routine prompts, not medical advice. Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly; do not wait for a reminder."
+                else "बाळाच्या हालचालींची स्मरणपत्रे ही केवळ ऐच्छिक आठवण आहे, वैद्यकीय सल्ला नाही. डॉक्टरांच्या सूचनांचे पालन करा. हालचाली कमी झाल्या किंवा नेहमीच्या पद्धतीत बदल जाणवला तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.",
+                color = Color(0xFF76531F), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(13.dp)
+            )
+        }
+    }
+}
+
 @Composable
 private fun StatTile(label: String, value: String, ink: Color, modifier: Modifier = Modifier) {
     Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
