@@ -32,6 +32,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
@@ -446,173 +447,226 @@ private fun BabyMovementScreen(
     val progress = (elapsed.toFloat() / CounterRepository.TWO_HOURS_MS).coerceIn(0f, 1f)
     val tapScale = remember { Animatable(1f) }
     val tapScope = rememberCoroutineScope()
-    val babyMotion = rememberInfiniteTransition(label = "babyMotion")
-    val babyBob by babyMotion.animateFloat(initialValue = -4f, targetValue = 4f, animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "babyBob")
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-        activeSession?.let { session ->
-            ExperimentalBabyMotionControl(activeSessionId = session.id, english = english, ink = ink,
-                onDetected = { timestamp, magnitude -> onAutoMovement(session.id, timestamp, magnitude) })
-        }
+    var autoDetect by remember(activeSession?.id) { mutableStateOf(false) }
+    var autoStatus by remember(activeSession?.id) { mutableStateOf("") }
+    val pending = detections.count { it.status == "PENDING" }
+    val added = detections.count { it.status == "CONFIRMED" }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         if (activeSession != null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
-                    Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color=ink, style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
-                Surface(shape=RoundedCornerShape(50), color=Color(0xFFE1F3E9)) {
-                    Text(if (english) "● LIVE" else "● सुरू", modifier=Modifier.padding(horizontal=12.dp, vertical=7.dp), color=Color(0xFF16764E), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (english) "Auto detect" else "स्वयंचलित", color = ink, style = MaterialTheme.typography.labelSmall)
+                    Switch(checked = autoDetect, onCheckedChange = { autoDetect = it })
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(28.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment=Alignment.CenterHorizontally) {
-                    Text(if (english) "MOVEMENTS COUNTED" else "नोंदवलेल्या हालचाली", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
-                    Text(activeSession.movementCount.toString(), color=ink, style=MaterialTheme.typography.displayLarge, fontWeight=FontWeight.ExtraBold)
-                    Spacer(Modifier.height(12.dp))
-                    Box(Modifier.size(218.dp), contentAlignment=Alignment.Center) {
-                        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-                            drawCircle(tapSurface, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx()))
-                            drawArc(Color(0xFFE7A33C), -90f, 360f*progress, false, style=androidx.compose.ui.graphics.drawscope.Stroke(width=15.dp.toPx(), cap=StrokeCap.Round))
+            BabyMotionSensorEngine(
+                activeSessionId = activeSession.id, enabled = autoDetect,
+                onDetected = { timestamp, magnitude -> onAutoMovement(activeSession.id, timestamp, magnitude) },
+                onStatus = { autoStatus = it }
+            )
+            Spacer(Modifier.height(8.dp))
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
+                    Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            drawCircle(tapSurface, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx()))
+                            drawArc(Gold, -90f, 360f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round))
                         }
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
-                            Modifier.size(178.dp)
-                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value, translationY = babyBob * 2f)
+                            Modifier.size(174.dp)
+                                .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
                                 .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
-                                    tapScope.launch { tapScale.animateTo(1.16f, tween(110)); tapScale.animateTo(1f, tween(260)) }
+                                    tapScope.launch { tapScale.animateTo(.92f, tween(90)); tapScale.animateTo(1f, tween(180)) }
                                     onTap(activeSession.id)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(48.dp))
-                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold)
-                                Text(if (english) "TAP MOVEMENT" else "हालचाल मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(44.dp))
+                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                                Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.SpaceBetween) {
-                        Column {
-                            Text(if (english) "ELAPSED" else "झालेला वेळ", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall)
-                            Text("%02d:%02d".format(elapsed/60000,(elapsed/1000)%60), color=ink, style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
-                        }
-                        Column(horizontalAlignment=Alignment.End) {
-                            Text(if (english) "TIME LEFT" else "उर्वरित वेळ", color=ink.copy(alpha=.55f), style=MaterialTheme.typography.labelSmall)
-                            Text("%02d:%02d".format(remainingMs/3600000,(remainingMs/60000)%60), color=Gold, style=MaterialTheme.typography.titleLarge, fontWeight=FontWeight.Bold)
-                        }
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("%02d:%02d".format(elapsed / 60000, (elapsed / 1000) % 60), color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("%02d:%02d".format(remainingMs / 3600000, (remainingMs / 60000) % 60), color = Gold, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
-                    LinearProgressIndicator(progress={progress}, modifier=Modifier.fillMaxWidth().padding(top=8.dp).height(7.dp).clip(CircleShape), color=Gold, trackColor=tapSurface)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        Surface(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) },
-                            enabled = activeSession.movementCount > 0, shape = RoundedCornerShape(14.dp), color = Color(0xFFF0F3F8)) {
-                            Row(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Undo, null, tint = ink, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (english) "Undo" else "मागे घ्या", color = ink, style = MaterialTheme.typography.labelLarge)
-                            }
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp).height(6.dp).clip(CircleShape), color = Gold, trackColor = tapSurface)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
+                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo" else "मागे")
                         }
-                    }
-                }
-            }
-            if (activeSession.movementCount >= 10) {
-                Surface(Modifier.fillMaxWidth().padding(top = 9.dp), shape = RoundedCornerShape(15.dp), color = Color(0xFFE5F2E8)) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF238451))
-                            Spacer(Modifier.width(7.dp))
-                            Text(if (english) "10+ movements" else "१०+ हालचाली", color = Color(0xFF238451), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.weight(1f))
-                            Text(activeSession.movementCount.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                        }
-                        LinearProgressIndicator(progress = { 1f }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(7.dp).clip(CircleShape), color = Color(0xFF2E9B63), trackColor = Color(0xFFB9DDC8))
-                        Text(if (english) "10 reached · continue recording" else "१० पूर्ण · हालचालींची नोंद सुरू ठेवा", color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 5.dp))
+                        TextButton(onClick = onFinish) { Text(if (english) "Finish session" else "सत्र पूर्ण करा") }
                     }
                 }
             }
         } else {
-            Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(26.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment=Alignment.CenterHorizontally) {
-                    Box(Modifier.size(66.dp).background(Color(0xFFFFE4E0),CircleShape),contentAlignment=Alignment.Center) { Icon(Icons.Default.Favorite,null,tint=Color(0xFFC65F68),modifier=Modifier.size(32.dp)) }
-                    Spacer(Modifier.height(12.dp))
-                    Text(if (english) "Baby movement" else "बाळाची हालचाल", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.Bold)
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick=onStart, modifier=Modifier.fillMaxWidth().height(52.dp), shape=RoundedCornerShape(16.dp)) {
-                        Icon(Icons.Default.PlayArrow,null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start 2-hour session" else "२ तासांचे सत्र सुरू करा")
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Favorite, null, tint = Color(0xFFC65F68), modifier = Modifier.size(42.dp))
+                    Text(if (english) "Baby movement" else "बाळाची हालचाल", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Button(onClick = onStart, modifier = Modifier.fillMaxWidth().height(54.dp)) {
+                        Icon(Icons.Default.PlayArrow, null); Spacer(Modifier.width(7.dp)); Text(if (english) "Start 2-hour session" else "२ तासांचे सत्र सुरू करा")
                     }
                 }
             }
             if (lockedSession != null) {
-                Surface(Modifier.fillMaxWidth().padding(top=9.dp), shape=RoundedCornerShape(15.dp), color=Color(0xFFFFF1D9)) {
-                    Text(if (english) "Previous session · " + lockedSession.movementCount + " movements · Available at " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS) else "मागील सत्र · " + lockedSession.movementCount + " हालचाली · पुढील सत्र " + sessionTime(lockedSession.startedAt+CounterRepository.TWO_HOURS_MS), modifier=Modifier.padding(12.dp), color=Color(0xFF865B20), style=MaterialTheme.typography.labelMedium)
+                Text(if (english) "Next session at " + sessionTime(lockedSession.startedAt + CounterRepository.TWO_HOURS_MS) else "पुढील सत्र " + sessionTime(lockedSession.startedAt + CounterRepository.TWO_HOURS_MS), color = ink.copy(alpha=.6f), modifier = Modifier.padding(10.dp))
+            }
+        }
+        if (detections.isNotEmpty() || autoDetect) {
+            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                    Text(if (english) "DETECTED MOMENTS" else "ओळखलेले क्षण", color = ink, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                        Column {
+                            Text(if (english) "Detected" else "ओळखले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                            Text(pending.toString(), color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                        }
+                        Column {
+                            Text(if (english) "Added" else "जोडले", color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall)
+                            Text(added.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+                    if (pending > 0) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, modifier = Modifier.weight(1f)) {
+                                Text(if (english) "Add all" else "सर्व जोडा")
+                            }
+                            OutlinedButton(onClick = { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, modifier = Modifier.weight(1f)) {
+                                Text(if (english) "Dismiss" else "वगळा")
+                            }
+                        }
+                    }
+                    if (autoDetect && autoStatus.isNotBlank()) Text(autoStatus, color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
-        if (detections.isNotEmpty()) {
-            val pending = detections.filter { it.status == "PENDING" }
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (english) "DETECTED MOMENTS" else "ओळखलेले क्षण",
-                        color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    Text(pending.size.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
-                    Text((if (english) "Detected: " else "ओळखले: ") + pending.size +
-                        "    " + (if (english) "Added: " else "जोडले: ") + detections.count { it.status == "CONFIRMED" },
-                        color = ink.copy(alpha = .7f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    if (pending.isNotEmpty()) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { onConfirmDetections(pending.map { it.id }) }, modifier = Modifier.weight(1f)) {
-                                Text(if (english) "Add all" else "सर्व जोडा")
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(if (english) "HISTORY" else "इतिहास", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onPreviousDay, modifier = Modifier.size(32.dp)) { Text("‹", color = ink, style = MaterialTheme.typography.titleLarge) }
+                Text(historyDate.format(dateFormat), color = ink, style = MaterialTheme.typography.labelMedium)
+                IconButton(onClick = onNextDay, enabled = historyDate.isBefore(LocalDate.now()), modifier = Modifier.size(32.dp)) { Text("›", color = ink, style = MaterialTheme.typography.titleLarge) }
+            }
+        }
+        if (sessions.isEmpty()) {
+            Text(if (english) "No sessions" else "नोंद उपलब्ध नाही", modifier = Modifier.fillMaxWidth().padding(14.dp), color = ink.copy(alpha=.55f))
+        } else {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                sessions.forEach { session ->
+                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(15.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(periodLabel(session.dayPeriod, english) + " · " + sessionTime(session.startedAt), color = ink, fontWeight = FontWeight.Bold)
+                                val duration = ((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000
+                                Text(duration.toString() + " min", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
                             }
-                            OutlinedButton(onClick = { onDismissDetections(pending.map { it.id }) }, modifier = Modifier.weight(1f)) {
-                                Text(if (english) "Dismiss" else "वगळा")
-                            }
+                            Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                 }
             }
         }
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
-            Text(if (english) "SESSION HISTORY" else "सत्रांची नोंद", color=ink, style=MaterialTheme.typography.titleMedium, fontWeight=FontWeight.Bold)
-            Row(verticalAlignment=Alignment.CenterVertically) {
-                IconButton(onClick=onPreviousDay, modifier=Modifier.size(30.dp)) { Text("‹",color=ink,style=MaterialTheme.typography.titleLarge) }
-                Text(historyDate.format(dateFormat), color=ink, style=MaterialTheme.typography.labelMedium)
-                IconButton(onClick=onNextDay, enabled=historyDate.isBefore(LocalDate.now()), modifier=Modifier.size(30.dp)) { Text("›",color=ink,style=MaterialTheme.typography.titleLarge) }
-            }
-        }
-        if (sessions.isEmpty()) {
-            Surface(Modifier.fillMaxWidth(), shape=RoundedCornerShape(16.dp), color=MaterialTheme.colorScheme.surface) {
-                Text(if (english) "No sessions on this day" else "या दिवसाची नोंद उपलब्ध नाही", modifier=Modifier.padding(16.dp), color=ink.copy(alpha=.55f), style=MaterialTheme.typography.bodySmall)
-            }
-        } else {
-            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                sessions.forEach { session ->
-                    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(17.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(40.dp).background(Color(0xFFFFE8DC), CircleShape), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Favorite, null, tint = Color(0xFFC65F68))
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(periodLabel(session.dayPeriod, english) + " · " + sessionTime(session.startedAt),
-                                    color = ink, fontWeight = FontWeight.Bold)
-                                val duration = ((session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS,
-                                    System.currentTimeMillis())) - session.startedAt).coerceAtLeast(0) / 60000
-                                Text(duration.toString() + " min · " +
-                                    (if (session.endedAt != null || System.currentTimeMillis() >= session.startedAt + CounterRepository.TWO_HOURS_MS)
-                                        if (english) "Completed" else "पूर्ण"
-                                     else if (english) "In progress" else "सुरू"),
-                                    color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
-                            }
-                            Text(session.movementCount.toString(), color = Gold,
-                                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
-                        }
+    }
+}
+
+@Composable
+private fun BabyMotionSensorEngine(
+    activeSessionId: Long,
+    enabled: Boolean,
+    onDetected: (Long, Float) -> Unit,
+    onStatus: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val manager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    val linear = remember { manager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) }
+    val gyro = remember { manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
+    val detectedCallback by rememberUpdatedState(onDetected)
+    val statusCallback by rememberUpdatedState(onStatus)
+
+    DisposableEffect(enabled, activeSessionId, linear, gyro, lifecycleOwner) {
+        if (enabled && linear != null) {
+            val startedAt = System.currentTimeMillis()
+            val samples = ArrayList<Float>()
+            var baseline = 0f
+            var threshold = 0.55f
+            var gyroMagnitude = 0f
+            var lastDetection = 0L
+            var calibrated = false
+            val listener = object : SensorEventListener {
+                override fun onSensorChanged(event: SensorEvent) {
+                    if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
+                        val v = event.values
+                        gyroMagnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+                        return
                     }
+                    if (event.sensor.type != Sensor.TYPE_LINEAR_ACCELERATION) return
+                    val v = event.values
+                    val magnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+                    if (!calibrated) {
+                        samples.add(magnitude)
+                        if (System.currentTimeMillis() - startedAt >= 8000L && samples.size >= 40) {
+                            val sorted = samples.sorted()
+                            baseline = sorted[sorted.size / 2]
+                            val deviations = sorted.map { kotlin.math.abs(it - baseline) }.sorted()
+                            threshold = maxOf(0.55f, baseline + 5f * deviations[deviations.size / 2])
+                            calibrated = true
+                            statusCallback(if (true) "Ready" else "Ready")
+                        }
+                        return
+                    }
+                    val spike = magnitude > maxOf(threshold, baseline + 0.65f)
+                    val quietRotation = gyro == null || gyroMagnitude < 1.2f
+                    val now = System.currentTimeMillis()
+                    if (spike && quietRotation && now - lastDetection > 2200L) {
+                        lastDetection = now
+                        detectedCallback(now, magnitude)
+                        statusCallback("Saved")
+                    } else if (!spike) baseline = baseline * 0.995f + magnitude * 0.005f
+                }
+                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+            }
+            var registered = false
+            val register = {
+                if (!registered) {
+                    manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
+                    gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
+                    registered = true
                 }
             }
+            val observer = LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> register()
+                    Lifecycle.Event.ON_STOP -> { manager.unregisterListener(listener); registered = false }
+                    else -> Unit
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) register()
+            statusCallback(if (linear == null) "Sensor unavailable" else "Calibrating")
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+                manager.unregisterListener(listener)
+            }
+        } else {
+            onDispose { }
         }
     }
 }
