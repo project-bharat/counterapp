@@ -28,7 +28,7 @@ data class BabySession(
     val timeToTenMs: Long? = null,
     val strength: String? = null,
     val note: String? = null,
-    val trackingMode: String = "TEN_MOVEMENTS"
+    @ColumnInfo(defaultValue = "'TEN_MOVEMENTS'") val trackingMode: String = "TEN_MOVEMENTS"
 )
 
 @Entity(tableName = "baby_detections", indices = [Index("sessionId"), Index("timestamp")])
