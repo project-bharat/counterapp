@@ -2,6 +2,7 @@ package com.projectbharat.counterapp
 
 import android.content.Intent
 import android.os.Bundle
+import android.media.ToneGenerator
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
@@ -9,16 +10,20 @@ import java.io.File
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -126,6 +131,8 @@ fun CounterApp(repo: CounterRepository) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val clickTone = remember { ToneGenerator(android.media.AudioManager.STREAM_SYSTEM, 35) }
+    DisposableEffect(clickTone) { onDispose { clickTone.release() } }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
     LaunchedEffect(Unit) { while (true) { delay(1000); clock = System.currentTimeMillis() } }
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
@@ -162,7 +169,7 @@ fun CounterApp(repo: CounterRepository) {
                         Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=ink.copy(alpha=.5f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                         Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=ink, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
-                    IconButton(onClick={english=!english}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.Language,null,tint=ink) }
+                    IconButton(onClick={english=!english}, modifier=Modifier.size(42.dp)) { Icon(Icons.Default.Language,null,tint=ink) }
                     IconButton(onClick={weekly=!weekly;monthlyHistory=false}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.BarChart,null,tint=ink) }
                     IconButton(onClick={monthlyHistory=!monthlyHistory;weekly=false}, modifier=Modifier.size(42.dp).background(MaterialTheme.colorScheme.surface,CircleShape)) { Icon(Icons.Default.History,null,tint=ink) }
                 }
@@ -174,7 +181,7 @@ fun CounterApp(repo: CounterRepository) {
                             Surface(onClick={selectedId=cat.id;weekly=false;monthlyHistory=false}, shape=RoundedCornerShape(17.dp), color=if(active) Navy else MaterialTheme.colorScheme.surface) {
                                 Row(Modifier.padding(horizontal=13.dp,vertical=11.dp),verticalAlignment=Alignment.CenterVertically) {
                                     Icon(glyph,null,tint=if(active) Color.White else ink,modifier=Modifier.size(17.dp)); Spacer(Modifier.width(6.dp))
-                                    Text(if(english) cat.titleEn else cat.titleMr,color=if(active) Color.White else ink,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
+                                    Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप" } else if(english) cat.titleEn else cat.titleMr,color=if(active) Color.White else ink,style=MaterialTheme.typography.labelLarge,fontWeight=FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -222,7 +229,8 @@ fun CounterApp(repo: CounterRepository) {
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
                         onStart = { scope.launch { vm.startSession(selected.id) } },
                         onTap = { sessionId ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
                             scope.launch { vm.addMovement(selected.id, sessionId) }
                         },
                         onUndo = { sessionId -> scope.launch { vm.undoMovement(sessionId) } },
@@ -230,8 +238,9 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
-                        english = english, count = count, goal = selected.goal, mantra = selected.kind == "MANTRA",
-                        ink = ink, onTap = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); scope.launch { vm.add(selected.id, null) } },
+                        english = english, count = count, goal = selected.goal, kind = selected.kind,
+                        categoryTitle = if (english) selected.titleEn else selected.titleMr,
+                        ink = ink, onTap = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.add(selected.id, null) } },
                         onUndo = { scope.launch { vm.undo(selected.id) } }, onReset = { resetDialog = true }
                     )
                 }
@@ -392,8 +401,12 @@ private fun BabyMovementScreen(
 }
 
 @Composable
-private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,mantra:Boolean,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
+private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,categoryTitle:String,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
+    val mantra = kind == "MANTRA"
+    val steps = kind == "STEPS"
     val progress=if(goal>0) (count.toFloat()/goal).coerceIn(0f,1f) else 0f
+    val tapScale = remember { Animatable(1f) }
+    val tapScope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally) {
         Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(26.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally) {
@@ -403,11 +416,11 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,mantra:Boolean,i
                 Spacer(Modifier.height(8.dp))
                 Text(if(english) "TODAY" else "आज",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelMedium,fontWeight=FontWeight.Bold)
                 Text(count.toString(),color=ink,style=MaterialTheme.typography.displayLarge,fontWeight=FontWeight.ExtraBold)
-                Text(if(mantra) if(english) "CHANTS" else "जप" else if(english) "STEPS" else "पावले",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+                Text(if(mantra) { if(english) "CHANTS" else "जप" } else if(steps) { if(english) "STEPS" else "पावले" } else categoryTitle,color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
                 if(mantra) {
                     Text((count/108).toString()+" "+(if(english) "mala" else "माळ")+" · "+(count%108)+"/108",color=Gold,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=9.dp))
                     Row(Modifier.padding(top=8.dp),horizontalArrangement=Arrangement.Center) { repeat(12) { index -> Box(Modifier.padding(3.dp).size(11.dp).background(if(index<count%108*12/108) Gold else Color(0xFFE8E1D7),CircleShape)) } }
-                } else {
+                } else if (steps && goal > 0) {
                     Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                         Text(if(english) "DAILY GOAL" else "दैनिक लक्ष्य",color=ink.copy(alpha=.6f),style=MaterialTheme.typography.labelSmall)
                         Text(count.toString()+" / "+goal,color=ink,fontWeight=FontWeight.Bold)
@@ -417,7 +430,7 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,mantra:Boolean,i
             }
         }
         Spacer(Modifier.weight(1f))
-        Box(Modifier.size(214.dp).background(Brush.linearGradient(if(mantra) listOf(Color(0xFFE9DDF8),Color(0xFFD8C4F0)) else listOf(Color(0xFFDDF1E8),Color(0xFFBDE2D0))),CircleShape).clickable(onClick=onTap),contentAlignment=Alignment.Center) {
+        Box(Modifier.size(214.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(if(mantra) listOf(Color(0xFFE9DDF8),Color(0xFFD8C4F0)) else listOf(Color(0xFFDDF1E8),Color(0xFFBDE2D0))),CircleShape).clickable { tapScope.launch { tapScale.animateTo(.91f, tween(75)); tapScale.animateTo(1f, tween(180)) }; onTap() },contentAlignment=Alignment.Center) {
             Column(horizontalAlignment=Alignment.CenterHorizontally) {
                 Icon(if(mantra) Icons.Default.SelfImprovement else Icons.Default.DirectionsWalk,null,tint=ink,modifier=Modifier.size(36.dp))
                 Text("+1",color=ink,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.ExtraBold)
@@ -426,7 +439,7 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,mantra:Boolean,i
         }
         Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick=onUndo,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Remove,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Undo" else "मागे घ्या") }
+            OutlinedButton(onClick=onUndo,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Undo,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Undo" else "मागे") }
             OutlinedButton(onClick=onReset,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Refresh,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Reset" else "रीसेट") }
         }
         Spacer(Modifier.weight(.8f))
