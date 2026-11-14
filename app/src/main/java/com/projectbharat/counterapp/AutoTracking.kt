@@ -341,7 +341,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
 }
 
 @Composable
-fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink: Color, onDetected: () -> Unit) {
+fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink: Color, onDetected: (Long, Float) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val manager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
@@ -350,7 +350,6 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
     var enabled by remember(activeSessionId) { mutableStateOf(false) }
     var calibrated by remember { mutableStateOf(false) }
     var detections by remember { mutableIntStateOf(0) }
-    var candidatePending by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
 
     DisposableEffect(enabled, activeSessionId, linear, gyro, lifecycleOwner) {
@@ -389,11 +388,11 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                     val spike = magnitude > maxOf(threshold, baseline + 0.65f)
                     val quietRotation = gyro == null || gyroMagnitude < 1.2f
                     val now = System.currentTimeMillis()
-                    if (spike && quietRotation && now - lastDetection > 2200L && !candidatePending) {
+                    if (spike && quietRotation && now - lastDetection > 2200L) {
                         lastDetection = now
                         detections++
-                        candidatePending = true
-                        status = if (english) "Possible movement · confirm or dismiss" else "संभाव्य हालचाल · पुष्टी करा किंवा नाकारा"
+                        onDetected(now, magnitude)
+                        status = if (english) "Moment saved for review" else "संकेत तपासणीसाठी जतन केला"
                     } else if (!spike) {
                         baseline = baseline * 0.995f + magnitude * 0.005f
                     }
@@ -418,7 +417,6 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
             lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
             if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) registerSensors()
             calibrated = false
-            candidatePending = false
             status = if (english) "Keep phone still for 8-second baseline…" else "८ सेकंद फोन स्थिर ठेवा…"
             onDispose {
                 lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
@@ -447,17 +445,7 @@ fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink:
                 if (enabled && linear != null) {
                     Text((if (english) "Detected: " else "ओळखले: ") + detections, color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(status.ifBlank { if (calibrated) "Baseline ready" else "Calibrating…" }, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
-                    if (candidatePending) {
-                        Text(if (english) "Possible sensor event — check whether you felt a baby movement." else "सेन्सरला हालचाल जाणवली — प्रत्यक्ष बाळाची हालचाल जाणवली का ते तपासा.", color = ink, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { candidatePending = false; onDetected(); status = if (english) "Movement confirmed by you" else "तुम्ही हालचालीची पुष्टी केली" }, modifier = Modifier.weight(1f)) {
-                                Text(if (english) "Confirm +1" else "पुष्टी +१")
-                            }
-                            OutlinedButton(onClick = { candidatePending = false; status = if (english) "Candidate dismissed" else "संकेत नाकारला" }, modifier = Modifier.weight(1f)) {
-                                Text(if (english) "Dismiss" else "नाकारा")
-                            }
-                        }
-                    }
+                    Text(if (english) "Detected moments are saved separately for your review." else "ओळखलेले क्षण स्वतंत्रपणे तपासणीसाठी जतन होतात.", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
                     Text(if (english) "A phone accelerometer cannot reliably separate fetal movement from breathing, speech or maternal motion. Manual logging remains the primary record; this is not a medical monitor." else "फोनचा सेन्सर बाळाची हालचाल आणि श्वास, बोलणे किंवा आईची हालचाल विश्वासार्हपणे वेगळी ओळखू शकत नाही. मॅन्युअल नोंद मुख्य आहे; हे वैद्यकीय उपकरण नाही.", color = ink.copy(alpha = .5f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
                 }
             }
