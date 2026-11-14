@@ -20,7 +20,7 @@ internal class GpsWalkVerifier {
         val distance = distanceMeters(anchorLat, anchorLon, latitude, longitude)
         val elapsedSeconds = ((timestampMs - anchorTimeMs).coerceAtLeast(1L)) / 1000.0
         val speed = distance / elapsedSeconds
-        val requiredDistance = max(MIN_DISPLACEMENT_METERS, accuracyMeters * ACCURACY_FACTOR)
+        val requiredDistance = max(MIN_DISPLACEMENT_METERS, accuracyMeters.toDouble() * ACCURACY_FACTOR)
         if (distance < requiredDistance || (speed < MIN_WALK_SPEED_MPS && distance < STRONG_DISPLACEMENT_METERS)) return 0
         anchorLat = latitude
         anchorLon = longitude
