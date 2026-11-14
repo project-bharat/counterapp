@@ -448,7 +448,11 @@ private fun BabyMovementScreen(
     val tapScope = rememberCoroutineScope()
     val babyMotion = rememberInfiniteTransition(label = "babyMotion")
     val babyBob by babyMotion.animateFloat(initialValue = -4f, targetValue = 4f, animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "babyBob")
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        activeSession?.let { session ->
+            ExperimentalBabyMotionControl(activeSessionId = session.id, english = english, ink = ink,
+                onDetected = { timestamp, magnitude -> onAutoMovement(session.id, timestamp, magnitude) })
+        }
         if (activeSession != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
@@ -549,44 +553,25 @@ private fun BabyMovementScreen(
             val pending = detections.filter { it.status == "PENDING" }
             Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(if (english) "DETECTED MOMENTS" else "ओळखलेले क्षण", color = ink, fontWeight = FontWeight.SemiBold)
-                            Text((if (english) "Pending: " else "तपासायचे: ") + pending.size +
-                                "  ·  " + (if (english) "Added: " else "नोंदवले: ") + detections.count { it.status == "CONFIRMED" },
-                                color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
-                        }
-                        if (pending.isNotEmpty()) {
-                            TextButton(onClick = { onConfirmDetections(pending.map { it.id }) }) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (english) "DETECTED MOMENTS" else "ओळखलेले क्षण",
+                        color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(pending.size.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                    Text((if (english) "Detected: " else "ओळखले: ") + pending.size +
+                        "    " + (if (english) "Added: " else "जोडले: ") + detections.count { it.status == "CONFIRMED" },
+                        color = ink.copy(alpha = .7f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    if (pending.isNotEmpty()) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { onConfirmDetections(pending.map { it.id }) }, modifier = Modifier.weight(1f)) {
                                 Text(if (english) "Add all" else "सर्व जोडा")
                             }
-                        }
-                    }
-                    detections.take(5).forEach { item ->
-                        Row(Modifier.fillMaxWidth().padding(top = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(sessionTime(item.timestamp), color = ink, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            Text(when (item.status) {
-                                "CONFIRMED" -> if (english) "Added" else "जोडले"
-                                "DISMISSED" -> if (english) "Ignored" else "वगळले"
-                                else -> if (english) "Review" else "तपासा"
-                            }, color = if (item.status == "CONFIRMED") Color(0xFF238451) else ink.copy(alpha = .55f),
-                                style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    if (pending.isNotEmpty()) {
-                        TextButton(onClick = { onDismissDetections(pending.map { it.id }) }, modifier = Modifier.align(Alignment.End)) {
-                            Text(if (english) "Dismiss pending" else "प्रलंबित वगळा")
+                            OutlinedButton(onClick = { onDismissDetections(pending.map { it.id }) }, modifier = Modifier.weight(1f)) {
+                                Text(if (english) "Dismiss" else "वगळा")
+                            }
                         }
                     }
                 }
             }
-        }
-        activeSession?.let { session ->
-            ExperimentalBabyMotionControl(
-                activeSessionId = session.id, english = english, ink = ink,
-                onDetected = { timestamp, magnitude -> onAutoMovement(session.id, timestamp, magnitude) }
-            )
         }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
@@ -602,8 +587,8 @@ private fun BabyMovementScreen(
                 Text(if (english) "No sessions on this day" else "या दिवसाची नोंद उपलब्ध नाही", modifier=Modifier.padding(16.dp), color=ink.copy(alpha=.55f), style=MaterialTheme.typography.bodySmall)
             }
         } else {
-            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement=Arrangement.spacedBy(7.dp), contentPadding=PaddingValues(bottom=12.dp)) {
-                items(sessions,key={it.id}) { session ->
+            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                sessions.forEach { session ->
                     Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(17.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment=Alignment.CenterVertically) {
                             Box(Modifier.size(40.dp).background(Color(0xFFFFE8DC),CircleShape),contentAlignment=Alignment.Center) { Icon(Icons.Default.Favorite,null,tint=Color(0xFFC65F68)) }
@@ -615,7 +600,7 @@ private fun BabyMovementScreen(
                             }
                             Text(session.movementCount.toString(), color=Gold, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                         }
-                    }
+                    
                 }
             }
         }
