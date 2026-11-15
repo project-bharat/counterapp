@@ -26,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 object CounterQuickActions {
     const val ACTION_START_BABY = "com.projectbharat.counterapp.action.START_BABY"
@@ -176,7 +177,9 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
             try {
                 val dao = CounterDatabase.get(context).dao()
                 val categories = dao.categories().first()
-                val today = LocalDate.now().toString()
+                val date = LocalDate.now()
+                val today = date.toString()
+                val todayLabel = date.format(DateTimeFormatter.ofPattern("EEE, dd MMM"))
                 val baby = categories.firstOrNull { it.kind == "BABY" }
                 val mantra = categories.firstOrNull { it.kind == "MANTRA" }
                 val steps = categories.firstOrNull { it.kind == "STEPS" }
@@ -185,7 +188,7 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                 val stepCount = steps?.let { dao.countNow(it.id, today) } ?: 0
                 ids.forEach { id ->
                     val views = RemoteViews(context.packageName, R.layout.counter_widget)
-                    views.setTextViewText(R.id.widget_date, today)
+                    views.setTextViewText(R.id.widget_date, todayLabel)
                     views.setTextViewText(R.id.widget_baby_action, "BABY\\n$babyCount moves\\n＋ Session")
                     views.setTextViewText(R.id.widget_japa_action, "JAPA\\n$mantraCount chants\\n＋ Start")
                     views.setTextViewText(R.id.widget_steps_action, "WALK\\n$stepCount steps\\n＋ Start")
