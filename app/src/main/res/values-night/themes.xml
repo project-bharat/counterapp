@@ -2,7 +2,8 @@
 <resources>
     <style name="Theme.CounterApp" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#0D1B2A</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_art</item>
+        <item name="windowSplashScreenIconBackgroundColor">#5C0F57</item>
         <item name="windowSplashScreenAnimationDuration">180</item>
         <item name="postSplashScreenTheme">@android:style/Theme.Material.NoActionBar</item>
     </style>
