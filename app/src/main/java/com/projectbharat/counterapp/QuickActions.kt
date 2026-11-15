@@ -65,8 +65,8 @@ class QuickActionReceiver : BroadcastReceiver() {
         val action = intent?.action ?: return
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            val app = context.applicationContext
             try {
-                val app = context.applicationContext
                 val dao = CounterDatabase.get(app).dao()
                 val categories = dao.categories().first()
                 val baby = categories.firstOrNull { it.kind == "BABY" }
@@ -98,11 +98,9 @@ class QuickActionReceiver : BroadcastReceiver() {
                         openCounter(app, "MANTRA")
                     }
                 }
-            } catch (_: Exception) {
-                // Permission and foreground-service failures are handled when the user opens the selected counter.
                 CounterHomeWidget.refresh(app)
             } catch (_: Exception) {
-                // No action is run when a required counter is unavailable.
+                // Permission and foreground-service failures are handled when the user opens the selected counter.
             } finally {
                 pending.finish()
             }
