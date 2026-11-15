@@ -34,6 +34,13 @@ object CounterQuickActions {
             Intent(context, QuickActionReceiver::class.java).setAction(action),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
+    fun activityPending(context: Context, kind: String, requestCode: Int): PendingIntent =
+        PendingIntent.getActivity(context, requestCode,
+            Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_COUNTER)
+                .putExtra(EXTRA_COUNTER_KIND, kind).putExtra("quick_start", true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
     fun publishShortcuts(context: Context, categories: List<com.projectbharat.counterapp.data.CounterCategory>) {
         val kinds = listOf("BABY", "MANTRA", "STEPS")
         val shortcuts = kinds.mapNotNull { kind ->
@@ -143,9 +150,9 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                     views.setTextViewText(R.id.widget_baby_action, "BABY\\n$babyCount moves\\n＋ Session")
                     views.setTextViewText(R.id.widget_japa_action, "JAPA\\n$mantraCount chants\\n＋ Start")
                     views.setTextViewText(R.id.widget_steps_action, "WALK\\n$stepCount steps\\n＋ Start")
-                    views.setOnClickPendingIntent(R.id.widget_baby_action, CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_BABY, 8101))
-                    views.setOnClickPendingIntent(R.id.widget_japa_action, CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_JAPA, 8102))
-                    views.setOnClickPendingIntent(R.id.widget_steps_action, CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_WALK, 8103))
+                    views.setOnClickPendingIntent(R.id.widget_baby_action, CounterQuickActions.activityPending(context, "BABY", 8101))
+                    views.setOnClickPendingIntent(R.id.widget_japa_action, CounterQuickActions.activityPending(context, "MANTRA", 8102))
+                    views.setOnClickPendingIntent(R.id.widget_steps_action, CounterQuickActions.activityPending(context, "STEPS", 8103))
                     manager.updateAppWidget(id, views)
                 }
             } finally {
