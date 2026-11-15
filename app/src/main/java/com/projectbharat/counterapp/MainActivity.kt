@@ -342,6 +342,12 @@ fun CounterApp(repo: CounterRepository) {
     val isBaby = selected?.kind == "BABY"
     val activeSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt == null && clock < it.startedAt + limit }
     val resumableSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt != null && clock < it.startedAt + limit }
+    LaunchedEffect(selected?.kind, activeSession?.id, activeSession?.movementCount) {
+        if (selected?.kind == "BABY") {
+            if (activeSession != null) BabySessionNotification.show(context, activeSession.id, selected.id, activeSession.movementCount)
+            else BabySessionNotification.cancel(context)
+        }
+    }
     val lockedSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; clock < it.startedAt + limit }
     val remainingMs = activeSession?.let { val limit = CounterRepository.TWO_HOURS_MS; (it.startedAt + limit - clock).coerceAtLeast(0L) } ?: 0L
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
@@ -501,8 +507,16 @@ fun CounterApp(repo: CounterRepository) {
                         historyDate = historyDate,
                         onPreviousDay = { historyDate = historyDate.minusDays(1) },
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
-                        onStart = { scope.launch { vm.startSession(selected.id) } },
-                        onResume = { sessionId -> scope.launch { vm.resumeSession(sessionId) } },
+                        onStart = { scope.launch {
+                            vm.startSession(selected.id)
+                            val session = vm.latestSession(selected.id).first()
+                            if (session != null && session.endedAt == null) BabySessionNotification.show(context, session.id, selected.id, session.movementCount)
+                        } },
+                        onResume = { sessionId -> scope.launch {
+                            vm.resumeSession(sessionId)
+                            val session = vm.latestSession(selected.id).first()
+                            if (session != null && session.endedAt == null) BabySessionNotification.show(context, session.id, selected.id, session.movementCount)
+                        } },
                         onTap = { sessionId ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
