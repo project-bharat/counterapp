@@ -119,9 +119,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
         launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
-        var firstContentFrameReady = false
-        val splashScreen = installSplashScreen()
-        splashScreen.setKeepOnScreenCondition { !firstContentFrameReady }
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         stopService(Intent(this, ChantRecognitionService::class.java))
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
@@ -129,10 +127,7 @@ class MainActivity : ComponentActivity() {
         DailyReminderScheduler.rescheduleAll(this)
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
-        setContent {
-            CounterApp(repo)
-            SideEffect { firstContentFrameReady = true }
-        }
+        setContent { CounterApp(repo) }
     }
 
     companion object {
@@ -184,10 +179,10 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     }
 }
 
-private val Navy = Color(0xFF31413A)
-private val Gold = Color(0xFFD5A757)
-private val Cream = Color(0xFFF3EEE3)
-private val SoftBlue = Color(0xFFE7E1D5)
+private val Navy = Color(0xFF102E55)
+private val Gold = Color(0xFFE7A33C)
+private val Cream = Color(0xFFF5F0E6)
+private val SoftBlue = Color(0xFFDCE9F7)
 private val zone = ZoneId.systemDefault()
 private val dateFormat = DateTimeFormatter.ofPattern("dd MMM yyyy")
 
@@ -351,11 +346,11 @@ fun CounterApp(repo: CounterRepository) {
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
-    val page = if (dark) Color(0xFF1B2923) else Cream
-    val ink = if (dark) Color(0xFFF3EEE3) else Navy
-    val tapSurface = if (dark) Color(0xFF34483E) else SoftBlue
-    val scheme = if (dark) darkColorScheme(primary = Color(0xFFE4D0A6), secondary = Gold, background = page, surface = Color(0xFF26362E), surfaceVariant = Color(0xFF34483E))
-                 else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color(0xFFFFFCF6), surfaceVariant = Color(0xFFEAE4D8))
+    val page = if (dark) Color(0xFF0D1B2A) else Cream
+    val ink = if (dark) Color(0xFFEAF0F6) else Navy
+    val tapSurface = if (dark) Color(0xFF23466A) else SoftBlue
+    val scheme = if (dark) darkColorScheme(primary = Color(0xFF9FC7ED), secondary = Gold, background = page, surface = Color(0xFF172A3E))
+                 else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
 
     MaterialTheme(colorScheme = scheme) {
         if (showPermissionIntro) {
@@ -424,23 +419,12 @@ fun CounterApp(repo: CounterRepository) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color(0xFFF3EEE3)) }
-                    Column(
-                        horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.bilan_header_logo_light),
-                            contentDescription = "Bilan",
-                            modifier = Modifier.width(94.dp).height(36.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                        Text(
-                            if (english) "Daily Counter" else "दैनिक मोजणी",
-                            color = Color(0xFFF3EEE3),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.bilan_header_logo_light),
+                        contentDescription = "Bilan Counter",
+                        modifier = Modifier.width(124.dp).height(48.dp),
+                        contentScale = ContentScale.Fit
+                    )
                     Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(12.dp))
@@ -681,7 +665,7 @@ private fun BabyMovementScreen(
                         Box(
                             Modifier.size(138.dp)
                                 .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
-                                .background(Brush.linearGradient(if (activeSession.movementCount >= 10) listOf(Color(0xFFE8EFE5), Color(0xFFD7E4D3)) else listOf(Color(0xFFF3EBDD), Color(0xFFE8D8B8))), CircleShape)
+                                .background(Brush.linearGradient(if (activeSession.movementCount >= 10) listOf(Color(0xFFE2F5E8), Color(0xFFC6EBD2)) else listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
                                     tapScope.launch { tapScale.animateTo(.92f, tween(90)); tapScale.animateTo(1f, tween(180)) }
                                     onTap(activeSession.id)
@@ -689,9 +673,9 @@ private fun BabyMovementScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFF31413A), modifier = Modifier.size(44.dp))
-                                Text("+1", color = Color(0xFF31413A), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
-                                Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF31413A), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(44.dp))
+                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                                Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
