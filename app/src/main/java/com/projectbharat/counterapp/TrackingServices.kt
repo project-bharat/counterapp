@@ -31,6 +31,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.projectbharat.counterapp.data.CounterDatabase
 import com.projectbharat.counterapp.data.CounterLog
+import com.projectbharat.counterapp.data.WalkingSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -86,6 +87,8 @@ class StepTrackingService : Service(), SensorEventListener {
     @Volatile private var pendingValidatedSteps = 0
     private var categoryId = -1L
     private var today = ""
+    @Volatile private var walkSessionId = -1L
+    private var lastReliableLocation: Location? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -124,20 +127,36 @@ class StepTrackingService : Service(), SensorEventListener {
         }
         today = LocalDate.now().toString()
         scope.launch {
+            val dao = CounterDatabase.get(this@StepTrackingService).dao()
+            walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = System.currentTimeMillis()))
             sensorManager.registerListener(this@StepTrackingService, accelerometer, SensorManager.SENSOR_DELAY_GAME)
             sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_GAME)
             val listener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
+                    val now = System.currentTimeMillis()
                     val confirmed = gpsVerifier.acceptLocation(location.latitude, location.longitude,
-                        location.accuracy, System.currentTimeMillis(), pendingValidatedSteps)
-                    if (confirmed <= 0) return
+                        location.accuracy, now, pendingValidatedSteps)
+                    var reliableDistance = 0.0
+                    if (location.hasAccuracy() && location.accuracy <= 10f) {
+                        val previous = lastReliableLocation
+                        if (previous != null) {
+                            val gap = now - previous.time
+                            val segment = previous.distanceTo(location).toDouble()
+                            val speed = if (gap > 0) segment / (gap / 1000.0) else Double.POSITIVE_INFINITY
+                            if (gap in 1L..20_000L && segment in 2.0..40.0 && speed in 0.35..3.0) reliableDistance = segment
+                        }
+                        lastReliableLocation = Location(location)
+                    } else lastReliableLocation = null
+                    if (confirmed <= 0 && reliableDistance <= 0.0) return
                     pendingValidatedSteps = (pendingValidatedSteps - confirmed).coerceAtLeast(0)
                     val dateNow = LocalDate.now().toString()
                     scope.launch {
-                        CounterDatabase.get(this@StepTrackingService).dao().addLog(
-                            CounterLog(date = dateNow, timestamp = System.currentTimeMillis(), categoryId = categoryId,
+                        val dao = CounterDatabase.get(this@StepTrackingService).dao()
+                        if (confirmed > 0) dao.addLog(
+                            CounterLog(date = dateNow, timestamp = now, categoryId = categoryId,
                                 count = confirmed, note = "GPS_VERIFIED_WALK_STEP")
                         )
+                        if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, confirmed, reliableDistance)
                         sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
                             .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", confirmed))
                     }
