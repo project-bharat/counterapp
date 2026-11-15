@@ -3,7 +3,6 @@
     <style name="Theme.CounterApp" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
-        <item name="windowSplashScreenAnimationDuration">350</item>
         <item name="postSplashScreenTheme">@android:style/Theme.Material.NoActionBar</item>
     </style>
 </resources>
