@@ -602,6 +602,7 @@ private fun BabyMovementScreen(
     onConfirmDetections: (List<Long>) -> Unit, onDismissDetections: (List<Long>) -> Unit
 ) {
     val context = LocalContext.current
+    var guidanceExpanded by remember { mutableStateOf(false) }
     val elapsed = activeSession?.let { (System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) } ?: 0L
     val sessionLimit = CounterRepository.TWO_HOURS_MS
     val progress = (elapsed.toFloat() / sessionLimit).coerceIn(0f, 1f)
@@ -786,10 +787,29 @@ private fun BabyMovementScreen(
         }
         Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
             Column(Modifier.padding(13.dp)) {
-                Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text(if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Guidance differs; follow your maternity-care professional's recommended method." else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे मोजा. डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.", color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-                Text(if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer." else "हालचाली नेहमीपेक्षा कमी किंवा वेगळ्या वाटल्यास वेळ संपण्याची वाट न पाहता त्वरित डॉक्टरांशी संपर्क साधा.", color = Color(0xFF9A5B36), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-                TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Know how · Cleveland Clinic" else "अधिक जाणून घ्या · Cleveland Clinic") }
+                Row(
+                    Modifier.fillMaxWidth().clickable { guidanceExpanded = !guidanceExpanded },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(if (english) "MOVEMENT GUIDANCE" else "हालचालींबाबत सूचना", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(if (guidanceExpanded) (if (english) "Less −" else "कमी −") else (if (english) "More +" else "अधिक +"), color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                }
+                Text(
+                    if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer."
+                    else "हालचाली नेहमीपेक्षा कमी किंवा वेगळ्या वाटल्यास वेळ संपण्याची वाट न पाहता त्वरित डॉक्टरांशी संपर्क साधा.",
+                    color = Color(0xFF9A5B36), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp)
+                )
+                if (guidanceExpanded) {
+                    Text(
+                        if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Guidance differs; follow your maternity-care professional's recommended method."
+                        else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे मोजा. डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.",
+                        color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)
+                    )
+                    TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) {
+                        Text(if (english) "Know how · Cleveland Clinic" else "अधिक जाणून घ्या · Cleveland Clinic")
+                    }
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
