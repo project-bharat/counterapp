@@ -633,17 +633,24 @@ private fun BabyMovementScreen(
             )
             Spacer(Modifier.height(8.dp))
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                    Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+                Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                        }
+                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
+                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(3.dp)); Text(if (english) "Undo" else "मागे")
+                        }
+                    }
+                    Box(Modifier.size(166.dp), contentAlignment = Alignment.Center) {
                         Canvas(Modifier.fillMaxSize()) {
                             drawCircle(tapSurface, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx()))
                             drawArc(Gold, -90f, 360f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round))
                         }
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
-                            Modifier.size(174.dp)
+                            Modifier.size(138.dp)
                                 .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
                                 .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
@@ -654,7 +661,7 @@ private fun BabyMovementScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(44.dp))
-                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
                                 Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -671,11 +678,6 @@ private fun BabyMovementScreen(
                                 Text(if (english) "10 MOVEMENTS REACHED" else "१० हालचाली पूर्ण", color = Color(0xFF246B48), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 Text(if (english) "Time: " + "%.1f min".format(activeSession.timeToTenMs / 60000.0) else "वेळ: " + "%.1f मिनिटे".format(activeSession.timeToTenMs / 60000.0), color = Color(0xFF246B48), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                             }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
-                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo" else "मागे")
                         }
                     }
                 }
@@ -709,17 +711,32 @@ private fun BabyMovementScreen(
             }
         }
         if (detections.isNotEmpty() || autoDetect) {
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(Modifier.fillMaxWidth().padding(top = 6.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = ink, fontWeight = FontWeight.SemiBold)
-                    Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                        Column {
-                            Text(if (english) "Detected" else "ओळखले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
-                            Text(pending.toString(), color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = ink.copy(alpha=.7f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                        if (autoDetect && autoStatus.contains("Calibrating", true)) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+                        else if (autoDetect && autoStatus.contains("Ready", true)) {
+                            val pulse = rememberInfiniteTransition(label = "readyDot")
+                            val alpha by pulse.animateFloat(.3f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "readyPulse")
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Box(Modifier.size(7.dp).graphicsLayer(alpha = alpha).background(Color(0xFF16834F), CircleShape))
+                                Text("READY", color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Column {
-                            Text(if (english) "Added" else "जोडले", color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall)
-                            Text(added.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(shape = CircleShape, color = Color(0xFFE8EFFA), modifier = Modifier.size(66.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Text(pending.toString(), color = Color(0xFF315E9B), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold) }
+                            }
+                            Text(if (english) "Detected" else "ओळखले", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(shape = CircleShape, color = Color(0xFFE5F4EA), modifier = Modifier.size(66.dp)) {
+                                Box(contentAlignment = Alignment.Center) { Text(added.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold) }
+                            }
+                            Text(if (english) "Added" else "जोडले", color = Color(0xFF238451), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
                     }
                     if (pending > 0) {
@@ -730,26 +747,6 @@ private fun BabyMovementScreen(
                             OutlinedButton(onClick = { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, modifier = Modifier.weight(1f)) {
                                 Text(if (english) "Dismiss" else "वगळा")
                             }
-                        }
-                    }
-                    if (autoDetect) {
-                        val calibrating = autoStatus.contains("Calibrating", true) || autoStatus.contains("कॅलिब्रेट", true)
-                        val ready = autoStatus.equals("Ready", true) || autoStatus.contains("Ready", true)
-                        if (calibrating) {
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                                Text(if (english) "Calibrating…" else "कॅलिब्रेट होत आहे…", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelMedium)
-                            }
-                        } else if (ready) {
-                            val readyPulse = rememberInfiniteTransition(label = "babyReadyPulse")
-                            val readyAlpha by readyPulse.animateFloat(initialValue = .25f, targetValue = 1f,
-                                animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "readyAlpha")
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Box(Modifier.size(9.dp).graphicsLayer(alpha = readyAlpha).background(Color(0xFF1D9A5B), CircleShape))
-                                Text(if (english) "READY · AUTO DETECTING" else "तयार · स्वयंचलित ओळख सुरू", color = Color(0xFF1D9A5B), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                        } else if (autoStatus.isNotBlank()) {
-                            Text(autoStatus, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
