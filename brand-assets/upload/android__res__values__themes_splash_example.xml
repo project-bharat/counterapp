@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Example only. Merge into your app theme. Light-mode artwork: splash-logo-light-mode.png ; dark-mode artwork: splash-logo-dark-mode.png (place in drawable-night). -->
+<resources>
+    <style name="Theme.Bilan.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Bilan</item>
+    </style>
+</resources>
