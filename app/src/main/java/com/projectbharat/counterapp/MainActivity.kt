@@ -89,12 +89,17 @@ import java.time.format.DateTimeFormatter
 class MainActivity : ComponentActivity() {
     var launchCounterKind by mutableStateOf<String?>(null)
         private set
-    fun consumeLaunchCounterKind() { launchCounterKind = null }
+    var launchCounterQuickStart by mutableStateOf(false)
+        private set
+    fun consumeLaunchCounterKind() { launchCounterKind = null; launchCounterQuickStart = false }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_OPEN_COUNTER) launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
+        if (intent.action == ACTION_OPEN_COUNTER) {
+            launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
+            launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
+        }
     }
 
     override fun onStop() {
@@ -105,6 +110,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
+        launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
         installSplashScreen()
         super.onCreate(savedInstanceState)
         stopService(Intent(this, ChantRecognitionService::class.java))
@@ -209,6 +215,7 @@ fun CounterApp(repo: CounterRepository) {
     val context = LocalContext.current
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
+    val shortcutQuickStart = activity?.launchCounterQuickStart == true
     var mantraTarget by remember { mutableStateOf(context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_1", "राम") ?: "राम") }
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
@@ -250,8 +257,31 @@ fun CounterApp(repo: CounterRepository) {
         CounterQuickActions.publishShortcuts(context, categories)
         CounterHomeWidget.refresh(context)
     }
-    LaunchedEffect(categories, shortcutKind) {
-        shortcutKind?.let { kind -> categories.firstOrNull { it.kind == kind }?.let { selectedId = it.id } }
+    LaunchedEffect(categories, shortcutKind, shortcutQuickStart) {
+        shortcutKind?.let { kind ->
+            categories.firstOrNull { it.kind == kind }?.let { category ->
+                selectedId = category.id
+                if (shortcutQuickStart) when (kind) {
+                    "BABY" -> scope.launch { vm.startSession(category.id) }
+                    "STEPS" -> {
+                        val activityGranted = Build.VERSION.SDK_INT < 29 ||
+                            ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+                        val locationGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        if (activityGranted && locationGranted) StepTrackingService.start(context, category.id)
+                    }
+                    "MANTRA" -> {
+                        val micGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        if (micGranted) {
+                            val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
+                            val target = prefs.getString("target_${category.id}", "राम") ?: "राम"
+                            mantraTarget = target
+                            val language = if (target.any { it in '\u0900'..'\u097F' }) "hi" else "en"
+                            ChantRecognitionService.start(context, category.id, target, language)
+                        }
+                    }
+                }
+            }
+        }
         if (shortcutKind != null) activity?.consumeLaunchCounterKind()
     }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
@@ -290,6 +320,7 @@ fun CounterApp(repo: CounterRepository) {
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
     val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
+    LaunchedEffect(count, selected?.id) { CounterHomeWidget.refresh(context) }
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
     val walkDays by walkTotalsFlow.collectAsStateWithLifecycle(emptyList())
     val walkSessions by walkSessionsFlow.collectAsStateWithLifecycle(emptyList())
