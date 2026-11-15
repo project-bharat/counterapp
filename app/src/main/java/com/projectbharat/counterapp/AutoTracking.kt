@@ -701,7 +701,7 @@ fun BabyMotionSensorEngine(
                     if (spike && quietRotation && now - lastDetection > 2200L) {
                         lastDetection = now
                         detectedCallback(now, magnitude)
-                        statusCallback("Saved")
+                        statusCallback("Ready")
                     } else if (!spike) baseline = baseline * 0.995f + magnitude * 0.005f
                 }
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
