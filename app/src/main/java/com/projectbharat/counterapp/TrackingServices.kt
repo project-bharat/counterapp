@@ -336,6 +336,7 @@ class ChantRecognitionService : Service() {
             }
         } finally {
             recording = false
+            finishChantAudio()
             try { audioRecord?.stop() } catch (_: Exception) { }
             audioRecord?.release(); audioRecord = null
             recognizer?.close(); recognizer = null
