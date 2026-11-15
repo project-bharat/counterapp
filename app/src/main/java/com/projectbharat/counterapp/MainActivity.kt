@@ -25,6 +25,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloat
@@ -38,6 +39,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.DirectionsWalk
@@ -411,15 +414,18 @@ fun CounterApp(repo: CounterRepository) {
             Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
                 Row(
                     Modifier.fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(Color(0xFF5C0F57), Color(0xFF9B4B91))), RoundedCornerShape(22.dp))
-                        .padding(horizontal = 10.dp, vertical = 13.dp),
+                        .background(Color(0xFF31413A), RoundedCornerShape(22.dp))
+                        .padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color.White) }
-                    Column(Modifier.weight(1f)) {
-                        Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=Color.White.copy(alpha=.76f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
-                        Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=Color.White, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
-                    }
+                    IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color(0xFFF3EEE3)) }
+                    Image(
+                        painter = painterResource(id = R.drawable.bilan_header_logo_light),
+                        contentDescription = "Bilan Counter",
+                        modifier = Modifier.width(124.dp).height(48.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(12.dp))
 
