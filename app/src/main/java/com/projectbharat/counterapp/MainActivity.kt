@@ -118,6 +118,8 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun updateLog(log: CounterLog) = repo.updateLog(log)
     suspend fun deleteLog(id: Long) = repo.deleteLog(id)
     fun week(id: Long) = repo.week(id)
+    fun stepTotals(id: Long, from: LocalDate, to: LocalDate) = repo.stepTotals(id, from, to)
+    fun walkingSessions(id: Long, from: LocalDate, to: LocalDate) = repo.walkingSessions(id, from, to)
     fun average(id: Long) = repo.average(id)
     fun averageBabyTimeToTen(id: Long) = repo.averageBabyTimeToTen(id)
     fun sessions(id: Long, date: String) = repo.babySessionsForDay(id, date)
@@ -186,6 +188,7 @@ fun CounterApp(repo: CounterRepository) {
     var finishDialog by remember { mutableStateOf(false) }
     var finalStrength by remember { mutableStateOf("MEDIUM") }
     var historyDate by remember { mutableStateOf(LocalDate.now()) }
+    var stepGraphRange by remember { mutableStateOf("7D") }
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -242,6 +245,17 @@ fun CounterApp(repo: CounterRepository) {
     val weekFlow = remember(selected?.id, selected?.kind, mantraTarget) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraWeek(it.id, mantraTarget) else vm.week(it.id) } ?: flowOf(emptyList())
     }
+    val walkRangeStart = when (stepGraphRange) {
+        "30D" -> LocalDate.now().minusDays(29)
+        "MONTH" -> LocalDate.now().withDayOfMonth(1)
+        else -> LocalDate.now().minusDays(6)
+    }
+    val walkTotalsFlow = remember(selected?.id, stepGraphRange) {
+        selected?.takeIf { it.kind == "STEPS" }?.let { vm.stepTotals(it.id, walkRangeStart, LocalDate.now()) } ?: flowOf(emptyList())
+    }
+    val walkSessionsFlow = remember(selected?.id, stepGraphRange) {
+        selected?.takeIf { it.kind == "STEPS" }?.let { vm.walkingSessions(it.id, walkRangeStart, LocalDate.now()) } ?: flowOf(emptyList())
+    }
     val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val historyLogsFlow = remember(selected?.id, selected?.kind, historyDate) {
@@ -251,6 +265,8 @@ fun CounterApp(repo: CounterRepository) {
     val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
+    val walkDays by walkTotalsFlow.collectAsStateWithLifecycle(emptyList())
+    val walkSessions by walkSessionsFlow.collectAsStateWithLifecycle(emptyList())
     val average by averageFlow.collectAsStateWithLifecycle(null)
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
@@ -426,7 +442,7 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected?.kind == "STEPS") {
                     AutoStepCounterScreen(
-                        categoryId = selected.id, count = count, days = days, english = english, ink = ink
+                        categoryId = selected.id, count = count, days = walkDays, sessions = walkSessions, range = stepGraphRange, onRangeChange = { stepGraphRange = it }, english = english, ink = ink
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
@@ -632,7 +648,7 @@ private fun BabyMovementScreen(
         if (detections.isNotEmpty() || autoDetect) {
             Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text(if (english) "DETECTED MOMENTS" else "ओळखलेले क्षण", color = ink, fontWeight = FontWeight.SemiBold)
+                    Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = ink, fontWeight = FontWeight.SemiBold)
                     Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                         Column {
                             Text(if (english) "Detected" else "ओळखले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
@@ -653,7 +669,26 @@ private fun BabyMovementScreen(
                             }
                         }
                     }
-                    if (autoDetect && autoStatus.isNotBlank()) Text(autoStatus, color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                    if (autoDetect) {
+                        val calibrating = autoStatus.contains("Calibrating", true) || autoStatus.contains("कॅलिब्रेट", true)
+                        val ready = autoStatus.equals("Ready", true) || autoStatus.contains("Ready", true)
+                        if (calibrating) {
+                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+                                Text(if (english) "Calibrating…" else "कॅलिब्रेट होत आहे…", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelMedium)
+                            }
+                        } else if (ready) {
+                            val readyPulse = rememberInfiniteTransition(label = "babyReadyPulse")
+                            val readyAlpha by readyPulse.animateFloat(initialValue = .25f, targetValue = 1f,
+                                animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "readyAlpha")
+                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.size(9.dp).graphicsLayer(alpha = readyAlpha).background(Color(0xFF1D9A5B), CircleShape))
+                                Text(if (english) "READY · AUTO DETECTING" else "तयार · स्वयंचलित ओळख सुरू", color = Color(0xFF1D9A5B), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        } else if (autoStatus.isNotBlank()) {
+                            Text(autoStatus, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
         }
@@ -847,7 +882,7 @@ private fun MonthlyHistoryScreen(
         }
         Spacer(Modifier.height(8.dp))
         Text(if (english) "Daily movement pattern" else "दैनिक हालचालींचा आलेख", color = ink, style = MaterialTheme.typography.titleSmall)
-        MonthlyChart((1..daysInMonth).map { day -> totals[month.withDayOfMonth(day).toString()] ?: 0 }, Modifier.fillMaxWidth().height(112.dp))
+        MonthlyChart((1..daysInMonth).map { day -> totals[month.withDayOfMonth(day).toString()] ?: 0 }, Modifier.fillMaxWidth().height(190.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Button(onClick = onExportPdf, enabled = sessions.isNotEmpty()) { Text(if (english) "Share doctor PDF" else "डॉक्टरांसाठी PDF शेअर करा") }
         }
