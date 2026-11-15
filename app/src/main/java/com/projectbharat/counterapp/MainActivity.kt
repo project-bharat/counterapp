@@ -245,16 +245,17 @@ fun CounterApp(repo: CounterRepository) {
     val weekFlow = remember(selected?.id, selected?.kind, mantraTarget) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraWeek(it.id, mantraTarget) else vm.week(it.id) } ?: flowOf(emptyList())
     }
+    val walkToday = Instant.ofEpochMilli(clock).atZone(ZoneId.systemDefault()).toLocalDate()
     val walkRangeStart = when (stepGraphRange) {
-        "30D" -> LocalDate.now().minusDays(29)
-        "MONTH" -> LocalDate.now().withDayOfMonth(1)
-        else -> LocalDate.now().minusDays(6)
+        "30D" -> walkToday.minusDays(29)
+        "MONTH" -> walkToday.withDayOfMonth(1)
+        else -> walkToday.minusDays(6)
     }
-    val walkTotalsFlow = remember(selected?.id, stepGraphRange) {
-        selected?.takeIf { it.kind == "STEPS" }?.let { vm.stepTotals(it.id, walkRangeStart, LocalDate.now()) } ?: flowOf(emptyList())
+    val walkTotalsFlow = remember(selected?.id, stepGraphRange, walkToday) {
+        selected?.takeIf { it.kind == "STEPS" }?.let { vm.stepTotals(it.id, walkRangeStart, walkToday) } ?: flowOf(emptyList())
     }
-    val walkSessionsFlow = remember(selected?.id, stepGraphRange) {
-        selected?.takeIf { it.kind == "STEPS" }?.let { vm.walkingSessions(it.id, walkRangeStart, LocalDate.now()) } ?: flowOf(emptyList())
+    val walkSessionsFlow = remember(selected?.id, stepGraphRange, walkToday) {
+        selected?.takeIf { it.kind == "STEPS" }?.let { vm.walkingSessions(it.id, walkRangeStart, walkToday) } ?: flowOf(emptyList())
     }
     val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
