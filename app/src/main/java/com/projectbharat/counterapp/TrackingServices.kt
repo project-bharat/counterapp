@@ -44,6 +44,7 @@ import org.vosk.Recognizer
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
@@ -230,6 +231,10 @@ class ChantRecognitionService : Service() {
     private var mantra = "Ram"
     private var language = "en"
     private var partialCounted = 0
+    private var saveAudio = false
+    private var chantAudioFile: File? = null
+    private var chantAudioStream: FileOutputStream? = null
+    private var chantAudioBytes = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
@@ -238,6 +243,7 @@ class ChantRecognitionService : Service() {
         categoryId = intent?.getLongExtra(StepTrackingService.EXTRA_CATEGORY_ID, -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
         language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
+        saveAudio = intent?.getBooleanExtra(EXTRA_SAVE_AUDIO, false) ?: false
         if (categoryId <= 0 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY
         }
@@ -291,6 +297,13 @@ class ChantRecognitionService : Service() {
             if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
             record.startRecording()
             recording = true
+            if (saveAudio) {
+                val directory = File(filesDir, "japa-recordings").apply { mkdirs() }
+                val safeName = mantra.replace(Regex("[^\\p{L}\\p{N}]+"), "_").trim('_').take(36).ifBlank { "chant" }
+                chantAudioFile = File(directory, safeName + "_" + System.currentTimeMillis() + ".wav")
+                chantAudioStream = FileOutputStream(chantAudioFile!!).apply { write(ByteArray(44)) }
+                chantAudioBytes = 0L
+            }
             sendState(true, "Offline model ready · listening offline")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             var lastPartial = ""
@@ -298,6 +311,7 @@ class ChantRecognitionService : Service() {
                 val read = record.read(buffer, 0, buffer.size)
                 if (read < 0) throw IllegalStateException("Microphone read failed: " + read)
                 if (read > 0) {
+                    if (saveAudio) { chantAudioStream?.write(buffer, 0, read); chantAudioBytes += read }
                     val activeRecognizer = recognizer ?: continue
                     if (activeRecognizer.acceptWaveForm(buffer, read)) {
                         val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
