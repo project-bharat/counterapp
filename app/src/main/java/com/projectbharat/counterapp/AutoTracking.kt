@@ -201,12 +201,13 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, se
                 } else {
                     groupedWalks.forEach { (date, records) ->
                         val totalSteps = records.sumOf { it.steps }
+                        val totalMinutes = records.sumOf { (((it.endedAt ?: System.currentTimeMillis()) - it.startedAt).coerceAtLeast(0L) / 60000L).toInt() }
                         val gpsDistance = records.filter { it.gpsReliable }.sumOf { it.distanceMeters }
                         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(date, color = ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-                                    Text((if (english) "${records.size} sessions · ${totalSteps} steps" else "${records.size} सत्रे · ${totalSteps} पावले"), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall)
+                                    Text((if (english) "${records.size} sessions · ${totalSteps} steps · ${totalMinutes} min" else "${records.size} सत्रे · ${totalSteps} पावले · ${totalMinutes} मि."), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall)
                                 }
                                 Text(if (gpsDistance > 0.0) {
                                     if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "${gpsDistance.toInt()} m"
