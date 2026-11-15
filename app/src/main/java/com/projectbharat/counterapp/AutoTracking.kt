@@ -356,8 +356,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 })
             }
         }
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(Modifier.fillMaxWidth().heightIn(min = 760.dp), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().heightIn(min = 760.dp).padding(horizontal = 18.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 val beadCount = if (count > 0 && count % 108 == 0) 108 else count % 108
                 val beadTint by animateColorAsState(if (count > 0 && count % 108 == 0) Color(0xFFB87928) else Color(0xFF7650A1), label = "beadCountTint")
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -398,51 +398,34 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                Row(Modifier.fillMaxWidth().padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f)) {
-                        Row(Modifier.padding(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(onClick = {
-                                if (!running) {
-                                    language = "hi"
-                                    (chantPresets + customMantras).firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.devanagari; onMantraChange(target) }
-                                }
-                            }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "hi") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "hi") MaterialTheme.colorScheme.onPrimary else ink) {
-                                Text("अ", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
-                            }
-                            Surface(onClick = {
-                                if (!running) {
-                                    language = "en"
-                                    (chantPresets + customMantras).firstOrNull { it.devanagari == target || it.latin == target }?.let { target = it.latin; onMantraChange(target) }
-                                }
-                            }, enabled = !running, shape = RoundedCornerShape(12.dp), color = if (language == "en") MaterialTheme.colorScheme.primary else Color.Transparent, contentColor = if (language == "en") MaterialTheme.colorScheme.onPrimary else ink) {
-                                Text("A", modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp), fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        TextButton(
-                            onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
+                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = { presetMenu = true },
                             enabled = !running,
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 7.dp, vertical = 5.dp)
-                        ) { Text(if (english) "+ Add" else "+ जोडा", style = MaterialTheme.typography.labelMedium) }
-                        Box {
-                            OutlinedButton(onClick = { presetMenu = true }, enabled = !running, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 9.dp, vertical = 8.dp)) {
-                                Text(if (english) "Choose" else "निवडा")
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                            }
-                            DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                                (chantPresets + customMantras).distinctBy { it.devanagari }.forEach { item ->
-                                    val mantra = if (language == "hi") item.devanagari else item.latin
-                                    DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
-                                        target = mantra
-                                        prefs.edit().putString("target_$categoryId", target).apply()
-                                        onMantraChange(target)
-                                        presetMenu = false
-                                    })
-                                }
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(if (english) "Choose mantra" else "मंत्र निवडा", maxLines = 1)
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        }
+                        DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
+                            (chantPresets + customMantras).distinctBy { it.devanagari }.forEach { item ->
+                                val mantra = if (language == "hi") item.devanagari else item.latin
+                                DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
+                                    target = mantra
+                                    prefs.edit().putString("target_$categoryId", target).apply()
+                                    onMantraChange(target)
+                                    presetMenu = false
+                                })
                             }
                         }
                     }
+                    Button(
+                        onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
+                        enabled = !running,
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text(if (english) "+ Add" else "+ जोडा", maxLines = 1) }
                 }
                 if (automatic) {
                     val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true))
@@ -493,13 +476,30 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             }
                         }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         if (automatic && !running && status.isNotBlank() && status != "Stopped" && status != "थांबवले") {
-                            TextButton(onClick = startService) { Text(if (english) "Resume" else "पुन्हा सुरू करा") }
+                            Button(
+                                onClick = startService,
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (english) "Resume" else "पुन्हा सुरू करा", maxLines = 1)
+                            }
                         }
-                        Surface(onClick = stopRecognition, shape = RoundedCornerShape(12.dp), color = Color(0xFFFFE7E7)) {
-                            Text(if (english) "Stop" else "थांबवा", color = Color(0xFFB3261E), fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+                        OutlinedButton(
+                            onClick = stopRecognition,
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (english) "Stop" else "थांबवा", maxLines = 1)
                         }
                     }
                 }

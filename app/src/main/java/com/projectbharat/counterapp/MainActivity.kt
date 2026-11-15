@@ -607,8 +607,10 @@ fun CounterApp(repo: CounterRepository) {
                             }
                         }
                     }
-                    TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
-                        Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
+                    if (selected.kind != "MANTRA") {
+                        TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
+                            Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
+                        }
                     }
                 }
             }
