@@ -90,6 +90,36 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+@Composable
+private fun BilanLaunchSplash() {
+    val dark = isSystemInDarkTheme()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(if (dark) Color(0xFF31413A) else Color(0xFFF3EEE3)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.splash_logo),
+                contentDescription = "Bilan Counter logo",
+                modifier = Modifier.size(164.dp),
+                contentScale = ContentScale.Fit
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = "Bilan Counter",
+                color = if (dark) Color(0xFFF3EEE3) else Color(0xFF31413A),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
     var launchCounterKind by mutableStateOf<String?>(null)
         private set
@@ -131,7 +161,16 @@ class MainActivity : ComponentActivity() {
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
         setContent {
-            CounterApp(repo)
+            var showBrandSplash by remember { mutableStateOf(true) }
+            LaunchedEffect(Unit) {
+                delay(900)
+                showBrandSplash = false
+            }
+            if (showBrandSplash) {
+                BilanLaunchSplash()
+            } else {
+                CounterApp(repo)
+            }
         }
     }
 
