@@ -24,8 +24,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -207,7 +205,6 @@ fun CounterApp(repo: CounterRepository) {
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
     var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
-    var historyOverview by remember { mutableStateOf(false) }
     var categoryScreen by remember { mutableStateOf(false) }
     var backupScreen by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
@@ -342,12 +339,6 @@ fun CounterApp(repo: CounterRepository) {
     val isBaby = selected?.kind == "BABY"
     val activeSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt == null && clock < it.startedAt + limit }
     val resumableSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt != null && clock < it.startedAt + limit }
-    LaunchedEffect(selected?.kind, activeSession?.id, activeSession?.movementCount) {
-        if (selected?.kind == "BABY") {
-            if (activeSession != null) BabySessionNotification.show(context, activeSession.id, selected.id, activeSession.movementCount)
-            else BabySessionNotification.cancel(context)
-        }
-    }
     val lockedSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; clock < it.startedAt + limit }
     val remainingMs = activeSession?.let { val limit = CounterRepository.TWO_HOURS_MS; (it.startedAt + limit - clock).coerceAtLeast(0L) } ?: 0L
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
@@ -403,7 +394,7 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History & analytics" else "इतिहास व विश्लेषण") }, selected = historyOverview || monthlyHistory, onClick = { historyOverview = true; monthlyHistory = false; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
                         Spacer(Modifier.weight(1f))
                         Text(
@@ -426,8 +417,7 @@ fun CounterApp(repo: CounterRepository) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color.White) }
-                    Image(painterResource(R.drawable.ic_launcher_foreground_padded), contentDescription = "Daily Counter", modifier = Modifier.size(42.dp).padding(2.dp))
-                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
+                    Column(Modifier.weight(1f)) {
                         Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=Color.White.copy(alpha=.76f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                         Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=Color.White, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
@@ -449,15 +439,8 @@ fun CounterApp(repo: CounterRepository) {
                         onRestore = { item -> scope.launch { vm.restoreCategory(item.id) } })
                 } else if (remindersScreen) {
                     ReminderSettingsScreen(english = english, ink = ink)
-                } else if (historyOverview) {
-                    HistoryOverviewScreen(categories = categories, english = english, ink = ink, onSelect = { categoryId ->
-                        selectedId = categoryId
-                        historyOverview = false
-                        historyDate = LocalDate.now()
-                        historyMonth = LocalDate.now().withDayOfMonth(1)
-                        monthlyHistory = true
-                    })
-                } else if (monthlyHistory && isBaby && selected != null) {
+                } else
+                if (monthlyHistory && isBaby && selected != null) {
                     MonthlyHistoryScreen(
                         english = english, ink = ink, month = historyMonth, sessions = monthSessions,
                         onPrevious = { historyMonth = historyMonth.minusMonths(1) },
@@ -507,16 +490,8 @@ fun CounterApp(repo: CounterRepository) {
                         historyDate = historyDate,
                         onPreviousDay = { historyDate = historyDate.minusDays(1) },
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
-                        onStart = { scope.launch {
-                            vm.startSession(selected.id)
-                            val session = vm.latestSession(selected.id).first()
-                            if (session != null && session.endedAt == null) BabySessionNotification.show(context, session.id, selected.id, session.movementCount)
-                        } },
-                        onResume = { sessionId -> scope.launch {
-                            vm.resumeSession(sessionId)
-                            val session = vm.latestSession(selected.id).first()
-                            if (session != null && session.endedAt == null) BabySessionNotification.show(context, session.id, selected.id, session.movementCount)
-                        } },
+                        onStart = { scope.launch { vm.startSession(selected.id) } },
+                        onResume = { sessionId -> scope.launch { vm.resumeSession(sessionId) } },
                         onTap = { sessionId ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
@@ -548,7 +523,7 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 }
                 if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
-                    if (selected.kind != "MANTRA" && selected.kind != "BABY" && historyLogs.isNotEmpty()) {
+                    if (selected.kind != "MANTRA" && historyLogs.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             historyLogs.take(2).forEach { item ->
@@ -556,7 +531,7 @@ fun CounterApp(repo: CounterRepository) {
                             }
                         }
                     }
-                    if (selected.kind != "BABY") TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
+                    TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
                         Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
                     }
                 }
@@ -634,7 +609,6 @@ private fun BabyMovementScreen(
     val tapScope = rememberCoroutineScope()
     var autoDetect by remember(activeSession?.id) { mutableStateOf(false) }
     var autoStatus by remember(activeSession?.id) { mutableStateOf("") }
-    var reminderExpanded by remember { mutableStateOf(false) }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -659,24 +633,17 @@ private fun BabyMovementScreen(
             )
             Spacer(Modifier.height(8.dp))
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
-                        }
-                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
-                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(3.dp)); Text(if (english) "Undo" else "मागे")
-                        }
-                    }
-                    Box(Modifier.size(166.dp), contentAlignment = Alignment.Center) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
+                    Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
                         Canvas(Modifier.fillMaxSize()) {
                             drawCircle(tapSurface, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx()))
                             drawArc(Gold, -90f, 360f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round))
                         }
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
-                            Modifier.size(138.dp)
+                            Modifier.size(174.dp)
                                 .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
                                 .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
@@ -687,7 +654,7 @@ private fun BabyMovementScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(44.dp))
-                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
                                 Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -704,6 +671,11 @@ private fun BabyMovementScreen(
                                 Text(if (english) "10 MOVEMENTS REACHED" else "१० हालचाली पूर्ण", color = Color(0xFF246B48), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 Text(if (english) "Time: " + "%.1f min".format(activeSession.timeToTenMs / 60000.0) else "वेळ: " + "%.1f मिनिटे".format(activeSession.timeToTenMs / 60000.0), color = Color(0xFF246B48), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                             }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
+                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo" else "मागे")
                         }
                     }
                 }
@@ -737,32 +709,17 @@ private fun BabyMovementScreen(
             }
         }
         if (detections.isNotEmpty() || autoDetect) {
-            Card(Modifier.fillMaxWidth().padding(top = 6.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = ink.copy(alpha=.7f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
-                        if (autoDetect && autoStatus.contains("Calibrating", true)) CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                        else if (autoDetect && autoStatus.contains("Ready", true)) {
-                            val pulse = rememberInfiniteTransition(label = "readyDot")
-                            val alpha by pulse.animateFloat(.3f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "readyPulse")
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Box(Modifier.size(7.dp).graphicsLayer(alpha = alpha).background(Color(0xFF16834F), CircleShape))
-                                Text("READY", color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            }
+                    Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = ink, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                        Column {
+                            Text(if (english) "Detected" else "ओळखले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                            Text(pending.toString(), color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                         }
-                    }
-                    Row(Modifier.fillMaxWidth().padding(top = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Surface(shape = CircleShape, color = Color(0xFFE8EFFA), modifier = Modifier.size(66.dp)) {
-                                Box(contentAlignment = Alignment.Center) { Text(pending.toString(), color = Color(0xFF315E9B), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold) }
-                            }
-                            Text(if (english) "Detected" else "ओळखले", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Surface(shape = CircleShape, color = Color(0xFFE5F4EA), modifier = Modifier.size(66.dp)) {
-                                Box(contentAlignment = Alignment.Center) { Text(added.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold) }
-                            }
-                            Text(if (english) "Added" else "जोडले", color = Color(0xFF238451), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Column {
+                            Text(if (english) "Added" else "जोडले", color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall)
+                            Text(added.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                         }
                     }
                     if (pending > 0) {
@@ -773,6 +730,26 @@ private fun BabyMovementScreen(
                             OutlinedButton(onClick = { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, modifier = Modifier.weight(1f)) {
                                 Text(if (english) "Dismiss" else "वगळा")
                             }
+                        }
+                    }
+                    if (autoDetect) {
+                        val calibrating = autoStatus.contains("Calibrating", true) || autoStatus.contains("कॅलिब्रेट", true)
+                        val ready = autoStatus.equals("Ready", true) || autoStatus.contains("Ready", true)
+                        if (calibrating) {
+                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                                CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
+                                Text(if (english) "Calibrating…" else "कॅलिब्रेट होत आहे…", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelMedium)
+                            }
+                        } else if (ready) {
+                            val readyPulse = rememberInfiniteTransition(label = "babyReadyPulse")
+                            val readyAlpha by readyPulse.animateFloat(initialValue = .25f, targetValue = 1f,
+                                animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "readyAlpha")
+                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Box(Modifier.size(9.dp).graphicsLayer(alpha = readyAlpha).background(Color(0xFF1D9A5B), CircleShape))
+                                Text(if (english) "READY · AUTO DETECTING" else "तयार · स्वयंचलित ओळख सुरू", color = Color(0xFF1D9A5B), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        } else if (autoStatus.isNotBlank()) {
+                            Text(autoStatus, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -805,16 +782,12 @@ private fun BabyMovementScreen(
                 }
             }
         }
-        Card(Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 5.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
-                Row(Modifier.fillMaxWidth().clickable { reminderExpanded = !reminderExpanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Text(if (reminderExpanded) "−" else "ⓘ", color = Color(0xFF5B87B2), style = MaterialTheme.typography.titleMedium)
-                }
-                if (reminderExpanded) {
-                    Text(if (english) "Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly. Do not wait for a reminder." else "तुमच्या प्रसूतीतज्ज्ञांच्या सूचनांचे पालन करा. बाळाच्या नेहमीच्या हालचाली कमी झाल्या किंवा बदलल्या तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.", color = ink.copy(alpha=.82f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
-                    TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Read guidance · Cleveland Clinic" else "मार्गदर्शन वाचा · Cleveland Clinic") }
-                }
+        Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
+            Column(Modifier.padding(13.dp)) {
+                Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Guidance differs; follow your maternity-care professional's recommended method." else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे मोजा. डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.", color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                Text(if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer." else "हालचाली नेहमीपेक्षा कमी किंवा वेगळ्या वाटल्यास वेळ संपण्याची वाट न पाहता त्वरित डॉक्टरांशी संपर्क साधा.", color = Color(0xFF9A5B36), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Know how · Cleveland Clinic" else "अधिक जाणून घ्या · Cleveland Clinic") }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -874,29 +847,17 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val settings = remember { mutableStateListOf<DailyReminder>().apply { addAll(DailyReminderScheduler.load(context)) } }
-    var addDialog by remember { mutableStateOf(false) }
-    var newTitle by remember { mutableStateOf("") }
-    var guideExpanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(if (english) "DAILY REMINDERS" else "दैनिक स्मरणपत्रे", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(if (english) "Choose times that fit your routine." else "तुमच्या दिनक्रमानुसार वेळ निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-            }
-            FilledTonalIconButton(onClick = { newTitle = ""; addDialog = true }, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.Default.Add, contentDescription = if (english) "Add reminder" else "स्मरणपत्र जोडा")
-            }
-        }
-        LazyColumn(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
+        Text(if (english) "DAILY REMINDERS" else "दैनिक स्मरणपत्रे", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(if (english) "Choose times that fit your routine." else "तुमच्या दिनक्रमानुसार वेळ निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
             items(settings, key = { it.id }) { item ->
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (item.enabled) Color(0xFFE4F1E8) else MaterialTheme.colorScheme.surface)) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if (english) item.titleEn else item.titleMr, color = if (item.enabled) Color(0xFF174D32) else ink, fontWeight = FontWeight.SemiBold)
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
-                                Text("%02d:%02d".format(item.hour, item.minute), color = if (item.enabled) Color(0xFF176B43) else ink.copy(alpha = .75f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                                Spacer(Modifier.width(8.dp))
-                                IconButton(onClick = {
+                            Text(if (english) item.titleEn else item.titleMr, color = ink, fontWeight = FontWeight.SemiBold)
+                            Text("%02d:%02d".format(item.hour, item.minute), color = Color(0xFF39865B), style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.clickable {
                                     TimePickerDialog(context, { _, hour, minute ->
                                         val index = settings.indexOfFirst { it.id == item.id }
                                         if (index >= 0) {
@@ -904,8 +865,8 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
                                             DailyReminderScheduler.saveAndSchedule(context, settings.toList())
                                         }
                                     }, item.hour, item.minute, false).show()
-                                }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Edit, contentDescription = if (english) "Change time" else "वेळ बदला", tint = if (item.enabled) Color(0xFF176B43) else ink) }
-                            }
+                                })
+                            Text(if (english) "Tap time to change" else "वेळ बदलण्यासाठी टॅप करा", color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall)
                         }
                         Switch(checked = item.enabled, onCheckedChange = { enabled ->
                             val index = settings.indexOfFirst { it.id == item.id }
@@ -921,78 +882,16 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
                 }
             }
         }
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(Modifier.fillMaxWidth().clickable { guideExpanded = !guideExpanded }.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (english) "Important guidance" else "महत्त्वाची सूचना", modifier = Modifier.weight(1f), color = ink, fontWeight = FontWeight.SemiBold)
-                    Icon(if (guideExpanded) Icons.Default.Remove else Icons.Default.Add, contentDescription = null, tint = ink)
-                }
-                if (guideExpanded) Text(
-                    if (english) "Reminders are optional routine prompts, not medical advice. Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly; do not wait for a reminder."
-                    else "ही केवळ ऐच्छिक आठवण आहे, वैद्यकीय सल्ला नाही. डॉक्टरांच्या सूचनांचे पालन करा. हालचाली कमी झाल्या किंवा नेहमीच्या पद्धतीत बदल जाणवला तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.",
-                    color = ink.copy(alpha = .8f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)
-                )
-            }
+        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3DF)) {
+            Text(
+                if (english) "Baby movement reminders are optional routine prompts, not medical advice. Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly; do not wait for a reminder."
+                else "बाळाच्या हालचालींची स्मरणपत्रे ही केवळ ऐच्छिक आठवण आहे, वैद्यकीय सल्ला नाही. डॉक्टरांच्या सूचनांचे पालन करा. हालचाली कमी झाल्या किंवा नेहमीच्या पद्धतीत बदल जाणवला तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.",
+                color = Color(0xFF76531F), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(13.dp)
+            )
         }
     }
-    if (addDialog) AlertDialog(
-        onDismissRequest = { addDialog = false },
-        title = { Text(if (english) "New reminder" else "नवीन स्मरणपत्र") },
-        text = { OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, singleLine = true, label = { Text(if (english) "Reminder title" else "स्मरणपत्राचे नाव") }) },
-        confirmButton = { TextButton(onClick = {
-            val title = newTitle.trim()
-            if (title.isNotEmpty()) {
-                val id = (settings.maxOfOrNull { it.id } ?: 5) + 1
-                addDialog = false
-                TimePickerDialog(context, { _, hour, minute ->
-                    settings.add(DailyReminder(id, title, title, hour, minute, false))
-                    DailyReminderScheduler.saveAndSchedule(context, settings.toList())
-                }, 9, 0, false).show()
-            }
-        }) { Text(if (english) "Add" else "जोडा") } },
-        dismissButton = { TextButton(onClick = { addDialog = false }) { Text(if (english) "Cancel" else "रद्द करा") } }
-    )
 }
 
-@Composable
-private fun HistoryOverviewScreen(
-    categories: List<CounterCategory>,
-    english: Boolean,
-    ink: Color,
-    onSelect: (Long) -> Unit
-) {
-    Column(Modifier.fillMaxSize()) {
-        Text(if (english) "HISTORY & ANALYTICS" else "इतिहास व विश्लेषण", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(if (english) "Choose a counter to view its records." else "नोंदी पाहण्यासाठी मोजणी निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-            items(categories, key = { it.id }) { item ->
-                val glyph = when (item.kind) {
-                    "BABY" -> Icons.Default.PregnantWoman
-                    "MANTRA" -> Icons.Default.SelfImprovement
-                    "STEPS" -> Icons.Default.DirectionsWalk
-                    else -> Icons.Default.BarChart
-                }
-                val title = if (english) item.titleEn else item.titleMr
-                val subtitle = when (item.kind) {
-                    "BABY" -> if (english) "Movement sessions & daily totals" else "हालचाल सत्रे व दैनिक नोंदी"
-                    "MANTRA" -> if (english) "Chant counts & daily history" else "जप संख्या व दैनिक इतिहास"
-                    "STEPS" -> if (english) "Steps, walking sessions & trends" else "पावले, चालण्याची सत्रे व आलेख"
-                    else -> if (english) "Daily totals & activity history" else "दैनिक संख्या व नोंदी"
-                }
-                Card(Modifier.fillMaxWidth().clickable { onSelect(item.id) }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(glyph, null, tint = Color(0xFF4E79A7), modifier = Modifier.size(30.dp))
-                        Column(Modifier.weight(1f).padding(start = 13.dp)) {
-                            Text(title, color = ink, fontWeight = FontWeight.SemiBold)
-                            Text(subtitle, color = ink.copy(alpha = .62f), style = MaterialTheme.typography.bodySmall)
-                        }
-                        Icon(Icons.Default.History, null, tint = ink.copy(alpha = .55f))
-                    }
-                }
-            }
-        }
-    }
-}
 @Composable
 private fun StatTile(label: String, value: String, ink: Color, modifier: Modifier = Modifier) {
     Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1140,20 +1039,11 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
     var cv: android.graphics.Canvas? = null
     var y = 0f
 
-    fun centersForReport(col: Int): Float = floatArrayOf(95f, 195f, 292f, 402f, 512f)[col]
-
     fun tableHeader(canvas: android.graphics.Canvas, top: Float): Float {
         canvas.drawRoundRect(android.graphics.RectF(36f, top, 559f, top + 28f), 7f, 7f, paint(navy, 9f, true))
         val labels = if (english) listOf("DATE & TIME", "PERIOD", "10 MOVES IN", "FIRST HOUR", "TOTAL MOVES")
                      else listOf("दिनांक व वेळ", "कालावधी", "१० हालचाली", "पहिला तास", "एकूण")
-        val centers = floatArrayOf(95f, 195f, 292f, 402f, 512f)
-        labels.forEachIndexed { i, label ->
-            if (i == 0) canvas.drawText(label, xs[i] + 7f, top + 18f, headPaint)
-            else {
-                val centered = paint(android.graphics.Color.WHITE, 8.5f, true).apply { textAlign = android.graphics.Paint.Align.CENTER }
-                canvas.drawText(label, centers[i], top + 18f, centered)
-            }
-        }
+        labels.forEachIndexed { i, label -> canvas.drawText(label, xs[i] + 7f, top + 18f, headPaint) }
         return top + 28f
     }
     fun startPage(first: Boolean) {
@@ -1162,25 +1052,12 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         cv = currentPage!!.canvas
         val canvas = cv!!
         canvas.drawColor(android.graphics.Color.WHITE)
-        val watermark = context.getDrawable(R.drawable.ic_launcher_foreground_padded)
-        if (watermark != null) {
-            canvas.save()
-            watermark.alpha = 16
-            watermark.setBounds(170, 315, 430, 575)
-            watermark.draw(canvas)
-            canvas.restore()
-        }
-        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 571f, 94f), 14f, 14f, paint(navy, 12f, true))
-        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 31f, 94f), 4f, 4f, paint(gold, 10f))
-        context.getDrawable(R.drawable.ic_launcher_foreground_padded)?.let { logo ->
-            logo.setBounds(39, 34, 80, 75)
-            logo.draw(canvas)
-        }
-        canvas.drawText(if (english) "BABY MOVEMENT REPORT" else "बाळाच्या हालचालींचा अहवाल", 91f, 52f, titlePaint)
-        canvas.drawText(if (english) titleEn + " · " + monthLabel else titleMr + " · " + monthLabel, 91f, 73f, subPaint)
-        val summaryPaint = paint(android.graphics.Color.WHITE, 9f, true).apply { textAlign = android.graphics.Paint.Align.RIGHT }
-        canvas.drawText(if (first) (if (english) "Monthly summary" else "मासिक सारांश") else (if (english) "Continued" else "पुढे"), 555f, 53f, summaryPaint)
-        var tableTop = 126f
+        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 571f, 119f), 16f, 16f, paint(navy, 12f, true))
+        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 32f, 119f), 4f, 4f, paint(gold, 10f))
+        canvas.drawText(if (english) "BABY MOVEMENT REPORT" else "बाळाच्या हालचालींचा अहवाल", 48f, 58f, titlePaint)
+        canvas.drawText(if (english) titleEn + " · " + monthLabel else titleMr + " · " + monthLabel, 48f, 81f, subPaint)
+        canvas.drawText(if (first) (if (english) "Monthly summary" else "मासिक सारांश") else (if (english) "Session details · continued" else "सत्र तपशील · पुढे"), 48f, 101f, subPaint)
+        var tableTop = 156f
         if (first) {
             val metrics = listOf(
                 Triple(if (english) "SESSIONS" else "सत्रे", sessions.size.toString(), blue),
@@ -1194,18 +1071,18 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
                 canvas.drawText(metric.first, left + 15f, 156f, labelPaint)
                 canvas.drawText(metric.second, left + 15f, 185f, numberPaint)
             }
-            canvas.drawText(if (english) "DAILY MOVEMENT PATTERN" else "दैनिक हालचालींचा आलेख", 36f, 211f, paint(navy, 10f, true))
-            canvas.drawRoundRect(android.graphics.RectF(36f, 221f, 559f, 316f), 8f, 8f, paint(pale, 9f))
+            canvas.drawText(if (english) "DAILY MOVEMENT PATTERN" else "दैनिक हालचालींचा आलेख", 36f, 226f, paint(navy, 10f, true))
+            canvas.drawRoundRect(android.graphics.RectF(36f, 238f, 559f, 333f), 8f, 8f, paint(pale, 9f))
             val slot = 505f / daily.size.coerceAtLeast(1)
             daily.forEachIndexed { i, value ->
                 val barHeight = if (value == 0) 1.5f else (value.toFloat() / maxDaily * 70f).coerceAtLeast(3f)
                 val left = 45f + i * slot + slot * .2f
-                canvas.drawRoundRect(android.graphics.RectF(left, 302f - barHeight, left + slot * .58f, 302f), 2f, 2f,
+                canvas.drawRoundRect(android.graphics.RectF(left, 319f - barHeight, left + slot * .58f, 319f), 2f, 2f,
                     paint(if (value > 0) blue else android.graphics.Color.rgb(205, 216, 228), 8f))
             }
-            canvas.drawText("1", 45f, 311f, smallPaint)
-            canvas.drawText(month.lengthOfMonth().toString(), 538f, 311f, smallPaint)
-            tableTop = 336f
+            canvas.drawText("1", 45f, 328f, smallPaint)
+            canvas.drawText(month.lengthOfMonth().toString(), 538f, 328f, smallPaint)
+            tableTop = 346f
         } else {
             canvas.drawText(if (english) "Session records" else "सत्र नोंदी", 36f, 143f, paint(navy, 11f, true))
         }
@@ -1215,7 +1092,7 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
     fun finishPage() {
         val canvas = cv ?: return
         canvas.drawLine(36f, 805f, 559f, 805f, paint(android.graphics.Color.rgb(220, 228, 237), 1f))
-        canvas.drawText(if (english) "Daily Counter · Developed by Bharat Rasave · Personal log, not a medical assessment" else "दैनिक मोजणी · निर्मिती: Bharat Rasave · वैयक्तिक नोंद, वैद्यकीय मूल्यांकन नाही", 36f, 823f, footerPaint)
+        canvas.drawText(if (english) "Daily Counter · Personal movement log · Not a medical assessment" else "दैनिक मोजणी · वैयक्तिक नोंद · वैद्यकीय मूल्यांकन नाही", 36f, 823f, footerPaint)
         canvas.drawText(pageNumber.toString(), 544f, 823f, paint(navy, 9f, true))
         pdf.finishPage(currentPage!!)
         currentPage = null
@@ -1235,17 +1112,13 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         val dateTimeLabel = dateLabel + " " + sessionTime(session.startedAt)
         val tenLabel = session.timeToTenMs?.let { "%.1f min".format(it / 60000.0) } ?: "—"
         val firstHourLabel = session.firstHourCount.toString()
-        val periodAndDuration = periodLabel(session.dayPeriod, english) + " / " + duration + (if (english) " min" else " मि.")
-        val values = listOf(dateTimeLabel, periodAndDuration, tenLabel, firstHourLabel, session.movementCount.toString())
+        val values = listOf(dateTimeLabel, periodLabel(session.dayPeriod, english), tenLabel, firstHourLabel, session.movementCount.toString())
         values.forEachIndexed { col, value ->
             if (col == 4) {
                 canvas.drawRoundRect(android.graphics.RectF(xs[col] + 5f, y + 4f, xs[col] + 57f, y + 21f), 6f, 6f, paint(android.graphics.Color.rgb(222, 237, 249), 8f))
                 canvas.drawText(value, xs[col] + 22f, y + 17f, paint(navy, 10f, true))
-            } else if (col == 0) {
-                canvas.drawText(value.take(18), xs[col] + 7f, y + 16f, bodyPaint)
             } else {
-                val centered = paint(muted, 8.5f).apply { textAlign = android.graphics.Paint.Align.CENTER }
-                canvas.drawText(value.take(if (col == 1) 16 else 12), centersForReport(col), y + 16f, centered)
+                canvas.drawText(value.take(if (col == 0) 18 else 12), xs[col] + 7f, y + 16f, bodyPaint)
             }
         }
         y += 27f

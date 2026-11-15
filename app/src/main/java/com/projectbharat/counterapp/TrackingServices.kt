@@ -44,7 +44,6 @@ import org.vosk.Recognizer
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
-import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
@@ -71,6 +70,10 @@ private object TrackingNotifications {
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(title).setContentText(text).setOngoing(true)
             .setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(android.R.drawable.ic_menu_my_calendar, "Start session",
+                CounterQuickActions.activityPending(context, "BABY", 7103))
+            .addAction(android.R.drawable.ic_media_play, "Start Japa",
+                CounterQuickActions.activityPending(context, "MANTRA", 7104))
             .addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent).build()
     }
     fun stopPending(context: Context, service: Class<out Service>, id: Int): PendingIntent =
@@ -227,10 +230,6 @@ class ChantRecognitionService : Service() {
     private var mantra = "Ram"
     private var language = "en"
     private var partialCounted = 0
-    private var saveAudio = false
-    private var chantAudioFile: File? = null
-    private var chantAudioStream: FileOutputStream? = null
-    private var chantAudioBytes = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
@@ -239,7 +238,6 @@ class ChantRecognitionService : Service() {
         categoryId = intent?.getLongExtra(StepTrackingService.EXTRA_CATEGORY_ID, -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
         language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
-        saveAudio = intent?.getBooleanExtra(EXTRA_SAVE_AUDIO, false) ?: false
         if (categoryId <= 0 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY
         }
@@ -265,25 +263,24 @@ class ChantRecognitionService : Service() {
             if (stopRequested || Thread.currentThread().isInterrupted) return
             model = Model(modelDir.absolutePath)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
-            val grammarPhrases = linkedSetOf<String>()
-            grammarPhrases.add(cleanMantra)
-            val mantraTokens = cleanMantra.split(Regex("\\s+")).filter { it.isNotBlank() }
-            mantraTokens.forEach { grammarPhrases.add(it) }
-            if (mantraTokens.size > 1) {
-                for (start in mantraTokens.indices) {
-                    for (end in start + 2..mantraTokens.size) {
-                        grammarPhrases.add(mantraTokens.subList(start, end).joinToString(" "))
-                    }
-                }
+            val grammarPhrases = linkedSetOf(mantra, cleanMantra)
+            // Allow consecutive repetitions to be decoded as one continuous utterance.
+            if (cleanMantra.split(" ").size <= 14) {
+                grammarPhrases.add("$cleanMantra $cleanMantra")
+                grammarPhrases.add("$cleanMantra $cleanMantra $cleanMantra")
             }
-            grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
-            grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
-            grammarPhrases.add(cleanMantra.replace("Aum", "Om").replace("aum", "om"))
-            grammarPhrases.add(cleanMantra.replace("Shivaaya", "Shivaya").replace("shivaaya", "shivaya"))
+            if (language == "hi") {
+                grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
+                grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
+            } else {
+                grammarPhrases.add(cleanMantra.replace("Aum", "Om").replace("aum", "om"))
+                grammarPhrases.add(cleanMantra.replace("Shivaaya", "Shivaya").replace("shivaaya", "shivaya"))
+            }
             val grammarJson = JSONArray()
             grammarPhrases.forEach { grammarJson.put(it) }
             grammarJson.put("[unk]")
-            recognizer = Recognizer(model, 16000.0f, grammarJson.toString())
+            val grammar = grammarJson.toString()
+            recognizer = Recognizer(model, 16000.0f, grammar)
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
             val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
@@ -293,13 +290,6 @@ class ChantRecognitionService : Service() {
             if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
             record.startRecording()
             recording = true
-            if (saveAudio) {
-                val directory = File(filesDir, "japa-recordings").apply { mkdirs() }
-                val safeName = mantra.replace(Regex("[^\\p{L}\\p{N}]+"), "_").trim('_').take(36).ifBlank { "chant" }
-                chantAudioFile = File(directory, safeName + "_" + System.currentTimeMillis() + ".wav")
-                chantAudioStream = FileOutputStream(chantAudioFile!!).apply { write(ByteArray(44)) }
-                chantAudioBytes = 0L
-            }
             sendState(true, "Offline model ready · listening offline")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             var lastPartial = ""
@@ -307,7 +297,6 @@ class ChantRecognitionService : Service() {
                 val read = record.read(buffer, 0, buffer.size)
                 if (read < 0) throw IllegalStateException("Microphone read failed: " + read)
                 if (read > 0) {
-                    if (saveAudio) { chantAudioStream?.write(buffer, 0, read); chantAudioBytes += read }
                     val activeRecognizer = recognizer ?: continue
                     if (activeRecognizer.acceptWaveForm(buffer, read)) {
                         val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
@@ -336,58 +325,11 @@ class ChantRecognitionService : Service() {
             }
         } finally {
             recording = false
-            finishChantAudio()
             try { audioRecord?.stop() } catch (_: Exception) { }
             audioRecord?.release(); audioRecord = null
             recognizer?.close(); recognizer = null
             model?.close(); model = null
         }
-    }
-
-
-    private fun finishChantAudio() {
-        try {
-            chantAudioStream?.flush()
-            chantAudioStream?.close()
-            val file = chantAudioFile
-            if (file != null && chantAudioBytes > 0L) {
-                RandomAccessFile(file, "rw").use { wav ->
-                    wav.seek(0)
-                    wav.writeBytes("RIFF")
-                    writeLeInt(wav, (chantAudioBytes + 36).toInt())
-                    wav.writeBytes("WAVEfmt ")
-                    writeLeInt(wav, 16)
-                    writeLeShort(wav, 1)
-                    writeLeShort(wav, 1)
-                    writeLeInt(wav, 16000)
-                    writeLeInt(wav, 32000)
-                    writeLeShort(wav, 2)
-                    writeLeShort(wav, 16)
-                    wav.writeBytes("data")
-                    writeLeInt(wav, chantAudioBytes.toInt())
-                }
-                getSharedPreferences("chant_settings", MODE_PRIVATE).edit()
-                    .putString("last_recording_path", file.absolutePath)
-                    .putString("last_recording_mantra", mantra)
-                    .putLong("last_recording_time", file.lastModified()).apply()
-                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                    .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("recording_saved", file.absolutePath))
-            } else file?.delete()
-        } catch (error: Exception) {
-            Log.w("CounterAppVosk", "Could not finalize chant recording", error)
-        } finally {
-            chantAudioStream = null
-            chantAudioFile = null
-            chantAudioBytes = 0L
-        }
-    }
-
-    private fun writeLeInt(out: RandomAccessFile, value: Int) {
-        out.write(value and 0xff); out.write((value shr 8) and 0xff)
-        out.write((value shr 16) and 0xff); out.write((value shr 24) and 0xff)
-    }
-    private fun writeLeShort(out: RandomAccessFile, value: Int) {
-        out.write(value and 0xff); out.write((value shr 8) and 0xff)
     }
 
     private fun sendRecognitionUpdate(transcript: String, matches: Int) {
@@ -406,47 +348,37 @@ class ChantRecognitionService : Service() {
 
     private fun countPhrase(transcript: String, phrase: String): Int {
         if (transcript.isBlank() || phrase.isBlank()) return 0
-        fun normalize(value: String): List<String> {
-            val normalized = java.text.Normalizer.normalize(value.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFC)
-                .replace("ॐ", "ओम").replace("aum", "om")
-                .replace("shivaaya", "shivaya").replace("namaha", "namah")
-                .replace(Regex("\\s+([\\p{M}])"), "$1")
+        val normalize = { value: String ->
+            value.lowercase(Locale.ROOT)
+                .replace("ॐ", "ओम")
+                .replace("aum", "om")
+                .replace("shivaaya", "shivaya")
+                .replace("namaha", "namah")
+                .replace("tryambakam", "tryambakam")
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .replace(Regex("\\s+"), " ").trim()
-            return normalized.split(" ").filter { it.isNotBlank() }
         }
-        val spoken = normalize(transcript)
-        val expected = normalize(phrase)
-        if (spoken.isEmpty() || expected.isEmpty()) return 0
-        var exactCount = 0
-        var cursor = 0
-        while (cursor <= spoken.size - expected.size) {
-            if (spoken.subList(cursor, cursor + expected.size) == expected) {
-                exactCount++
-                cursor += expected.size
-            } else cursor++
-        }
-        if (exactCount > 0) return exactCount
+        val text = normalize(transcript)
+        val target = normalize(phrase)
+        if (target.isBlank()) return 0
+        val exact = Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(target) + "(?![\\p{L}\\p{N}])")
+            .findAll(text).count()
+        if (exact > 0) return exact
 
-        // Allow two or more consecutive mantra words when Vosk omits a boundary word.
-        // Never count a single generic token such as "Om" or "नमः" on its own.
-        for (length in minOf(expected.size, spoken.size) downTo 2) {
-            val spokenWindows = (0..spoken.size - length).map { spoken.subList(it, it + length) }
-            val expectedWindows = (0..expected.size - length).map { expected.subList(it, it + length) }
-            if (spokenWindows.any { it in expectedWindows }) return 1
+        // Longer Sanskrit verses often lose one or two syllables in speech recognition.
+        // Accept a single near-complete ordered match, but keep short mantras exact.
+        val expected = target.split(" ").filter { it.isNotBlank() }
+        val spoken = text.split(" ").filter { it.isNotBlank() }
+        if (expected.size < 5 || spoken.isEmpty() || expected.first() != spoken.first()) return 0
+        var i = 0
+        var j = 0
+        var matchedTokens = 0
+        while (i < expected.size && j < spoken.size) {
+            if (expected[i] == spoken[j]) { matchedTokens++; i++; j++ }
+            else if (j + 1 < spoken.size && expected[i] == spoken[j + 1]) j++
+            else i++
         }
-        if (expected.size >= 5 && spoken.size >= 4) {
-            var i = 0
-            var j = 0
-            var matchedTokens = 0
-            while (i < expected.size && j < spoken.size) {
-                if (expected[i] == spoken[j]) { matchedTokens++; i++; j++ }
-                else if (j + 1 < spoken.size && expected[i] == spoken[j + 1]) j++
-                else i++
-            }
-            if (matchedTokens.toDouble() / expected.size >= 0.78) return 1
-        }
-        return 0
+        return if (matchedTokens.toDouble() / expected.size >= 0.78) 1 else 0
     }
 
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
@@ -528,11 +460,10 @@ class ChantRecognitionService : Service() {
     companion object {
         const val EXTRA_MANTRA = "mantra"
         const val EXTRA_LANGUAGE = "language"
-        const val EXTRA_SAVE_AUDIO = "save_audio"
-        fun start(context: Context, categoryId: Long, mantra: String, language: String, saveAudio: Boolean = false) {
+        fun start(context: Context, categoryId: Long, mantra: String, language: String) {
             val intent = Intent(context, ChantRecognitionService::class.java)
                 .putExtra(StepTrackingService.EXTRA_CATEGORY_ID, categoryId)
-                .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language).putExtra(EXTRA_SAVE_AUDIO, saveAudio)
+                .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language)
             ContextCompat.startForegroundService(context, intent)
         }
         fun stop(context: Context) { context.stopService(Intent(context, ChantRecognitionService::class.java)) }
