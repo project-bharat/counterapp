@@ -523,7 +523,7 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 }
                 if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
-                    if (selected.kind != "MANTRA" && historyLogs.isNotEmpty()) {
+                    if (selected.kind != "MANTRA" && selected.kind != "BABY" && historyLogs.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                             historyLogs.take(2).forEach { item ->
@@ -531,7 +531,7 @@ fun CounterApp(repo: CounterRepository) {
                             }
                         }
                     }
-                    TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
+                    if (selected.kind != "BABY") TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
                         Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
                     }
                 }
@@ -609,6 +609,7 @@ private fun BabyMovementScreen(
     val tapScope = rememberCoroutineScope()
     var autoDetect by remember(activeSession?.id) { mutableStateOf(false) }
     var autoStatus by remember(activeSession?.id) { mutableStateOf("") }
+    var reminderExpanded by remember { mutableStateOf(false) }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -779,12 +780,16 @@ private fun BabyMovementScreen(
                 }
             }
         }
-        Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
-            Column(Modifier.padding(13.dp)) {
-                Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text(if (english) "Choose a quiet time when you usually notice movement. Sit comfortably and count kicks, flutters, rolls or swishes. Guidance differs; follow your maternity-care professional's recommended method." else "बाळाची हालचाल सहसा जाणवते अशी शांत वेळ निवडा. आरामात बसा आणि लाथा, फडफड, वळणे किंवा सरकणे मोजा. डॉक्टरांनी सांगितलेली मोजणी पद्धत पाळा.", color = ink.copy(alpha=.75f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
-                Text(if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer." else "हालचाली नेहमीपेक्षा कमी किंवा वेगळ्या वाटल्यास वेळ संपण्याची वाट न पाहता त्वरित डॉक्टरांशी संपर्क साधा.", color = Color(0xFF9A5B36), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-                TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Know how · Cleveland Clinic" else "अधिक जाणून घ्या · Cleveland Clinic") }
+        Card(Modifier.fillMaxWidth().padding(top = 5.dp, bottom = 5.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                Row(Modifier.fillMaxWidth().clickable { reminderExpanded = !reminderExpanded }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (english) "A GENTLE REMINDER" else "छोटीशी आठवण", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(if (reminderExpanded) "−" else "ⓘ", color = Color(0xFF5B87B2), style = MaterialTheme.typography.titleMedium)
+                }
+                if (reminderExpanded) {
+                    Text(if (english) "Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly. Do not wait for a reminder." else "तुमच्या प्रसूतीतज्ज्ञांच्या सूचनांचे पालन करा. बाळाच्या नेहमीच्या हालचाली कमी झाल्या किंवा बदलल्या तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.", color = ink.copy(alpha=.82f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                    TextButton(onClick = { val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://my.clevelandclinic.org/health/articles/23497-kick-counts")); runCatching { context.startActivity(intent) } }) { Text(if (english) "Read guidance · Cleveland Clinic" else "मार्गदर्शन वाचा · Cleveland Clinic") }
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
