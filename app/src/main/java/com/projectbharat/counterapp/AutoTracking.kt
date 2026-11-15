@@ -5,6 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.MediaPlayer
+import android.net.Uri
+import java.io.File
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -274,6 +277,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var transcript by remember { mutableStateOf("") }
     var matched by remember { mutableStateOf(false) }
     var matchedCount by remember { mutableIntStateOf(0) }
+    var saveRecording by remember(categoryId) { mutableStateOf(prefs.getBoolean("save_recording_$categoryId", false)) }
+    var lastRecordingPath by remember { mutableStateOf(prefs.getString("last_recording_path", null)) }
     var presetMenu by remember { mutableStateOf(false) }
     var addMantraDialog by remember { mutableStateOf(false) }
     var newMantraMr by remember { mutableStateOf("") }
@@ -296,7 +301,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
         if (target.isNotBlank()) {
             prefs.edit().putString("target_$categoryId", target.trim()).putString("language_$categoryId", language).apply()
             try {
-                ChantRecognitionService.start(context, categoryId, target.trim(), language)
+                ChantRecognitionService.start(context, categoryId, target.trim(), language, saveRecording)
                 running = true
                 status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
             } catch (error: Exception) {
@@ -325,6 +330,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 intent.getStringExtra("transcript")?.let { transcript = it }
                 if (intent.hasExtra("matched")) matched = intent.getBooleanExtra("matched", false)
                 if (intent.hasExtra("delta")) { matched = true; matchedCount = intent.getIntExtra("delta", 0) }
+                intent.getStringExtra("recording_saved")?.let { lastRecordingPath = it }
             }
         }
         registerTrackingReceiver(context, receiver)
@@ -448,6 +454,25 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                                 }
                             }
                         }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(if (english) "Save chant audio" else "जपाचे ध्वनिमुद्रण जतन करा", color = ink.copy(alpha = .78f), style = MaterialTheme.typography.labelSmall)
+                    Switch(checked = saveRecording, onCheckedChange = {
+                        saveRecording = it
+                        prefs.edit().putBoolean("save_recording_$categoryId", it).apply()
+                    })
+                }
+                lastRecordingPath?.let { path ->
+                    if (File(path).exists()) {
+                        TextButton(onClick = {
+                            runCatching {
+                                MediaPlayer.create(context, Uri.fromFile(File(path)))?.apply {
+                                    setOnCompletionListener { it.release() }
+                                    start()
+                                }
+                            }
+                        }) { Text(if (english) "▶ Play last recording" else "▶ शेवटचे ध्वनिमुद्रण ऐका") }
                     }
                 }
                 if (automatic) {
