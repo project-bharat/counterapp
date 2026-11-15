@@ -48,6 +48,12 @@ class CounterRepository(private val dao: CounterDao) {
         dao.latestLog(categoryId, LocalDate.now().toString())?.let { dao.deleteLog(it.id) }
     }
     suspend fun reset(categoryId: Long) = dao.resetDay(categoryId, LocalDate.now().toString())
+    fun stepTotals(categoryId: Long, from: LocalDate, to: LocalDate): Flow<List<DayTotal>> =
+        dao.weeklyTotals(categoryId, from.toString(), to.toString())
+
+    fun walkingSessions(categoryId: Long, from: LocalDate, to: LocalDate): Flow<List<WalkingSession>> =
+        dao.walkingSessionsForRange(categoryId, from.toString(), to.toString())
+
     fun week(categoryId: Long): Flow<List<DayTotal>> {
         val today = LocalDate.now()
         return dao.weeklyTotals(categoryId, today.minusDays(6).toString(), today.toString())
