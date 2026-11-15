@@ -116,6 +116,9 @@ interface CounterDao {
     @Query("UPDATE walking_sessions SET endedAt=:endedAt WHERE id=:id AND endedAt IS NULL")
     suspend fun finishWalkingSession(id: Long, endedAt: Long)
 
+    @Query("UPDATE walking_sessions SET endedAt=:endedAt WHERE categoryId=:categoryId AND endedAt IS NULL")
+    suspend fun finishOpenWalkingSessions(categoryId: Long, endedAt: Long)
+
     @Query("SELECT * FROM walking_sessions WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY startedAt DESC")
     fun walkingSessionsForRange(categoryId: Long, fromDate: String, toDate: String): Flow<List<WalkingSession>>
 
