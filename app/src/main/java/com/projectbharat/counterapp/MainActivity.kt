@@ -949,7 +949,7 @@ private fun HistoryOverviewScreen(
         Text(if (english) "HISTORY & ANALYTICS" else "इतिहास व विश्लेषण", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text(if (english) "Choose a counter to view its records." else "नोंदी पाहण्यासाठी मोजणी निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-            items(categories.filter { !it.archived }, key = { it.id }) { item ->
+            items(categories, key = { it.id }) { item ->
                 val glyph = when (item.kind) {
                     "BABY" -> Icons.Default.PregnantWoman
                     "MANTRA" -> Icons.Default.SelfImprovement
