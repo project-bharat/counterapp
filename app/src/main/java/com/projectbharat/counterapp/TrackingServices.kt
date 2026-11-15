@@ -333,6 +333,52 @@ class ChantRecognitionService : Service() {
         }
     }
 
+
+    private fun finishChantAudio() {
+        try {
+            chantAudioStream?.flush()
+            chantAudioStream?.close()
+            val file = chantAudioFile
+            if (file != null && chantAudioBytes > 0L) {
+                RandomAccessFile(file, "rw").use { wav ->
+                    wav.seek(0)
+                    wav.writeBytes("RIFF")
+                    writeLeInt(wav, (chantAudioBytes + 36).toInt())
+                    wav.writeBytes("WAVEfmt ")
+                    writeLeInt(wav, 16)
+                    writeLeShort(wav, 1)
+                    writeLeShort(wav, 1)
+                    writeLeInt(wav, 16000)
+                    writeLeInt(wav, 32000)
+                    writeLeShort(wav, 2)
+                    writeLeShort(wav, 16)
+                    wav.writeBytes("data")
+                    writeLeInt(wav, chantAudioBytes.toInt())
+                }
+                getSharedPreferences("chant_settings", MODE_PRIVATE).edit()
+                    .putString("last_recording_path", file.absolutePath)
+                    .putString("last_recording_mantra", mantra)
+                    .putLong("last_recording_time", file.lastModified()).apply()
+                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                    .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("recording_saved", file.absolutePath))
+            } else file?.delete()
+        } catch (error: Exception) {
+            Log.w("CounterAppVosk", "Could not finalize chant recording", error)
+        } finally {
+            chantAudioStream = null
+            chantAudioFile = null
+            chantAudioBytes = 0L
+        }
+    }
+
+    private fun writeLeInt(out: RandomAccessFile, value: Int) {
+        out.write(value and 0xff); out.write((value shr 8) and 0xff)
+        out.write((value shr 16) and 0xff); out.write((value shr 24) and 0xff)
+    }
+    private fun writeLeShort(out: RandomAccessFile, value: Int) {
+        out.write(value and 0xff); out.write((value shr 8) and 0xff)
+    }
+
     private fun sendRecognitionUpdate(transcript: String, matches: Int) {
         val matched = matches > 0 || countPhrase(transcript, mantra) > 0
         sendState(true, if (matched) "Mantra matched" else "Listening offline", transcript, matched)
@@ -471,10 +517,11 @@ class ChantRecognitionService : Service() {
     companion object {
         const val EXTRA_MANTRA = "mantra"
         const val EXTRA_LANGUAGE = "language"
-        fun start(context: Context, categoryId: Long, mantra: String, language: String) {
+        const val EXTRA_SAVE_AUDIO = "save_audio"
+        fun start(context: Context, categoryId: Long, mantra: String, language: String, saveAudio: Boolean = false) {
             val intent = Intent(context, ChantRecognitionService::class.java)
                 .putExtra(StepTrackingService.EXTRA_CATEGORY_ID, categoryId)
-                .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language)
+                .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language).putExtra(EXTRA_SAVE_AUDIO, saveAudio)
             ContextCompat.startForegroundService(context, intent)
         }
         fun stop(context: Context) { context.stopService(Intent(context, ChantRecognitionService::class.java)) }
