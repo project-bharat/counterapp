@@ -84,11 +84,8 @@ private object TrackingNotifications {
 class StepTrackingService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var sensorManager: SensorManager
-    private val motionValidator = StepMotionValidator()
-    private val gpsVerifier = GpsWalkVerifier()
-    private lateinit var locationManager: LocationManager
+        private lateinit var locationManager: LocationManager
     private var gpsListener: LocationListener? = null
-    @Volatile private var pendingValidatedSteps = 0
     private var categoryId = -1L
     private var today = ""
     @Volatile private var walkSessionId = -1L
@@ -127,8 +124,7 @@ class StepTrackingService : Service(), SensorEventListener {
         else ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
 
         val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (detector == null || accelerometer == null || !locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        if (detector == null) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
             stopSelf(); return START_NOT_STICKY
         }
@@ -138,13 +134,10 @@ class StepTrackingService : Service(), SensorEventListener {
             val sessionStart = System.currentTimeMillis()
             dao.finishOpenWalkingSessions(categoryId, sessionStart)
             walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = System.currentTimeMillis()))
-            sensorManager.registerListener(this@StepTrackingService, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-            sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_GAME)
+            sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_NORMAL)
             val listener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
                     val now = System.currentTimeMillis()
-                    val confirmed = gpsVerifier.acceptLocation(location.latitude, location.longitude,
-                        location.accuracy, now, pendingValidatedSteps)
                     var reliableDistance = 0.0
                     if (location.hasAccuracy() && location.accuracy <= 10f) {
                         val previous = lastReliableLocation
@@ -156,18 +149,10 @@ class StepTrackingService : Service(), SensorEventListener {
                         }
                         lastReliableLocation = Location(location)
                     } else lastReliableLocation = null
-                    if (confirmed <= 0 && reliableDistance <= 0.0) return
-                    pendingValidatedSteps = (pendingValidatedSteps - confirmed).coerceAtLeast(0)
-                    val dateNow = LocalDate.now().toString()
+                    if (reliableDistance <= 0.0) return
                     scope.launch {
                         val dao = CounterDatabase.get(this@StepTrackingService).dao()
-                        if (confirmed > 0) dao.addLog(
-                            CounterLog(date = dateNow, timestamp = now, categoryId = categoryId,
-                                count = confirmed, note = "GPS_VERIFIED_WALK_STEP")
-                        )
-                        if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, confirmed, reliableDistance)
-                        sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                            .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", confirmed))
+                        if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, 0, reliableDistance)
                     }
                 }
                 @Deprecated("Deprecated in Java") override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
@@ -175,12 +160,13 @@ class StepTrackingService : Service(), SensorEventListener {
                 override fun onProviderDisabled(provider: String) = Unit
             }
             gpsListener = listener
-            try {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener, Looper.getMainLooper())
-                locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let(listener::onLocationChanged)
-            } catch (error: SecurityException) {
-                Log.w("CounterAppSteps", "GPS permission was not available", error)
-                stopSelf()
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                try {
+                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener, Looper.getMainLooper())
+                    locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let(listener::onLocationChanged)
+                } catch (error: SecurityException) {
+                    Log.w("CounterAppSteps", "GPS permission was not available; sensor step counting continues", error)
+                }
             }
         }
         sendState(true)
@@ -188,13 +174,19 @@ class StepTrackingService : Service(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            motionValidator.addAcceleration(event.timestamp, event.values[0], event.values[1], event.values[2])
-            return
-        }
         if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR) return
-        val accepted = motionValidator.acceptStepDetector(event.timestamp)
-        if (accepted > 0) pendingValidatedSteps = (pendingValidatedSteps + accepted).coerceAtMost(30)
+        val now = System.currentTimeMillis()
+        val dateNow = LocalDate.now().toString()
+        scope.launch {
+            val dao = CounterDatabase.get(this@StepTrackingService).dao()
+            dao.addLog(
+                CounterLog(date = dateNow, timestamp = now, categoryId = categoryId,
+                    count = 1, note = "SENSOR_STEP_DETECTOR")
+            )
+            if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, 1, 0.0)
+            sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", 1))
+        }
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
