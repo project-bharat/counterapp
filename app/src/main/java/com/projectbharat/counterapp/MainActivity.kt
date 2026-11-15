@@ -748,6 +748,7 @@ private fun BabyMovementScreen(
                     }
                 }
             }
+        }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(if (english) "HISTORY" else "इतिहास", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
