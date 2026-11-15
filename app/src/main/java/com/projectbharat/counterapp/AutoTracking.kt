@@ -81,6 +81,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.projectbharat.counterapp.data.DayTotal
+import com.projectbharat.counterapp.data.WalkingSession
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import kotlin.math.sqrt
@@ -95,7 +96,7 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
 }
 
 @Composable
-fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, english: Boolean, ink: Color) {
+fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, sessions: List<WalkingSession>, range: String, onRangeChange: (String) -> Unit, english: Boolean, ink: Color) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null && sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null }
@@ -176,13 +177,44 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, en
                 Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
                 Text(if (english) "steps today" else "आजची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
-                Text(if (english) "LAST 7 DAYS" else "मागील ७ दिवस", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                val totalsByDate = days.associate { it.date to it.total }
-                val walkWeek = (6 downTo 0).map { offset ->
-                    val date = LocalDate.now().minusDays(offset.toLong())
-                    DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf("7D" to if (english) "7 days" else "७ दिवस", "30D" to if (english) "30 days" else "३० दिवस", "MONTH" to if (english) "Month" else "महिना").forEach { (key, label) ->
+                        FilterChip(selected = range == key, onClick = { onRangeChange(key) }, label = { Text(label) })
+                    }
                 }
-                WeeklyChart(walkWeek, Modifier.fillMaxWidth().height(112.dp))
+                val today = LocalDate.now()
+                val chartDates = when (range) {
+                    "30D" -> (29 downTo 0).map { today.minusDays(it.toLong()) }
+                    "MONTH" -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
+                    else -> (6 downTo 0).map { today.minusDays(it.toLong()) }
+                }
+                val totalsByDate = days.associate { it.date to it.total }
+                val chartDays = chartDates.map { date -> DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
+                Text(if (english) when (range) { "30D" -> "LAST 30 DAYS"; "MONTH" -> "THIS MONTH"; else -> "LAST 7 DAYS" } else when (range) { "30D" -> "मागील ३० दिवस"; "MONTH" -> "हा महिना"; else -> "मागील ७ दिवस" },
+                    color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                WeeklyChart(chartDays, Modifier.fillMaxWidth().height(190.dp))
+                Spacer(Modifier.height(8.dp))
+                Text(if (english) "DAILY WALK SUMMARIES" else "दैनिक चालण्याचा सारांश", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                val groupedWalks = sessions.groupBy { it.date }.entries.take(5)
+                if (groupedWalks.isEmpty()) {
+                    Text(if (english) "No walking sessions in this period" else "या कालावधीत चालण्याची नोंद नाही", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.bodySmall)
+                } else {
+                    groupedWalks.forEach { (date, records) ->
+                        val totalSteps = records.sumOf { it.steps }
+                        val gpsDistance = records.filter { it.gpsReliable }.sumOf { it.distanceMeters }
+                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))) {
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(date, color = ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                                    Text((if (english) "${records.size} sessions · ${totalSteps} steps" else "${records.size} सत्रे · ${totalSteps} पावले"), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall)
+                                }
+                                Text(if (gpsDistance > 0.0) {
+                                    if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "${gpsDistance.toInt()} m"
+                                } else if (english) "GPS distance —" else "GPS अंतर —", color = if (gpsDistance > 0.0) Color(0xFF238451) else ink.copy(alpha = .5f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 when {
                     !available -> Text(if (english) "This phone has no step-counter sensor" else "या फोनमध्ये स्टेप काउंटर सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
