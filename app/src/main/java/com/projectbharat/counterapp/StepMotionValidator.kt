@@ -5,8 +5,8 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
- * Rejects isolated step-detector pulses unless they align with an accelerometer
- * impact and form a plausible walking cadence.
+ * Confirms a sustained walking rhythm by matching hardware step-detector events
+ * with accelerometer impacts. Isolated or irregular pulses are discarded.
  */
 internal class StepMotionValidator {
     private var gravityX = 0f
@@ -18,10 +18,13 @@ internal class StepMotionValidator {
     private val accelerationPeaks = ArrayDeque<Long>()
     private var lastAcceptedStepNs = 0L
     private var cadenceStreak = 0
+    private var walkingConfirmed = false
 
     fun addAcceleration(timestampNs: Long, x: Float, y: Float, z: Float) {
         if (!initialized) {
-            gravityX = x; gravityY = y; gravityZ = z
+            gravityX = x
+            gravityY = y
+            gravityZ = z
             initialized = true
             return
         }
@@ -43,26 +46,39 @@ internal class StepMotionValidator {
         }
     }
 
-    /** Returns zero until three consecutive, motion-validated steps establish walking. */
+    /**
+     * Returns 0 while validating. On the eighth consecutive valid step it
+     * releases the buffered eight; subsequent valid steps are returned as 1.
+     */
     fun acceptStepDetector(timestampNs: Long): Int {
         while (accelerationPeaks.isNotEmpty() && timestampNs - accelerationPeaks.first() > MATCH_WINDOW_NS) {
             accelerationPeaks.removeFirst()
         }
         val match = accelerationPeaks.firstOrNull { abs(timestampNs - it) <= MATCH_WINDOW_NS }
         if (match == null) {
-            cadenceStreak = 0
-            lastAcceptedStepNs = 0L
+            resetCandidate()
             return 0
         }
         accelerationPeaks.remove(match)
+
         val interval = if (lastAcceptedStepNs == 0L) 0L else timestampNs - lastAcceptedStepNs
-        cadenceStreak = if (lastAcceptedStepNs == 0L || interval !in MIN_STEP_INTERVAL_NS..MAX_STEP_INTERVAL_NS) 1 else cadenceStreak + 1
-        lastAcceptedStepNs = timestampNs
-        return when {
-            cadenceStreak == 3 -> 3
-            cadenceStreak > 3 -> 1
-            else -> 0
+        if (lastAcceptedStepNs != 0L && interval !in MIN_STEP_INTERVAL_NS..MAX_STEP_INTERVAL_NS) {
+            resetCandidate()
         }
+        cadenceStreak++
+        lastAcceptedStepNs = timestampNs
+
+        if (!walkingConfirmed && cadenceStreak >= REQUIRED_CONSECUTIVE_STEPS) {
+            walkingConfirmed = true
+            return cadenceStreak
+        }
+        return if (walkingConfirmed) 1 else 0
+    }
+
+    private fun resetCandidate() {
+        cadenceStreak = 0
+        lastAcceptedStepNs = 0L
+        walkingConfirmed = false
     }
 
     companion object {
@@ -70,7 +86,8 @@ internal class StepMotionValidator {
         private const val PEAK_GAP_NS = 180_000_000L
         private const val PEAK_RETENTION_NS = 1_000_000_000L
         private const val MATCH_WINDOW_NS = 280_000_000L
-        private const val MIN_STEP_INTERVAL_NS = 280_000_000L
+        private const val MIN_STEP_INTERVAL_NS = 300_000_000L
         private const val MAX_STEP_INTERVAL_NS = 1_500_000_000L
+        private const val REQUIRED_CONSECUTIVE_STEPS = 8
     }
 }
