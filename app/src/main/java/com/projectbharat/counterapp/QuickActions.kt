@@ -119,6 +119,14 @@ class QuickActionReceiver : BroadcastReceiver() {
 }
 
 class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
+    companion object {
+        fun refresh(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            val ids = manager.getAppWidgetIds(ComponentName(context, CounterHomeWidget::class.java))
+            if (ids.isNotEmpty()) CounterHomeWidget().onUpdate(context, manager, ids)
+        }
+    }
+
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
