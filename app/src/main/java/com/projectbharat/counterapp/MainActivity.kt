@@ -633,17 +633,24 @@ private fun BabyMovementScreen(
             )
             Spacer(Modifier.height(8.dp))
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                    Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+                Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                        }
+                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
+                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(3.dp)); Text(if (english) "Undo" else "मागे")
+                        }
+                    }
+                    Box(Modifier.size(166.dp), contentAlignment = Alignment.Center) {
                         Canvas(Modifier.fillMaxSize()) {
                             drawCircle(tapSurface, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx()))
                             drawArc(Gold, -90f, 360f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round))
                         }
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
-                            Modifier.size(174.dp)
+                            Modifier.size(138.dp)
                                 .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
                                 .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
@@ -654,7 +661,7 @@ private fun BabyMovementScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(Icons.Default.PregnantWoman, null, tint = Color(0xFFC65F68), modifier = Modifier.size(44.dp))
-                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                                Text("+1", color = Color(0xFF7F3546), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
                                 Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF7F3546), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
@@ -671,11 +678,6 @@ private fun BabyMovementScreen(
                                 Text(if (english) "10 MOVEMENTS REACHED" else "१० हालचाली पूर्ण", color = Color(0xFF246B48), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 Text(if (english) "Time: " + "%.1f min".format(activeSession.timeToTenMs / 60000.0) else "वेळ: " + "%.1f मिनिटे".format(activeSession.timeToTenMs / 60000.0), color = Color(0xFF246B48), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                             }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
-                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(4.dp)); Text(if (english) "Undo" else "मागे")
                         }
                     }
                 }
