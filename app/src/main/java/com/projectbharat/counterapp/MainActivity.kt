@@ -970,7 +970,7 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
     val numberPaint = paint(navy, 17f, true)
     val labelPaint = paint(muted, 8.5f, true)
     val footerPaint = paint(muted, 8f)
-    val xs = floatArrayOf(36f, 120f, 196f, 268f, 328f, 403f)
+    val xs = floatArrayOf(36f, 160f, 250f, 355f, 465f)
     var pageNumber = 0
     var currentPage: PdfDocument.Page? = null
     var cv: android.graphics.Canvas? = null
@@ -978,8 +978,8 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
 
     fun tableHeader(canvas: android.graphics.Canvas, top: Float): Float {
         canvas.drawRoundRect(android.graphics.RectF(36f, top, 559f, top + 28f), 7f, 7f, paint(navy, 9f, true))
-        val labels = if (english) listOf("DATE", "PERIOD", "START", "METHOD", "MOVES", "TIME / DURATION")
-                     else listOf("दिनांक", "वेळ", "सुरुवात", "पद्धत", "हालचाली", "वेळ / कालावधी")
+        val labels = if (english) listOf("DATE & TIME", "PERIOD", "10 MOVES IN", "FIRST HOUR", "TOTAL MOVES")
+                     else listOf("दिनांक व वेळ", "कालावधी", "१० हालचाली", "पहिला तास", "एकूण")
         labels.forEachIndexed { i, label -> canvas.drawText(label, xs[i] + 7f, top + 18f, headPaint) }
         return top + 28f
     }
@@ -1009,17 +1009,17 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
                 canvas.drawText(metric.second, left + 15f, 185f, numberPaint)
             }
             canvas.drawText(if (english) "DAILY MOVEMENT PATTERN" else "दैनिक हालचालींचा आलेख", 36f, 226f, paint(navy, 10f, true))
-            canvas.drawRoundRect(android.graphics.RectF(36f, 238f, 559f, 298f), 8f, 8f, paint(pale, 9f))
+            canvas.drawRoundRect(android.graphics.RectF(36f, 238f, 559f, 333f), 8f, 8f, paint(pale, 9f))
             val slot = 505f / daily.size.coerceAtLeast(1)
             daily.forEachIndexed { i, value ->
-                val barHeight = if (value == 0) 1.5f else (value.toFloat() / maxDaily * 39f).coerceAtLeast(3f)
+                val barHeight = if (value == 0) 1.5f else (value.toFloat() / maxDaily * 70f).coerceAtLeast(3f)
                 val left = 45f + i * slot + slot * .2f
-                canvas.drawRoundRect(android.graphics.RectF(left, 286f - barHeight, left + slot * .58f, 286f), 2f, 2f,
+                canvas.drawRoundRect(android.graphics.RectF(left, 319f - barHeight, left + slot * .58f, 319f), 2f, 2f,
                     paint(if (value > 0) blue else android.graphics.Color.rgb(205, 216, 228), 8f))
             }
-            canvas.drawText("1", 45f, 293f, smallPaint)
-            canvas.drawText(month.lengthOfMonth().toString(), 538f, 293f, smallPaint)
-            tableTop = 316f
+            canvas.drawText("1", 45f, 328f, smallPaint)
+            canvas.drawText(month.lengthOfMonth().toString(), 538f, 328f, smallPaint)
+            tableTop = 346f
         } else {
             canvas.drawText(if (english) "Session records" else "सत्र नोंदी", 36f, 143f, paint(navy, 11f, true))
         }
@@ -1046,16 +1046,16 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         val dateLabel = runCatching { LocalDate.parse(session.date).format(DateTimeFormatter.ofPattern("dd MMM")) }.getOrDefault(session.date)
         val end = session.endedAt ?: minOf(session.startedAt + CounterRepository.TWO_HOURS_MS, System.currentTimeMillis())
         val duration = (end - session.startedAt).coerceAtLeast(0L) / 60000L
-        val methodLabel = if (english) "Baby movement" else "बाळाची हालचाल"
-        val timeLabel = session.timeToTenMs?.let { "%.1f min".format(it / 60000.0) } ?: (duration.toString() + " min")
-        val values = listOf(dateLabel, periodLabel(session.dayPeriod, english), sessionTime(session.startedAt),
-            methodLabel, session.movementCount.toString(), timeLabel)
+        val dateTimeLabel = dateLabel + " " + sessionTime(session.startedAt)
+        val tenLabel = session.timeToTenMs?.let { "%.1f min".format(it / 60000.0) } ?: "—"
+        val firstHourLabel = session.firstHourCount.toString()
+        val values = listOf(dateTimeLabel, periodLabel(session.dayPeriod, english), tenLabel, firstHourLabel, session.movementCount.toString())
         values.forEachIndexed { col, value ->
             if (col == 4) {
-                canvas.drawRoundRect(android.graphics.RectF(xs[col] + 5f, y + 4f, xs[col] + 49f, y + 21f), 6f, 6f, paint(android.graphics.Color.rgb(222, 237, 249), 8f))
-                canvas.drawText(value, xs[col] + 20f, y + 17f, paint(navy, 10f, true))
+                canvas.drawRoundRect(android.graphics.RectF(xs[col] + 5f, y + 4f, xs[col] + 57f, y + 21f), 6f, 6f, paint(android.graphics.Color.rgb(222, 237, 249), 8f))
+                canvas.drawText(value, xs[col] + 22f, y + 17f, paint(navy, 10f, true))
             } else {
-                canvas.drawText(value.take(if (col == 5) 11 else 14), xs[col] + 7f, y + 16f, bodyPaint)
+                canvas.drawText(value.take(if (col == 0) 18 else 12), xs[col] + 7f, y + 16f, bodyPaint)
             }
         }
         y += 27f
