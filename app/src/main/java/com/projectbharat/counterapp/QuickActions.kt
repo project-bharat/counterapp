@@ -83,11 +83,12 @@ object QuickActionsNotification {
             })
         }
         val entries = listOf(
-            Triple(7111, "Baby movements", "Start a baby movement session", "BABY"),
-            Triple(7112, "Japa", "Start offline mantra recognition", "MANTRA"),
-            Triple(7113, "Walking", "Start walking and step tracking", "STEPS")
+            Triple(7111, "Baby movements" to "Start a baby movement session", "BABY"),
+            Triple(7112, "Japa" to "Start offline mantra recognition", "MANTRA"),
+            Triple(7113, "Walking" to "Start walking and step tracking", "STEPS")
         )
-        entries.forEach { (id, title, description, kind) ->
+        entries.forEach { (id, labels, kind) ->
+            val (title, description) = labels
             val action = when (kind) { "BABY" -> "Start session"; "MANTRA" -> "Start Japa"; else -> "Start walking" }
             val icon = when (kind) { "BABY" -> android.R.drawable.ic_menu_my_calendar; "MANTRA" -> android.R.drawable.ic_media_play; else -> android.R.drawable.ic_menu_directions }
             val notification = NotificationCompat.Builder(context, CHANNEL)
