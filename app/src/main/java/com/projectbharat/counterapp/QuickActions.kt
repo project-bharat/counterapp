@@ -72,35 +72,35 @@ object CounterQuickActions {
 
 object QuickActionsNotification {
     private const val CHANNEL = "counter_quick_actions"
-    private const val NOTIFICATION_ID = 7100
-
     fun show(context: Context) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL, "Counter quick actions", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shortcuts to start a baby movement session or Japa"
+                description = "Individual shortcuts for each counter"
                 setShowBadge(false)
             })
         }
-        val open = PendingIntent.getActivity(context, 7100,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_today)
-            .setContentTitle("Daily Counter")
-            .setContentText("Quick start · Baby session · Japa")
-            .setContentIntent(open)
-            .setAutoCancel(false)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .addAction(android.R.drawable.ic_menu_my_calendar, "Start session",
-                CounterQuickActions.activityPending(context, "BABY", 7103))
-            .addAction(android.R.drawable.ic_media_play, "Start Japa",
-                CounterQuickActions.activityPending(context, "MANTRA", 7104))
-            .build()
-        runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
+        val entries = listOf(
+            Triple(7111, "Baby movements", "Start a baby movement session", "BABY"),
+            Triple(7112, "Japa", "Start offline mantra recognition", "MANTRA"),
+            Triple(7113, "Walking", "Start walking and step tracking", "STEPS")
+        )
+        entries.forEach { (id, title, description, kind) ->
+            val action = when (kind) { "BABY" -> "Start session"; "MANTRA" -> "Start Japa"; else -> "Start walking" }
+            val icon = when (kind) { "BABY" -> android.R.drawable.ic_menu_my_calendar; "MANTRA" -> android.R.drawable.ic_media_play; else -> android.R.drawable.ic_menu_directions }
+            val notification = NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_menu_today)
+                .setContentTitle(title)
+                .setContentText(description)
+                .setOnlyAlertOnce(true)
+                .setOngoing(false)
+                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+                .addAction(icon, action, CounterQuickActions.activityPending(context, kind, id))
+                .build()
+            runCatching { NotificationManagerCompat.from(context).notify(id, notification) }
+        }
     }
 }
 
