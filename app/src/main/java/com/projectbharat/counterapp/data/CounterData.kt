@@ -246,14 +246,16 @@ interface CounterDao {
     suspend fun deleteAllBabySessions()
 
     @Transaction
-    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>, detections: List<BabyDetection>) {
+    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>, detections: List<BabyDetection>, walkingSessions: List<WalkingSession>) {
         deleteAllLogs()
         deleteAllBabySessions()
         deleteAllBabyDetections()
+        deleteAllWalkingSessions()
         deleteAllCategories()
         insertCategories(categories)
         if (sessions.isNotEmpty()) insertBabySessions(sessions)
         if (detections.isNotEmpty()) insertBabyDetections(detections)
+        if (walkingSessions.isNotEmpty()) insertWalkingSessions(walkingSessions)
         if (logs.isNotEmpty()) insertLogs(logs)
     }
 
