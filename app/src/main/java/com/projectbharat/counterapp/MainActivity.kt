@@ -123,6 +123,36 @@ class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         var splashContentReady = false
         splashScreen.setKeepOnScreenCondition { !splashContentReady }
+        splashScreen.setOnExitAnimationListener { splashProvider ->
+            val splashView = splashProvider.view
+            val logoView = splashProvider.iconView
+            logoView.post {
+                val margin = 40f * resources.displayMetrics.density
+                val startX = (splashView.width / 2f - margin - logoView.width / 2f).coerceAtLeast(0f)
+                val startY = (splashView.height / 2f - margin - logoView.height / 2f).coerceAtLeast(0f)
+                logoView.scaleX = 0.78f
+                logoView.scaleY = 0.78f
+                val moveX = android.animation.ObjectAnimator.ofFloat(
+                    logoView, android.view.View.TRANSLATION_X, startX, 0f
+                )
+                val moveY = android.animation.ObjectAnimator.ofFloat(
+                    logoView, android.view.View.TRANSLATION_Y, startY, 0f
+                )
+                val scaleX = android.animation.ObjectAnimator.ofFloat(logoView, android.view.View.SCALE_X, 0.78f, 1f)
+                val scaleY = android.animation.ObjectAnimator.ofFloat(logoView, android.view.View.SCALE_Y, 0.78f, 1f)
+                android.animation.AnimatorSet().apply {
+                    playTogether(moveX, moveY, scaleX, scaleY)
+                    duration = 720L
+                    interpolator = android.view.animation.DecelerateInterpolator(1.8f)
+                    addListener(object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: android.animation.Animator) {
+                            splashProvider.remove()
+                        }
+                    })
+                    start()
+                }
+            }
+        }
         super.onCreate(savedInstanceState)
         stopService(Intent(this, ChantRecognitionService::class.java))
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
@@ -132,33 +162,7 @@ class MainActivity : ComponentActivity() {
         val repo = CounterRepository(CounterDatabase.get(this).dao())
         setContent {
             SideEffect { splashContentReady = true }
-            var showBrandIntro by remember { mutableStateOf(true) }
-            LaunchedEffect(Unit) {
-                delay(850)
-                showBrandIntro = false
-            }
-            val darkTheme = isSystemInDarkTheme()
-            Box(Modifier.fillMaxSize()) {
-                CounterApp(repo)
-                if (showBrandIntro) {
-                    Box(
-                        Modifier.fillMaxSize().background(
-                            if (darkTheme) Color(0xFF31413A) else Color(0xFFF3EEE3)
-                        ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            painter = painterResource(
-                                if (darkTheme) R.drawable.bilan_header_logo_light
-                                else R.drawable.bilan_header_logo_dark
-                            ),
-                            contentDescription = "Bilan Counter",
-                            modifier = Modifier.width(210.dp).height(82.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                }
-            }
+            CounterApp(repo)
         }
     }
 
