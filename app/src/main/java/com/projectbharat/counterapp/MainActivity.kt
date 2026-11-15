@@ -207,6 +207,7 @@ fun CounterApp(repo: CounterRepository) {
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
     var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
+    var historyOverview by remember { mutableStateOf(false) }
     var categoryScreen by remember { mutableStateOf(false) }
     var backupScreen by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
@@ -396,7 +397,7 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History & analytics" else "इतिहास व विश्लेषण") }, selected = historyOverview || monthlyHistory, onClick = { historyOverview = true; monthlyHistory = false; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
                         Spacer(Modifier.weight(1f))
                         Text(
@@ -442,8 +443,15 @@ fun CounterApp(repo: CounterRepository) {
                         onRestore = { item -> scope.launch { vm.restoreCategory(item.id) } })
                 } else if (remindersScreen) {
                     ReminderSettingsScreen(english = english, ink = ink)
-                } else
-                if (monthlyHistory && isBaby && selected != null) {
+                } else if (historyOverview) {
+                    HistoryOverviewScreen(categories = categories, english = english, ink = ink, onSelect = { categoryId ->
+                        selectedId = categoryId
+                        historyOverview = false
+                        historyDate = LocalDate.now()
+                        historyMonth = LocalDate.now().withDayOfMonth(1)
+                        monthlyHistory = true
+                    })
+                } else if (monthlyHistory && isBaby && selected != null) {
                     MonthlyHistoryScreen(
                         english = english, ink = ink, month = historyMonth, sessions = monthSessions,
                         onPrevious = { historyMonth = historyMonth.minusMonths(1) },
@@ -852,17 +860,29 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val settings = remember { mutableStateListOf<DailyReminder>().apply { addAll(DailyReminderScheduler.load(context)) } }
+    var addDialog by remember { mutableStateOf(false) }
+    var newTitle by remember { mutableStateOf("") }
+    var guideExpanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        Text(if (english) "DAILY REMINDERS" else "दैनिक स्मरणपत्रे", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(if (english) "Choose times that fit your routine." else "तुमच्या दिनक्रमानुसार वेळ निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(if (english) "DAILY REMINDERS" else "दैनिक स्मरणपत्रे", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(if (english) "Choose times that fit your routine." else "तुमच्या दिनक्रमानुसार वेळ निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+            }
+            FilledTonalIconButton(onClick = { newTitle = ""; addDialog = true }, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Default.Add, contentDescription = if (english) "Add reminder" else "स्मरणपत्र जोडा")
+            }
+        }
+        LazyColumn(Modifier.weight(1f).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
             items(settings, key = { it.id }) { item ->
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (item.enabled) Color(0xFFE4F1E8) else MaterialTheme.colorScheme.surface)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if (english) item.titleEn else item.titleMr, color = ink, fontWeight = FontWeight.SemiBold)
-                            Text("%02d:%02d".format(item.hour, item.minute), color = Color(0xFF39865B), style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.clickable {
+                            Text(if (english) item.titleEn else item.titleMr, color = if (item.enabled) Color(0xFF174D32) else ink, fontWeight = FontWeight.SemiBold)
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 3.dp)) {
+                                Text("%02d:%02d".format(item.hour, item.minute), color = if (item.enabled) Color(0xFF176B43) else ink.copy(alpha = .75f), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(8.dp))
+                                IconButton(onClick = {
                                     TimePickerDialog(context, { _, hour, minute ->
                                         val index = settings.indexOfFirst { it.id == item.id }
                                         if (index >= 0) {
@@ -870,8 +890,8 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
                                             DailyReminderScheduler.saveAndSchedule(context, settings.toList())
                                         }
                                     }, item.hour, item.minute, false).show()
-                                })
-                            Text(if (english) "Tap time to change" else "वेळ बदलण्यासाठी टॅप करा", color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall)
+                                }, modifier = Modifier.size(34.dp)) { Icon(Icons.Default.Edit, contentDescription = if (english) "Change time" else "वेळ बदला", tint = if (item.enabled) Color(0xFF176B43) else ink) }
+                            }
                         }
                         Switch(checked = item.enabled, onCheckedChange = { enabled ->
                             val index = settings.indexOfFirst { it.id == item.id }
@@ -887,16 +907,76 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
                 }
             }
         }
-        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3DF)) {
-            Text(
-                if (english) "Baby movement reminders are optional routine prompts, not medical advice. Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly; do not wait for a reminder."
-                else "बाळाच्या हालचालींची स्मरणपत्रे ही केवळ ऐच्छिक आठवण आहे, वैद्यकीय सल्ला नाही. डॉक्टरांच्या सूचनांचे पालन करा. हालचाली कमी झाल्या किंवा नेहमीच्या पद्धतीत बदल जाणवला तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.",
-                color = Color(0xFF76531F), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(13.dp)
-            )
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            Column(Modifier.fillMaxWidth().clickable { guideExpanded = !guideExpanded }.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (english) "Important guidance" else "महत्त्वाची सूचना", modifier = Modifier.weight(1f), color = ink, fontWeight = FontWeight.SemiBold)
+                    Icon(if (guideExpanded) Icons.Default.Remove else Icons.Default.Add, contentDescription = null, tint = ink)
+                }
+                if (guideExpanded) Text(
+                    if (english) "Reminders are optional routine prompts, not medical advice. Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly; do not wait for a reminder."
+                    else "ही केवळ ऐच्छिक आठवण आहे, वैद्यकीय सल्ला नाही. डॉक्टरांच्या सूचनांचे पालन करा. हालचाली कमी झाल्या किंवा नेहमीच्या पद्धतीत बदल जाणवला तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.",
+                    color = ink.copy(alpha = .8f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+    if (addDialog) AlertDialog(
+        onDismissRequest = { addDialog = false },
+        title = { Text(if (english) "New reminder" else "नवीन स्मरणपत्र") },
+        text = { OutlinedTextField(value = newTitle, onValueChange = { newTitle = it }, singleLine = true, label = { Text(if (english) "Reminder title" else "स्मरणपत्राचे नाव") }) },
+        confirmButton = { TextButton(onClick = {
+            val title = newTitle.trim()
+            if (title.isNotEmpty()) {
+                val id = (settings.maxOfOrNull { it.id } ?: 5) + 1
+                settings.add(DailyReminder(id, title, title, 9, 0, false))
+                DailyReminderScheduler.saveAndSchedule(context, settings.toList())
+                addDialog = false
+            }
+        }) { Text(if (english) "Add" else "जोडा") } },
+        dismissButton = { TextButton(onClick = { addDialog = false }) { Text(if (english) "Cancel" else "रद्द करा") } }
+    )
+}
+
+@Composable
+private fun HistoryOverviewScreen(
+    categories: List<CounterCategory>,
+    english: Boolean,
+    ink: Color,
+    onSelect: (Long) -> Unit
+) {
+    Column(Modifier.fillMaxSize()) {
+        Text(if (english) "HISTORY & ANALYTICS" else "इतिहास व विश्लेषण", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(if (english) "Choose a counter to view its records." else "नोंदी पाहण्यासाठी मोजणी निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
+            items(categories.filter { !it.archived }, key = { it.id }) { item ->
+                val glyph = when (item.kind) {
+                    "BABY" -> Icons.Default.PregnantWoman
+                    "MANTRA" -> Icons.Default.SelfImprovement
+                    "STEPS" -> Icons.Default.DirectionsWalk
+                    else -> Icons.Default.BarChart
+                }
+                val title = if (english) item.titleEn else item.titleMr
+                val subtitle = when (item.kind) {
+                    "BABY" -> if (english) "Movement sessions & daily totals" else "हालचाल सत्रे व दैनिक नोंदी"
+                    "MANTRA" -> if (english) "Chant counts & daily history" else "जप संख्या व दैनिक इतिहास"
+                    "STEPS" -> if (english) "Steps, walking sessions & trends" else "पावले, चालण्याची सत्रे व आलेख"
+                    else -> if (english) "Daily totals & activity history" else "दैनिक संख्या व नोंदी"
+                }
+                Card(Modifier.fillMaxWidth().clickable { onSelect(item.id) }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(glyph, null, tint = Color(0xFF4E79A7), modifier = Modifier.size(30.dp))
+                        Column(Modifier.weight(1f).padding(start = 13.dp)) {
+                            Text(title, color = ink, fontWeight = FontWeight.SemiBold)
+                            Text(subtitle, color = ink.copy(alpha = .62f), style = MaterialTheme.typography.bodySmall)
+                        }
+                        Icon(Icons.Default.History, null, tint = ink.copy(alpha = .55f))
+                    }
+                }
+            }
         }
     }
 }
-
 @Composable
 private fun StatTile(label: String, value: String, ink: Color, modifier: Modifier = Modifier) {
     Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
