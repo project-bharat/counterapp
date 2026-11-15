@@ -24,7 +24,7 @@ class StepMotionValidatorTest {
         val validator = StepMotionValidator()
         val times = mutableListOf(1_000_000_000L, 1_600_000_000L, 3_800_000_000L)
         times += (0..7).map { 4_400_000_000L + it * 600_000_000L }
-        val expected = listOf(0, 0, 0, 0, 0, 0, 0, 0, 8, 1)
+        val expected = listOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 1)
         times.forEachIndexed { index, timestamp ->
             addPeak(validator, timestamp)
             assertEquals(expected[index], validator.acceptStepDetector(timestamp))
