@@ -943,9 +943,11 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
             val title = newTitle.trim()
             if (title.isNotEmpty()) {
                 val id = (settings.maxOfOrNull { it.id } ?: 5) + 1
-                settings.add(DailyReminder(id, title, title, 9, 0, false))
-                DailyReminderScheduler.saveAndSchedule(context, settings.toList())
                 addDialog = false
+                TimePickerDialog(context, { _, hour, minute ->
+                    settings.add(DailyReminder(id, title, title, hour, minute, false))
+                    DailyReminderScheduler.saveAndSchedule(context, settings.toList())
+                }, 9, 0, false).show()
             }
         }) { Text(if (english) "Add" else "जोडा") } },
         dismissButton = { TextButton(onClick = { addDialog = false }) { Text(if (english) "Cancel" else "रद्द करा") } }
