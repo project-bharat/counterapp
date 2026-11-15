@@ -43,7 +43,7 @@ object DailyReminderScheduler {
         }
         val customIds = prefs.getString("custom_ids", "").orEmpty().split(",").mapNotNull { it.toIntOrNull() }
         val custom = customIds.mapNotNull { id ->
-            val names = prefs.getString("custom_$id", null)?.split("\\u001F", limit = 2) ?: return@mapNotNull null
+            val names = prefs.getString("custom_$id", null)?.split("\u001F", limit = 2) ?: return@mapNotNull null
             if (names.size != 2) return@mapNotNull null
             DailyReminder(id, names[0], names[1], prefs.getInt("hour_$id", 9),
                 prefs.getInt("minute_$id", 0), prefs.getBoolean("enabled_$id", false))
@@ -55,7 +55,7 @@ object DailyReminderScheduler {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.edit().apply {
             putString("custom_ids", reminders.filter { it.id > 5 }.joinToString(",") { it.id.toString() })
-            reminders.filter { it.id > 5 }.forEach { putString("custom_${it.id}", it.titleMr + "\\u001F" + it.titleEn) }
+            reminders.filter { it.id > 5 }.forEach { putString("custom_${it.id}", it.titleMr + "\u001F" + it.titleEn) }
             reminders.forEach { item ->
                 putInt("hour_${item.id}", item.hour)
                 putInt("minute_${item.id}", item.minute)
