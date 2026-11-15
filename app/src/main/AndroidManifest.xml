@@ -33,10 +33,15 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
         <receiver android:name=".DailyReminderReceiver" android:exported="false" />
+        <receiver android:name=".QuickActionReceiver" android:enabled="true" android:exported="false" />
+        <receiver android:name=".CounterHomeWidget" android:enabled="true" android:exported="true" android:label="Daily Counter">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/counter_widget_info" />
+        </receiver>
         <receiver android:name=".ReminderBootReceiver" android:enabled="true" android:exported="false">
             <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
         </receiver>
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
