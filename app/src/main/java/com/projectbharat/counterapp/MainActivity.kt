@@ -24,6 +24,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -417,7 +419,8 @@ fun CounterApp(repo: CounterRepository) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color.White) }
-                    Column(Modifier.weight(1f)) {
+                    Image(painterResource(R.drawable.ic_launcher_foreground_padded), contentDescription = "Daily Counter", modifier = Modifier.size(42.dp).padding(2.dp))
+                    Column(Modifier.weight(1f).padding(start = 8.dp)) {
                         Text(if(english) "YOUR DAILY RHYTHM" else "तुमची रोजची नोंद", color=Color.White.copy(alpha=.76f), style=MaterialTheme.typography.labelSmall, fontWeight=FontWeight.Bold)
                         Text(if(english) "Daily Counter" else "दैनिक मोजणी", color=Color.White, style=MaterialTheme.typography.headlineSmall, fontWeight=FontWeight.ExtraBold)
                     }
