@@ -451,12 +451,23 @@ fun CounterApp(repo: CounterRepository) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color(0xFFF3EEE3)) }
-                    Image(
-                        painter = painterResource(id = R.drawable.bilan_header_logo_light),
-                        contentDescription = "Bilan Counter",
-                        modifier = Modifier.width(124.dp).height(48.dp),
-                        contentScale = ContentScale.Fit
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.bilan_header_logo_light),
+                            contentDescription = "Bilan",
+                            modifier = Modifier.width(94.dp).height(32.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                        Text(
+                            if (english) "Daily Counter" else "दैनिक मोजणी",
+                            color = Color(0xFFF3EEE3),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(12.dp))
