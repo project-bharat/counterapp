@@ -635,13 +635,17 @@ private fun BabyMovementScreen(
             Spacer(Modifier.height(8.dp))
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column {
-                            Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
-                        }
-                        TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
-                            Icon(Icons.Default.Undo, null); Spacer(Modifier.width(3.dp)); Text(if (english) "Undo" else "मागे")
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                        Surface(
+                            modifier = Modifier.padding(top = 4.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = tapSurface.copy(alpha = .55f)
+                        ) {
+                            TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
+                                Icon(Icons.Default.Undo, null); Spacer(Modifier.width(5.dp)); Text(if (english) "Undo" else "मागे")
+                            }
                         }
                     }
                     Box(Modifier.size(166.dp), contentAlignment = Alignment.Center) {
@@ -712,17 +716,17 @@ private fun BabyMovementScreen(
             }
         }
         if (detections.isNotEmpty() || autoDetect) {
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = ink, fontWeight = FontWeight.SemiBold)
-                    Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                        Column {
-                            Text(if (english) "Detected" else "ओळखले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
-                            Text(pending.toString(), color = ink, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Navy)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = Color.White, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (english) "Detected" else "ओळखले", color = Color.White.copy(alpha=.75f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(pending.toString(), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                         }
-                        Column {
-                            Text(if (english) "Added" else "जोडले", color = Color(0xFF238451), style = MaterialTheme.typography.labelSmall)
-                            Text(added.toString(), color = Color(0xFF238451), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (english) "Added" else "जोडले", color = Color.White.copy(alpha=.75f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(added.toString(), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                         }
                     }
                     if (pending > 0) {
