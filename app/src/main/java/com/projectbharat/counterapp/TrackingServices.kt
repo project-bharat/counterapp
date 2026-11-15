@@ -408,7 +408,7 @@ class ChantRecognitionService : Service() {
         fun normalize(value: String): List<String> {
             val normalized = java.text.Normalizer.normalize(value.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFC)
                 .replace("ॐ", "ओम").replace("aum", "om")
-                .replace("shivaaya", "shivaya").replace("namaha", "नमः")
+                .replace("shivaaya", "shivaya").replace("namaha", "namah")
                 .replace(Regex("\\s+([\\p{M}])"), "$1")
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .replace(Regex("\\s+"), " ").trim()
