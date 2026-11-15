@@ -10,23 +10,33 @@ class StepMotionValidatorTest {
         assertEquals(0, validator.acceptStepDetector(1_000_000_000L))
     }
 
-    @Test fun walkingCadenceIsCountedAfterThreeValidatedPulses() {
+    @Test fun sustainedWalkingIsReleasedAfterEightValidatedSteps() {
         val validator = StepMotionValidator()
-        repeat(4) { index ->
+        repeat(10) { index ->
             val timestamp = 1_000_000_000L + index * 600_000_000L
             addPeak(validator, timestamp)
             val actual = validator.acceptStepDetector(timestamp)
-            assertEquals(if (index == 2) 3 else if (index == 3) 1 else 0, actual)
+            assertEquals(if (index == 7) 8 else if (index > 7) 1 else 0, actual)
         }
     }
 
     @Test fun irregularPulseResetsWalkingCandidate() {
         val validator = StepMotionValidator()
-        val times = listOf(1_000_000_000L, 1_600_000_000L, 3_800_000_000L, 4_400_000_000L, 5_000_000_000L)
-        val expected = listOf(0, 0, 0, 0, 3)
+        val times = mutableListOf(1_000_000_000L, 1_600_000_000L, 3_800_000_000L)
+        times += (0..7).map { 4_400_000_000L + it * 600_000_000L }
+        val expected = listOf(0, 0, 0, 0, 0, 0, 0, 0, 8, 1)
         times.forEachIndexed { index, timestamp ->
             addPeak(validator, timestamp)
             assertEquals(expected[index], validator.acceptStepDetector(timestamp))
+        }
+    }
+
+    @Test fun rapidShakeLikePulsesDoNotConfirmWalking() {
+        val validator = StepMotionValidator()
+        repeat(12) { index ->
+            val timestamp = 1_000_000_000L + index * 180_000_000L
+            addPeak(validator, timestamp)
+            assertEquals(0, validator.acceptStepDetector(timestamp))
         }
     }
 
