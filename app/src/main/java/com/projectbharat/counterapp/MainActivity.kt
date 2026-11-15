@@ -87,6 +87,16 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
+    var launchCounterKind by mutableStateOf<String?>(null)
+        private set
+    fun consumeLaunchCounterKind() { launchCounterKind = null }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == ACTION_OPEN_COUNTER) launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
+    }
+
     override fun onStop() {
         // Keep the step foreground service alive; stop microphone recognition when the app leaves the foreground.
         ChantRecognitionService.stop(this)
@@ -94,6 +104,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
         installSplashScreen()
         super.onCreate(savedInstanceState)
         stopService(Intent(this, ChantRecognitionService::class.java))
@@ -103,6 +114,10 @@ class MainActivity : ComponentActivity() {
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
         setContent { CounterApp(repo) }
+    }
+
+    companion object {
+        const val ACTION_OPEN_COUNTER = "com.projectbharat.counterapp.action.OPEN_COUNTER"
     }
 }
 
@@ -192,6 +207,8 @@ fun CounterApp(repo: CounterRepository) {
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = context as? MainActivity
+    val shortcutKind = activity?.launchCounterKind
     var mantraTarget by remember { mutableStateOf(context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_1", "राम") ?: "राम") }
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
@@ -229,6 +246,14 @@ fun CounterApp(repo: CounterRepository) {
     val haptic = LocalHapticFeedback.current
     val clickTone = remember { ToneGenerator(android.media.AudioManager.STREAM_SYSTEM, 35) }
     DisposableEffect(clickTone) { onDispose { clickTone.release() } }
+    LaunchedEffect(categories) {
+        CounterQuickActions.publishShortcuts(context, categories)
+        CounterHomeWidget.refresh(context)
+    }
+    LaunchedEffect(categories, shortcutKind) {
+        shortcutKind?.let { kind -> categories.firstOrNull { it.kind == kind }?.let { selectedId = it.id } }
+        if (shortcutKind != null) activity?.consumeLaunchCounterKind()
+    }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
     LaunchedEffect(Unit) { while (true) { delay(1000); clock = System.currentTimeMillis() } }
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
