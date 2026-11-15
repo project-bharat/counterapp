@@ -47,6 +47,7 @@ import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -356,6 +357,7 @@ class ChantRecognitionService : Service() {
             val modelDir = File(filesDir, modelName)
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
+            sendState(true, "Loading offline speech model…")
             model = Model(modelDir.absolutePath)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
@@ -479,6 +481,7 @@ class ChantRecognitionService : Service() {
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
         val zipFile = File(cacheDir, modelName + ".zip")
         val existingBytes = if (zipFile.exists()) zipFile.length() else 0L
+        sendState(true, "Downloading offline model · starting")
         val connection = URL(modelUrl).openConnection() as HttpURLConnection
         connection.connectTimeout = 20000; connection.readTimeout = 60000; connection.instanceFollowRedirects = true
         try {
@@ -493,20 +496,30 @@ class ChantRecognitionService : Service() {
             }
             if (response !in 200..299) throw IllegalStateException("Model download failed (" + response + ")")
             val append = response == HttpURLConnection.HTTP_PARTIAL && existingBytes > 0L
+            val totalBytes = if (append) existingBytes + connection.contentLengthLong else connection.contentLengthLong
+            var downloadedBytes = if (append) existingBytes else 0L
+            var lastProgressBytes = downloadedBytes
             connection.inputStream.use { input ->
-                FileOutputStream(zipFile, append).use { output ->
-                    val chunk = ByteArray(64 * 1024)
+                BufferedOutputStream(FileOutputStream(zipFile, append), 128 * 1024).use { output ->
+                    val chunk = ByteArray(128 * 1024)
                     while (true) {
                         if (Thread.currentThread().isInterrupted || stopRequested) throw InterruptedException("Model preparation paused")
                         val read = input.read(chunk)
                         if (read < 0) break
                         output.write(chunk, 0, read)
+                        downloadedBytes += read
+                        if (downloadedBytes - lastProgressBytes >= 4L * 1024L * 1024L) {
+                            lastProgressBytes = downloadedBytes
+                            val percent = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt().coerceIn(0, 100) else -1
+                            sendState(true, if (percent >= 0) "Downloading offline model · $percent%" else "Downloading offline model · " + downloadedBytes + " bytes")
+                        }
                     }
                 }
             }
+            sendState(true, "Extracting offline model…")
         } finally { connection.disconnect() }
         val staging = File(filesDir, modelName + "_extract").apply { deleteRecursively(); mkdirs() }
-        ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zip ->
+        ZipInputStream(BufferedInputStream(zipFile.inputStream(), 128 * 1024)).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 val safeName = entry.name.replace('\\', '/')
@@ -514,7 +527,7 @@ class ChantRecognitionService : Service() {
                 val output = File(staging, safeName)
                 if (entry.isDirectory) output.mkdirs() else {
                     output.parentFile?.mkdirs()
-                    FileOutputStream(output).use { zip.copyTo(it) }
+                    BufferedOutputStream(FileOutputStream(output), 128 * 1024).use { zip.copyTo(it, 128 * 1024) }
                 }
                 zip.closeEntry(); entry = zip.nextEntry
             }

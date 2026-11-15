@@ -390,10 +390,10 @@ fun CounterApp(repo: CounterRepository) {
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val detections by detectionFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
-    val page = if (dark) Color(0xFF0D1B2A) else Cream
-    val ink = if (dark) Color(0xFFEAF0F6) else Navy
-    val tapSurface = if (dark) Color(0xFF23466A) else SoftBlue
-    val scheme = if (dark) darkColorScheme(primary = Color(0xFF9FC7ED), secondary = Gold, background = page, surface = Color(0xFF172A3E))
+    val page = if (dark) Color(0xFF0B1420) else Cream
+    val ink = if (dark) Color(0xFFF2F5F8) else Navy
+    val tapSurface = if (dark) Color(0xFF263D52) else SoftBlue
+    val scheme = if (dark) darkColorScheme(primary = Color(0xFFB8D5F2), onPrimary = Color(0xFF102238), secondary = Color(0xFFE3BD73), onSecondary = Color(0xFF30230C), background = Color(0xFF0B1420), onBackground = Color(0xFFF2F5F8), surface = Color(0xFF172638), onSurface = Color(0xFFF2F5F8), surfaceVariant = Color(0xFF22384D), onSurfaceVariant = Color(0xFFC4D0DC), outline = Color(0xFF52677B))
                  else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
 
     MaterialTheme(colorScheme = scheme) {
@@ -481,6 +481,20 @@ fun CounterApp(repo: CounterRepository) {
                         )
                     }
                     Spacer(Modifier.weight(1f))
+                    IconButton(onClick = {
+                        remindersScreen = true; weekly = false; monthlyHistory = false
+                        categoryScreen = false; backupScreen = false
+                    }) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = if (english) "Reminders" else "स्मरणपत्रे", tint = Color(0xFFF3EEE3))
+                    }
+                    IconButton(onClick = {
+                        historyDate = LocalDate.now()
+                        historyMonth = LocalDate.now().withDayOfMonth(1)
+                        monthlyHistory = true; remindersScreen = false; weekly = false
+                        categoryScreen = false; backupScreen = false
+                    }) {
+                        Icon(Icons.Default.History, contentDescription = if (english) "History" else "इतिहास", tint = Color(0xFFF3EEE3))
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
 

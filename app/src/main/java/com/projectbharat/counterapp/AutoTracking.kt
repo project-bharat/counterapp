@@ -19,11 +19,18 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloatAsState
@@ -452,28 +459,34 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         shape = RoundedCornerShape(14.dp),
                         color = if (listeningOffline) Color(0xFFE4F5EA) else Color(0xFFF3EFF8)
                     ) {
-                        Column(Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                                 if (listeningOffline) {
-                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF16834F),
-                                        modifier = Modifier.size(22.dp).graphicsLayer(scaleX = micScale, scaleY = micScale))
-                                    Text(if (english) "LISTENING OFFLINE" else "ऑफलाइन ऐकत आहे",
-                                        color = Color(0xFF16834F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF16834F), modifier = Modifier.size(22.dp).graphicsLayer(scaleX = micScale, scaleY = micScale))
+                                    Text(if (english) "LISTENING OFFLINE" else "ऑफलाइन ऐकत आहे", modifier = Modifier.weight(1f), color = Color(0xFF16834F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                                 } else {
-                                    Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख",
-                                        color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF76528D), modifier = Modifier.size(20.dp))
+                                    Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", modifier = Modifier.weight(1f), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 }
                             }
-                            if (status.contains("Preparing", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true)) {
+                            if (status.contains("Preparing", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true) || status.contains("Extracting", true) || status.contains("Loading", true) || status.contains("लोड होत", true)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Text(if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…", color = ink, style = MaterialTheme.typography.bodySmall)
+                                    Text(status.ifBlank { if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…" }, color = ink, style = MaterialTheme.typography.bodySmall)
                                 }
                             } else {
-                                Text(transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
-                                    color = if (listeningOffline || matched) Color(0xFF16834F) else ink,
-                                    fontWeight = if (matched) FontWeight.Bold else FontWeight.Normal,
-                                    style = MaterialTheme.typography.bodyMedium)
+                                Box(Modifier.fillMaxWidth().clipToBounds().padding(top = 6.dp)) {
+                                    AnimatedContent(
+                                        targetState = transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
+                                        transitionSpec = { (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut()) },
+                                        label = "recognizedPhraseTicker"
+                                    ) { visibleText ->
+                                        Text(visibleText,
+                                            color = if (matched) (if (listeningOffline) Color(0xFF16834F) else ink).copy(alpha = 0.58f) else if (listeningOffline) Color(0xFF16834F) else ink,
+                                            fontWeight = if (matched) FontWeight.Medium else FontWeight.Normal,
+                                            style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                                    }
+                                }
                                 if (matched) Text(
                                     (if (english) "Mantra matched" else "मंत्र जुळला") + if (matchedCount > 0) " · +$matchedCount" else "",
                                     color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
