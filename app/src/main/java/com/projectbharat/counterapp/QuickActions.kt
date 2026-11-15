@@ -189,9 +189,9 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                 ids.forEach { id ->
                     val views = RemoteViews(context.packageName, R.layout.counter_widget)
                     views.setTextViewText(R.id.widget_date, todayLabel)
-                    views.setTextViewText(R.id.widget_baby_action, "👶  BABY\\n$babyCount moves\\n＋ Session")
-                    views.setTextViewText(R.id.widget_japa_action, "📿  JAPA\\n$mantraCount chants\\n＋ Start")
-                    views.setTextViewText(R.id.widget_steps_action, "👣  WALK\\n$stepCount steps\\n＋ Start")
+                    views.setTextViewText(R.id.widget_baby_action, "👶  BABY\n$babyCount moves\n＋ Session")
+                    views.setTextViewText(R.id.widget_japa_action, "📿  JAPA\n$mantraCount chants\n＋ Start")
+                    views.setTextViewText(R.id.widget_steps_action, "👣  WALK\n$stepCount steps\n＋ Start")
                     views.setOnClickPendingIntent(R.id.widget_baby_action, CounterQuickActions.activityPending(context, "BABY", 8101))
                     views.setOnClickPendingIntent(R.id.widget_japa_action, CounterQuickActions.activityPending(context, "MANTRA", 8102))
                     views.setOnClickPendingIntent(R.id.widget_steps_action, CounterQuickActions.activityPending(context, "STEPS", 8103))
