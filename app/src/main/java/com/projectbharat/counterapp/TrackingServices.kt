@@ -70,6 +70,10 @@ private object TrackingNotifications {
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(title).setContentText(text).setOngoing(true)
             .setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(android.R.drawable.ic_menu_my_calendar, "Start session",
+                CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_BABY, 7103))
+            .addAction(android.R.drawable.ic_media_play, "Start Japa",
+                CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_JAPA, 7104))
             .addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent).build()
     }
     fun stopPending(context: Context, service: Class<out Service>, id: Int): PendingIntent =
