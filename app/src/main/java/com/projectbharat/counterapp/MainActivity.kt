@@ -63,6 +63,7 @@ import androidx.compose.material3.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -119,7 +120,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
         launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        var splashContentReady = false
+        splashScreen.setKeepOnScreenCondition { !splashContentReady }
         super.onCreate(savedInstanceState)
         stopService(Intent(this, ChantRecognitionService::class.java))
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
@@ -127,7 +130,36 @@ class MainActivity : ComponentActivity() {
         DailyReminderScheduler.rescheduleAll(this)
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
-        setContent { CounterApp(repo) }
+        setContent {
+            SideEffect { splashContentReady = true }
+            var showBrandIntro by remember { mutableStateOf(true) }
+            LaunchedEffect(Unit) {
+                delay(850)
+                showBrandIntro = false
+            }
+            val darkTheme = isSystemInDarkTheme()
+            Box(Modifier.fillMaxSize()) {
+                CounterApp(repo)
+                if (showBrandIntro) {
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            if (darkTheme) Color(0xFF31413A) else Color(0xFFF3EEE3)
+                        ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            painter = painterResource(
+                                if (darkTheme) R.drawable.bilan_header_logo_light
+                                else R.drawable.bilan_header_logo_dark
+                            ),
+                            contentDescription = "Bilan Counter",
+                            modifier = Modifier.width(210.dp).height(82.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                }
+            }
+        }
     }
 
     companion object {
