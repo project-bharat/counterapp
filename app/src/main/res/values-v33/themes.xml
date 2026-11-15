@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Prefer the app icon on Android 13+ instead of an empty splash surface. -->
+    <style name="Theme.CounterApp">
+        <item name="android:windowSplashScreenBehavior">1</item>
+    </style>
+</resources>

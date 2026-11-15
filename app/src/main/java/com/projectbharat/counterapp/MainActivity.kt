@@ -120,30 +120,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
         launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
-        val splashScreen = installSplashScreen()
-        var splashContentReady = false
-        splashScreen.setKeepOnScreenCondition { !splashContentReady }
-        splashScreen.setOnExitAnimationListener { splashProvider ->
-            val splashView = splashProvider.view
-            val fadeOut = android.animation.ObjectAnimator.ofFloat(
-                splashView, android.view.View.ALPHA, 1f, 0f
-            )
-            val liftOut = android.animation.ObjectAnimator.ofFloat(
-                splashView, android.view.View.TRANSLATION_Y, 0f,
-                -splashView.height * 0.06f
-            )
-            android.animation.AnimatorSet().apply {
-                playTogether(fadeOut, liftOut)
-                duration = 260L
-                interpolator = android.view.animation.DecelerateInterpolator(1.6f)
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: android.animation.Animator) {
-                        splashProvider.remove()
-                    }
-                })
-                start()
-            }
-        }
+        // Use the Android SplashScreen API defaults. Android removes the splash
+        // automatically as soon as the first app frame is ready.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         stopService(Intent(this, ChantRecognitionService::class.java))
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
@@ -152,7 +131,6 @@ class MainActivity : ComponentActivity() {
         SeedData.initialize(this)
         val repo = CounterRepository(CounterDatabase.get(this).dao())
         setContent {
-            SideEffect { splashContentReady = true }
             CounterApp(repo)
         }
     }
