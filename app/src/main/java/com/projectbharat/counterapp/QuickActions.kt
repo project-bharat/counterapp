@@ -11,18 +11,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
-import androidx.core.app.ActivityCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import androidx.lifecycle.LifecycleService
 import com.projectbharat.counterapp.data.CounterDatabase
 import com.projectbharat.counterapp.data.CounterRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -42,10 +38,10 @@ object CounterQuickActions {
         val kinds = listOf("BABY", "MANTRA", "STEPS")
         val shortcuts = kinds.mapNotNull { kind ->
             val category = categories.firstOrNull { it.kind == kind } ?: return@mapNotNull null
-            val (short, long, action) = when (kind) {
-                "BABY" -> Triple("Baby", "Start baby movement session", ACTION_START_BABY)
-                "MANTRA" -> Triple("Japa", "Open Japa counter", ACTION_START_JAPA)
-                else -> Triple("Walk", "Start walking session", ACTION_START_WALK)
+            val (short, long) = when (kind) {
+                "BABY" -> "Baby" to "Start baby movement session"
+                "MANTRA" -> "Japa" to "Start Japa counter"
+                else -> "Walk" to "Start walking session"
             }
             ShortcutInfoCompat.Builder(context, "counter_${kind.lowercase()}")
                 .setShortLabel(short).setLongLabel(long)
@@ -53,6 +49,7 @@ object CounterQuickActions {
                 .setIntent(Intent(context, MainActivity::class.java)
                     .setAction(MainActivity.ACTION_OPEN_COUNTER)
                     .putExtra(EXTRA_COUNTER_KIND, kind)
+                    .putExtra("quick_start", true)
                     .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
                 .build()
         }
