@@ -28,7 +28,8 @@ data class BabySession(
     val timeToTenMs: Long? = null,
     val strength: String? = null,
     val note: String? = null,
-    @ColumnInfo(defaultValue = "'TEN_MOVEMENTS'") val trackingMode: String = "TWO_HOURS"
+    @ColumnInfo(defaultValue = "'TEN_MOVEMENTS'") val trackingMode: String = "TWO_HOURS",
+    @ColumnInfo(defaultValue = "0") val firstHourCount: Int = 0
 )
 
 @Entity(tableName = "baby_detections", indices = [Index("sessionId"), Index("timestamp")])
@@ -51,6 +52,18 @@ data class CounterLog(
     val strength: String? = null,
     val note: String? = null,
     val sessionId: Long? = null
+)
+
+@Entity(tableName = "walking_sessions", indices = [Index("categoryId"), Index("date"), Index("startedAt")])
+data class WalkingSession(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val categoryId: Long,
+    val date: String,
+    val startedAt: Long,
+    val endedAt: Long? = null,
+    val steps: Int = 0,
+    val distanceMeters: Double = 0.0,
+    val gpsReliable: Boolean = false
 )
 
 @Dao
@@ -93,6 +106,27 @@ interface CounterDao {
 
     @Insert
     suspend fun addLog(log: CounterLog): Long
+
+    @Insert
+    suspend fun insertWalkingSession(session: WalkingSession): Long
+
+    @Query("UPDATE walking_sessions SET steps=steps+:steps, distanceMeters=distanceMeters+:distanceMeters, gpsReliable=CASE WHEN gpsReliable=1 OR :distanceMeters>0 THEN 1 ELSE 0 END WHERE id=:id AND endedAt IS NULL")
+    suspend fun addWalkingMetrics(id: Long, steps: Int, distanceMeters: Double)
+
+    @Query("UPDATE walking_sessions SET endedAt=:endedAt WHERE id=:id AND endedAt IS NULL")
+    suspend fun finishWalkingSession(id: Long, endedAt: Long)
+
+    @Query("SELECT * FROM walking_sessions WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY startedAt DESC")
+    fun walkingSessionsForRange(categoryId: Long, fromDate: String, toDate: String): Flow<List<WalkingSession>>
+
+    @Query("SELECT * FROM walking_sessions ORDER BY id")
+    suspend fun allWalkingSessions(): List<WalkingSession>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWalkingSessions(items: List<WalkingSession>)
+
+    @Query("DELETE FROM walking_sessions")
+    suspend fun deleteAllWalkingSessions()
 
     @Insert
     suspend fun addBabyDetection(detection: BabyDetection): Long
@@ -186,7 +220,7 @@ interface CounterDao {
     suspend fun undoLatestBabyMovementAtomically(sessionId: Long): Boolean {
         val latest = latestSessionLog(sessionId) ?: return false
         deleteSessionLog(latest.id)
-        decrementBabySession(sessionId)
+        decrementBabySession(sessionId, latest.timestamp)
         return true
     }
 
@@ -238,7 +272,7 @@ interface CounterDao {
     @Query("SELECT * FROM baby_sessions WHERE categoryId=:categoryId AND startedAt > :lockStart ORDER BY startedAt DESC LIMIT 1")
     fun latestSessionFlow(categoryId: Long, lockStart: Long): Flow<BabySession?>
 
-    @Query("UPDATE baby_sessions SET movementCount=movementCount+1, timeToTenMs=CASE WHEN movementCount=9 AND timeToTenMs IS NULL THEN :durationMs ELSE timeToTenMs END WHERE id=:sessionId")
+    @Query("UPDATE baby_sessions SET movementCount=movementCount+1, timeToTenMs=CASE WHEN movementCount=9 AND timeToTenMs IS NULL THEN :durationMs ELSE timeToTenMs END, firstHourCount=CASE WHEN :durationMs<=3600000 THEN firstHourCount+1 ELSE firstHourCount END WHERE id=:sessionId")
     suspend fun incrementBabySession(sessionId: Long, durationMs: Long)
 
     @Query("UPDATE baby_sessions SET endedAt=:endedAt, strength=:strength WHERE id=:sessionId")
@@ -259,13 +293,13 @@ interface CounterDao {
     @Query("DELETE FROM counter_logs WHERE id=:id")
     suspend fun deleteSessionLog(id: Long)
 
-    @Query("UPDATE baby_sessions SET timeToTenMs=CASE WHEN movementCount=10 THEN NULL ELSE timeToTenMs END, movementCount=CASE WHEN movementCount>0 THEN movementCount-1 ELSE 0 END WHERE id=:sessionId")
-    suspend fun decrementBabySession(sessionId: Long)
+    @Query("UPDATE baby_sessions SET timeToTenMs=CASE WHEN movementCount=10 THEN NULL ELSE timeToTenMs END, movementCount=CASE WHEN movementCount>0 THEN movementCount-1 ELSE 0 END, firstHourCount=CASE WHEN :timestamp<startedAt+3600000 AND firstHourCount>0 THEN firstHourCount-1 ELSE firstHourCount END WHERE id=:sessionId")
+    suspend fun decrementBabySession(sessionId: Long, timestamp: Long)
 }
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class], version = 6, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class, WalkingSession::class], version = 7, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
@@ -304,9 +338,18 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_counter_logs_categoryId_date_note ON counter_logs(categoryId, date, note)")
             }
         }
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE baby_sessions ADD COLUMN firstHourCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS walking_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, categoryId INTEGER NOT NULL, date TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, steps INTEGER NOT NULL DEFAULT 0, distanceMeters REAL NOT NULL DEFAULT 0.0, gpsReliable INTEGER NOT NULL DEFAULT 0)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_walking_sessions_categoryId ON walking_sessions(categoryId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_walking_sessions_date ON walking_sessions(date)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_walking_sessions_startedAt ON walking_sessions(startedAt)")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { INSTANCE = it }
         }
     }
 }
