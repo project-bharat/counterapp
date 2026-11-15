@@ -486,6 +486,8 @@ fun CounterApp(repo: CounterRepository) {
                         remainingMs = remainingMs,
                         sessions = sessions,
                         detections = detections,
+                        recentLogs = historyLogs,
+                        onViewHistory = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true },
                         historyDate = historyDate,
                         onPreviousDay = { historyDate = historyDate.minusDays(1) },
                         onNextDay = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
@@ -521,7 +523,7 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 }
                 }
-                if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
+                if (selected != null && selected.kind != "BABY" && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
                     if (selected.kind != "MANTRA" && historyLogs.isNotEmpty()) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
@@ -595,7 +597,7 @@ fun CounterApp(repo: CounterRepository) {
 @Composable
 private fun BabyMovementScreen(
     english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
-    resumableSession: BabySession?, lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, historyDate: LocalDate,
+    resumableSession: BabySession?, lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, recentLogs: List<CounterLog>, onViewHistory: () -> Unit, historyDate: LocalDate,
     onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onResume: (Long) -> Unit, onTap: (Long) -> Unit,
     onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long, Long, Float) -> Unit,
     onConfirmDetections: (List<Long>) -> Unit, onDismissDetections: (List<Long>) -> Unit
@@ -636,14 +638,14 @@ private fun BabyMovementScreen(
                 Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(if (english) "MOVEMENTS" else "हालचाली", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
-                        Surface(
-                            modifier = Modifier.padding(top = 4.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            color = tapSurface.copy(alpha = .55f)
-                        ) {
-                            TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0) {
-                                Icon(Icons.Default.Undo, null); Spacer(Modifier.width(5.dp)); Text(if (english) "Undo" else "मागे")
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Text(activeSession.movementCount.toString(), color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                            Surface(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp), shape = RoundedCornerShape(9.dp), color = tapSurface.copy(alpha = .65f)) {
+                                TextButton(onClick = { if (activeSession.movementCount > 0) onUndo(activeSession.id) }, enabled = activeSession.movementCount > 0,
+                                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 2.dp), modifier = Modifier.height(34.dp)) {
+                                    Icon(Icons.Default.Undo, null, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(3.dp))
+                                    Text(if (english) "Undo" else "मागे", style = MaterialTheme.typography.labelSmall)
+                                }
                             }
                         }
                     }
@@ -656,7 +658,7 @@ private fun BabyMovementScreen(
                         Box(
                             Modifier.size(138.dp)
                                 .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
-                                .background(Brush.linearGradient(listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
+                                .background(Brush.linearGradient(if (activeSession.movementCount >= 10) listOf(Color(0xFFE2F5E8), Color(0xFFC6EBD2)) else listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
                                     tapScope.launch { tapScale.animateTo(.92f, tween(90)); tapScale.animateTo(1f, tween(180)) }
                                     onTap(activeSession.id)
@@ -715,52 +717,37 @@ private fun BabyMovementScreen(
             }
         }
         if (detections.isNotEmpty() || autoDetect) {
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Navy)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (english) "AUTO DETECTED KICKS" else "आपोआप ओळखलेल्या हालचाली", color = Color.White, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.fillMaxWidth().padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Navy).padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(if (english) "AUTO DETECTED" else "स्वयंचलित ओळख", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        if (autoDetect) {
+                            val ready = autoStatus.contains("Ready", true) || autoStatus.contains("तयार", true)
+                            Text(if (ready) (if (english) "READY" else "तयार") else if (autoStatus.isNotBlank()) autoStatus else (if (english) "STARTING…" else "सुरू होत आहे…"),
+                                color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                        } else Text(if (english) "OFF" else "बंद", color = Color.White.copy(alpha = .8f), style = MaterialTheme.typography.labelSmall)
+                    }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (english) "Detected" else "ओळखले", color = Color.White.copy(alpha=.75f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                            Text(pending.toString(), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                            Text(if (english) "Detected" else "ओळखले", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(pending.toString(), color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                         }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (english) "Added" else "जोडले", color = Color.White.copy(alpha=.75f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                            Text(added.toString(), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
+                            Text(if (english) "Added" else "जोडले", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                            Text(added.toString(), color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                         }
                     }
-                    if (pending > 0) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, modifier = Modifier.weight(1f)) {
-                                Text(if (english) "Add all" else "सर्व जोडा")
-                            }
-                            OutlinedButton(onClick = { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, modifier = Modifier.weight(1f)) {
-                                Text(if (english) "Dismiss" else "वगळा")
-                            }
+                    if (pending > 0) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        TextButton(onClick = { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)) {
+                            Text(if (english) "Add all" else "सर्व जोडा", style = MaterialTheme.typography.labelSmall)
                         }
-                    }
-                    if (autoDetect) {
-                        val calibrating = autoStatus.contains("Calibrating", true) || autoStatus.contains("कॅलिब्रेट", true)
-                        val ready = autoStatus.equals("Ready", true) || autoStatus.contains("Ready", true)
-                        if (calibrating) {
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                CircularProgressIndicator(Modifier.size(17.dp), strokeWidth = 2.dp)
-                                Text(if (english) "Calibrating…" else "कॅलिब्रेट होत आहे…", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelMedium)
-                            }
-                        } else if (ready) {
-                            val readyPulse = rememberInfiniteTransition(label = "babyReadyPulse")
-                            val readyAlpha by readyPulse.animateFloat(initialValue = .25f, targetValue = 1f,
-                                animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "readyAlpha")
-                            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Box(Modifier.size(9.dp).graphicsLayer(alpha = readyAlpha).background(Color(0xFF1D9A5B), CircleShape))
-                                Text(if (english) "READY · AUTO DETECTING" else "तयार · स्वयंचलित ओळख सुरू", color = Color(0xFF1D9A5B), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                        } else if (autoStatus.isNotBlank()) {
-                            Text(autoStatus, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)) {
+                            Text(if (english) "Dismiss" else "वगळा", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
             }
-        }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(if (english) "HISTORY" else "इतिहास", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -788,15 +775,26 @@ private fun BabyMovementScreen(
                 }
             }
         }
+        if (recentLogs.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                recentLogs.take(2).forEach { item ->
+                    Text(sessionTime(item.timestamp) + " · +" + item.count, color = ink.copy(alpha = .75f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+            }
+        }
+        TextButton(onClick = onViewHistory, modifier = Modifier.align(Alignment.End)) {
+            Icon(Icons.Default.History, null); Spacer(Modifier.width(5.dp))
+            Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
+        }
         Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .65f))) {
             Column(Modifier.padding(13.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().clickable { guidanceExpanded = !guidanceExpanded },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Navy).clickable { guidanceExpanded = !guidanceExpanded }.padding(horizontal = 12.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(if (english) "MOVEMENT GUIDANCE" else "हालचालींबाबत सूचना", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Text(if (guidanceExpanded) (if (english) "Less −" else "कमी −") else (if (english) "More +" else "अधिक +"), color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    Text(if (english) "MOVEMENT GUIDANCE" else "हालचालींबाबत सूचना", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(if (guidanceExpanded) (if (english) "Less −" else "कमी −") else (if (english) "More +" else "अधिक +"), color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 }
                 Text(
                     if (english) "If movements become less frequent or feel different from your baby's usual pattern, contact your maternity-care professional promptly. Do not wait for the timer."
