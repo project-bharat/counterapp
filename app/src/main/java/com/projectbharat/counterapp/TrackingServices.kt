@@ -32,6 +32,11 @@ import androidx.core.content.ContextCompat
 import com.projectbharat.counterapp.data.CounterDatabase
 import com.projectbharat.counterapp.data.CounterLog
 import com.projectbharat.counterapp.data.WalkingSession
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityTransition
+import com.google.android.gms.location.ActivityTransitionRequest
+import com.google.android.gms.location.ActivityTransitionResult
+import com.google.android.gms.location.DetectedActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -81,16 +86,43 @@ private object TrackingNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 }
 
+class ActivityTransitionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (!com.google.android.gms.location.ActivityTransitionResult.hasResult(intent)) return
+        val result = com.google.android.gms.location.ActivityTransitionResult.extractResult(intent) ?: return
+        val prefs = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE)
+        result.transitionEvents.forEach { event ->
+            when {
+                event.activityType == com.google.android.gms.location.DetectedActivity.ON_FOOT &&
+                    event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER ->
+                    prefs.edit().putBoolean("activity_on_foot", true).apply()
+                event.activityType == com.google.android.gms.location.DetectedActivity.STILL &&
+                    event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER ->
+                    prefs.edit().putBoolean("activity_on_foot", false).apply()
+                event.activityType == com.google.android.gms.location.DetectedActivity.IN_VEHICLE &&
+                    event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER ->
+                    prefs.edit().putBoolean("activity_on_foot", false).apply()
+                event.activityType == com.google.android.gms.location.DetectedActivity.ON_BICYCLE &&
+                    event.transitionType == com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER ->
+                    prefs.edit().putBoolean("activity_on_foot", false).apply()
+            }
+        }
+    }
+}
+
 class StepTrackingService : Service(), SensorEventListener {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var sensorManager: SensorManager
-        private lateinit var locationManager: LocationManager
+    private lateinit var locationManager: LocationManager
     private var gpsListener: LocationListener? = null
     private var categoryId = -1L
     private var today = ""
     @Volatile private var walkSessionId = -1L
+    @Volatile private var activityTransitionsReady = false
     private var lastReliableLocation: Location? = null
     private val motionValidator = StepMotionValidator()
+    private lateinit var stepCounterDelta: StepCounterDeltaTracker
+    private var transitionPendingIntent: PendingIntent? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -101,74 +133,83 @@ class StepTrackingService : Service(), SensorEventListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val state = getSharedPreferences("tracking_state", MODE_PRIVATE)
         if (intent?.action == ACTION_STOP) {
-            state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
+            state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false)
+                .putBoolean("activity_on_foot", false).apply()
+            removeActivityTransitions()
             scope.launch {
-                if (walkSessionId > 0L) CounterDatabase.get(this@StepTrackingService).dao().finishWalkingSession(walkSessionId, System.currentTimeMillis())
+                if (walkSessionId > 0L) CounterDatabase.get(this@StepTrackingService).dao()
+                    .finishWalkingSession(walkSessionId, System.currentTimeMillis())
                 stopSelf(startId)
             }
             return START_NOT_STICKY
         }
         categoryId = intent?.getLongExtra(EXTRA_CATEGORY_ID, -1L) ?: state.getLong("step_category", -1L)
         if (categoryId <= 0 || (Build.VERSION.SDK_INT >= 29 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED)) {
             stopSelf(); return START_NOT_STICKY
         }
         state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).putBoolean("steps_running", true).apply()
         val notification = TrackingNotifications.show(this, TrackingNotifications.STEP_ID, "CounterApp · Steps",
             "Walking detection is active",
             TrackingNotifications.stopPending(this, StepTrackingService::class.java, TrackingNotifications.STEP_ID))
-        if (Build.VERSION.SDK_INT >= 34) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        else if (Build.VERSION.SDK_INT >= 29) ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        else ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
+        if (Build.VERSION.SDK_INT >= 34) {
+            ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+        } else {
+            ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
+        }
 
-        val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+        val stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        val stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
         val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (detector == null || accelerometer == null) {
+        if (stepCounter == null && (stepDetector == null || accelerometer == null)) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
             stopSelf(); return START_NOT_STICKY
         }
+        stepCounterDelta = StepCounterDeltaTracker(state.getInt("last_hardware_step_total", -1))
+        requestActivityTransitions()
         today = LocalDate.now().toString()
         scope.launch {
             val dao = CounterDatabase.get(this@StepTrackingService).dao()
             val sessionStart = System.currentTimeMillis()
             dao.finishOpenWalkingSessions(categoryId, sessionStart)
-            walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = System.currentTimeMillis()))
-            sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_NORMAL)
-            sensorManager.registerListener(this@StepTrackingService, accelerometer, SensorManager.SENSOR_DELAY_GAME)
-            val listener = object : LocationListener {
-                override fun onLocationChanged(location: Location) {
-                    val now = System.currentTimeMillis()
-                    var reliableDistance = 0.0
-                    if (location.hasAccuracy() && location.accuracy <= 10f) {
-                        val previous = lastReliableLocation
-                        if (previous != null) {
-                            val gap = now - previous.time
-                            val segment = previous.distanceTo(location).toDouble()
-                            val speed = if (gap > 0) segment / (gap / 1000.0) else Double.POSITIVE_INFINITY
-                            if (gap in 1L..20_000L && segment in 2.0..40.0 && speed in 0.35..3.0) reliableDistance = segment
+            walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = sessionStart))
+            stepCounter?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL) }
+            stepDetector?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL) }
+            accelerometer?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_GAME) }
+
+            // GPS is optional and is used only for distance; step counting never depends on it.
+            if (ContextCompat.checkSelfPermission(this@StepTrackingService, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+                locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                val listener = object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        val now = System.currentTimeMillis()
+                        var reliableDistance = 0.0
+                        if (location.hasAccuracy() && location.accuracy <= 10f) {
+                            val previous = lastReliableLocation
+                            if (previous != null) {
+                                val gap = now - previous.time
+                                val segment = previous.distanceTo(location).toDouble()
+                                val speed = if (gap > 0) segment / (gap / 1000.0) else Double.POSITIVE_INFINITY
+                                if (gap in 1L..20_000L && segment in 2.0..40.0 && speed in 0.35..3.0) reliableDistance = segment
+                            }
+                            lastReliableLocation = Location(location)
+                        } else lastReliableLocation = null
+                        if (reliableDistance <= 0.0) return
+                        scope.launch {
+                            if (walkSessionId > 0L) CounterDatabase.get(this@StepTrackingService).dao()
+                                .addWalkingMetrics(walkSessionId, 0, reliableDistance)
                         }
-                        lastReliableLocation = Location(location)
-                    } else lastReliableLocation = null
-                    if (reliableDistance <= 0.0) return
-                    scope.launch {
-                        val dao = CounterDatabase.get(this@StepTrackingService).dao()
-                        if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, 0, reliableDistance)
                     }
+                    @Deprecated("Deprecated in Java") override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+                    override fun onProviderEnabled(provider: String) = Unit
+                    override fun onProviderDisabled(provider: String) = Unit
                 }
-                @Deprecated("Deprecated in Java") override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
-                override fun onProviderEnabled(provider: String) = Unit
-                override fun onProviderDisabled(provider: String) = Unit
-            }
-            gpsListener = listener
-            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                gpsListener = listener
                 try {
                     locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000L, 0f, listener, Looper.getMainLooper())
                     locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.let(listener::onLocationChanged)
                 } catch (error: SecurityException) {
-                    Log.w("CounterAppSteps", "GPS permission was not available; sensor step counting continues", error)
+                    Log.w("CounterAppSteps", "Optional GPS distance is unavailable; step counting continues", error)
                 }
             }
         }
@@ -176,29 +217,76 @@ class StepTrackingService : Service(), SensorEventListener {
         return START_STICKY
     }
 
+    private fun requestActivityTransitions() {
+        val transitions = listOf(
+            com.google.android.gms.location.ActivityTransition.Builder()
+                .setActivityType(com.google.android.gms.location.DetectedActivity.ON_FOOT)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build(),
+            com.google.android.gms.location.ActivityTransition.Builder()
+                .setActivityType(com.google.android.gms.location.DetectedActivity.STILL)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build(),
+            com.google.android.gms.location.ActivityTransition.Builder()
+                .setActivityType(com.google.android.gms.location.DetectedActivity.IN_VEHICLE)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build(),
+            com.google.android.gms.location.ActivityTransition.Builder()
+                .setActivityType(com.google.android.gms.location.DetectedActivity.ON_BICYCLE)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build()
+        )
+        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+        val pending = PendingIntent.getBroadcast(this, ACTIVITY_TRANSITION_REQUEST_CODE,
+            Intent(this, ActivityTransitionReceiver::class.java).setAction(ACTION_ACTIVITY_TRANSITIONS), pendingFlags)
+        transitionPendingIntent = pending
+        com.google.android.gms.location.ActivityRecognition.getClient(this)
+            .requestActivityTransitionUpdates(com.google.android.gms.location.ActivityTransitionRequest(transitions), pending)
+            .addOnSuccessListener { activityTransitionsReady = true }
+            .addOnFailureListener { activityTransitionsReady = false }
+    }
+
+    private fun removeActivityTransitions() {
+        val pending = transitionPendingIntent ?: run {
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+            PendingIntent.getBroadcast(this, ACTIVITY_TRANSITION_REQUEST_CODE,
+                Intent(this, ActivityTransitionReceiver::class.java).setAction(ACTION_ACTIVITY_TRANSITIONS), flags)
+        }
+        runCatching { com.google.android.gms.location.ActivityRecognition.getClient(this).removeActivityTransitionUpdates(pending) }
+        pending.cancel()
+        transitionPendingIntent = null
+        activityTransitionsReady = false
+    }
+
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             motionValidator.addAcceleration(event.timestamp, event.values[0], event.values[1], event.values[2])
             return
         }
-        if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR) return
-
-        // Do not publish individual detector pulses. Require eight consecutive
-        // cadence-valid pulses, each matched to an accelerometer impact.
+        if (event.sensor.type == Sensor.TYPE_STEP_COUNTER) {
+            val delta = stepCounterDelta.update(event.values[0].toInt())
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
+                .putInt("last_hardware_step_total", stepCounterDelta.lastValue).apply()
+            if (activityTransitionsReady && delta > 0 &&
+                getSharedPreferences("tracking_state", MODE_PRIVATE).getBoolean("activity_on_foot", false)) {
+                recordSteps(delta, "ACTIVITY_GATED_STEP_COUNTER")
+            }
+            return
+        }
+        if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR || activityTransitionsReady) return
         val validatedSteps = motionValidator.acceptStepDetector(event.timestamp)
-        if (validatedSteps <= 0) return
+        if (validatedSteps > 0) recordSteps(validatedSteps, "VALIDATED_STEP_DETECTOR")
+    }
 
+    private fun recordSteps(steps: Int, source: String) {
+        if (steps <= 0) return
         val now = System.currentTimeMillis()
         val dateNow = LocalDate.now().toString()
         scope.launch {
             val dao = CounterDatabase.get(this@StepTrackingService).dao()
-            dao.addLog(
-                CounterLog(date = dateNow, timestamp = now, categoryId = categoryId,
-                    count = validatedSteps, note = "VALIDATED_STEP_DETECTOR")
-            )
-            if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, validatedSteps, 0.0)
+            dao.addLog(CounterLog(date = dateNow, timestamp = now, categoryId = categoryId,
+                count = steps, note = source))
+            if (walkSessionId > 0L) dao.addWalkingMetrics(walkSessionId, steps, 0.0)
             sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", validatedSteps))
+                .putExtra(EXTRA_TRACKING_KIND, "steps").putExtra("delta", steps))
         }
     }
 
@@ -207,7 +295,7 @@ class StepTrackingService : Service(), SensorEventListener {
         sensorManager.unregisterListener(this)
         gpsListener?.let { runCatching { locationManager.removeUpdates(it) } }
         gpsListener = null
-        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).putBoolean("steps_enabled", false).apply()
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).apply()
         sendState(false)
         scope.cancel()
         super.onDestroy()
@@ -218,6 +306,8 @@ class StepTrackingService : Service(), SensorEventListener {
 
     companion object {
         const val EXTRA_CATEGORY_ID = "category_id"
+        private const val ACTIVITY_TRANSITION_REQUEST_CODE = 7105
+        private const val ACTION_ACTIVITY_TRANSITIONS = "com.projectbharat.counterapp.ACTIVITY_TRANSITIONS"
         fun start(context: Context, categoryId: Long) = ContextCompat.startForegroundService(
             context, Intent(context, StepTrackingService::class.java).putExtra(EXTRA_CATEGORY_ID, categoryId))
         fun stop(context: Context) { context.startService(Intent(context, StepTrackingService::class.java).setAction(ACTION_STOP)) }

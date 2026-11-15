@@ -101,11 +101,10 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
 fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, sessions: List<WalkingSession>, range: String, onRangeChange: (String) -> Unit, english: Boolean, ink: Color) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null && sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null }
+    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null || (sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null && sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) }
     var permissionGranted by remember {
-        mutableStateOf((Build.VERSION.SDK_INT < 29 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED) &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
+        mutableStateOf(Build.VERSION.SDK_INT < 29 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
     }
     var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", false)) }
     var message by remember { mutableStateOf("") }
@@ -122,24 +121,13 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, se
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startService() else message = if (english) "Notification permission is required" else "सूचना परवानगी आवश्यक आहे"
     }
-    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            permissionGranted = Build.VERSION.SDK_INT < 29 || ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            else startService()
-        } else message = if (english) "Location permission is required for step verification" else "पावलांची पडताळणी करण्यासाठी लोकेशन परवानगी आवश्यक आहे"
-    }
     val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted
         if (granted) {
-            permissionGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
-                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             else startService()
-        } else message = if (english) "Activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
+        } else message = if (english) "Physical activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
     }
 
     DisposableEffect(context) {
@@ -230,7 +218,6 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, se
                     onClick = {
                         if (running) { StepTrackingService.stop(context); running = false }
                         else if (Build.VERSION.SDK_INT >= 29 && ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-                        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                         else startService()
                     },

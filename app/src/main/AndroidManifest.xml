@@ -26,12 +26,13 @@
             android:name=".StepTrackingService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="health|location" />
+            android:foregroundServiceType="health" />
         <service
             android:name=".ChantRecognitionService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <receiver android:name=".ActivityTransitionReceiver" android:enabled="true" android:exported="false" />
         <receiver android:name=".DailyReminderReceiver" android:exported="false" />
         <receiver android:name=".QuickActionReceiver" android:enabled="true" android:exported="false" />
         <receiver android:name=".CounterHomeWidget" android:enabled="true" android:exported="true" android:label="Daily Counter">

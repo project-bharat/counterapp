@@ -272,8 +272,7 @@ fun CounterApp(repo: CounterRepository) {
                     "STEPS" -> {
                         val activityGranted = Build.VERSION.SDK_INT < 29 ||
                             ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
-                        val locationGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                        if (activityGranted && locationGranted) StepTrackingService.start(context, category.id)
+                        if (activityGranted) StepTrackingService.start(context, category.id)
                     }
                     "MANTRA" -> {
                         val micGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
