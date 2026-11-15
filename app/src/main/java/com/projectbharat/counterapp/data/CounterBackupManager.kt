@@ -16,6 +16,7 @@ object CounterBackupManager {
         val logs = dao.allLogs()
         val sessions = dao.allBabySessions()
         val detections = dao.allBabyDetections()
+        val walkingSessions = dao.allWalkingSessions()
         val root = JSONObject().put("formatVersion", FORMAT_VERSION)
             .put("app", "Daily Counter")
             .put("exportedAt", System.currentTimeMillis())
@@ -36,13 +37,18 @@ object CounterBackupManager {
         root.put("babyDetections", JSONArray().apply {
             detections.forEach { d -> put(JSONObject().put("id", d.id).put("sessionId", d.sessionId).put("timestamp", d.timestamp).put("magnitude", d.magnitude.toDouble()).put("status", d.status)) }
         })
+        root.put("walkingSessions", JSONArray().apply {
+            walkingSessions.forEach { s -> put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
+                .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt).put("steps", s.steps)
+                .put("distanceMeters", s.distanceMeters).put("gpsReliable", s.gpsReliable)) }
+        })
         root.put("babySessions", JSONArray().apply {
             sessions.forEach { s ->
                 put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
                     .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt)
                     .put("dayPeriod", s.dayPeriod).put("movementCount", s.movementCount)
                     .putNullable("timeToTenMs", s.timeToTenMs).putNullable("strength", s.strength)
-                    .putNullable("note", s.note).put("trackingMode", s.trackingMode))
+                    .putNullable("note", s.note).put("trackingMode", s.trackingMode).put("firstHourCount", s.firstHourCount))
             }
         })
         context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(root.toString(2)) }
@@ -59,6 +65,7 @@ object CounterBackupManager {
         val logArray = root.getJSONArray("logs")
         val sessionArray = root.getJSONArray("babySessions")
         val detectionArray = root.optJSONArray("babyDetections") ?: JSONArray()
+        val walkingArray = root.optJSONArray("walkingSessions") ?: JSONArray()
         require(categoryArray.length() > 0) { "Backup contains no categories" }
 
         val categories = (0 until categoryArray.length()).map { i ->
@@ -77,16 +84,22 @@ object CounterBackupManager {
             BabySession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"),
                 o.getLong("startedAt"), o.longOrNull("endedAt"), o.getString("dayPeriod"),
                 o.optInt("movementCount", 0), o.longOrNull("timeToTenMs"),
-                o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TWO_HOURS"))
+                o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TWO_HOURS"), o.optInt("firstHourCount", 0))
         }
 
         val detections = (0 until detectionArray.length()).map { i ->
             val o = detectionArray.getJSONObject(i)
             BabyDetection(o.getLong("id"), o.getLong("sessionId"), o.getLong("timestamp"), o.getDouble("magnitude").toFloat(), o.optString("status", "PENDING"))
         }
+        val walkingSessions = (0 until walkingArray.length()).map { i ->
+            val o = walkingArray.getJSONObject(i)
+            WalkingSession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"), o.getLong("startedAt"),
+                o.longOrNull("endedAt"), o.optInt("steps", 0), o.optDouble("distanceMeters", 0.0), o.optBoolean("gpsReliable", false))
+        }
         require(detections.all { d -> sessions.any { it.id == d.sessionId } && d.status in setOf("PENDING", "CONFIRMED", "DISMISSED") }) { "Invalid baby detection records" }
+        require(walkingSessions.all { it.steps >= 0 && it.distanceMeters >= 0.0 && categories.any { c -> c.id == it.categoryId } }) { "Invalid walking session records" }
         BackupSnapshotValidator.validate(categories, logs, sessions)
-        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions, detections)
+        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions, detections, walkingSessions)
     }
 
     suspend fun exportCsv(context: Context, uri: Uri) {
