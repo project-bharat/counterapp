@@ -204,3 +204,86 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
         }
     }
 }
+
+
+object BabySessionNotification {
+    private const val CHANNEL = "baby_active_session"
+    private const val NOTIFICATION_ID = 7201
+    const val ACTION_ADD = "com.projectbharat.counterapp.action.BABY_ADD"
+    const val ACTION_UNDO = "com.projectbharat.counterapp.action.BABY_UNDO"
+    const val ACTION_FINISH = "com.projectbharat.counterapp.action.BABY_FINISH"
+
+    fun show(context: Context, sessionId: Long, categoryId: Long, movementCount: Int) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Baby movement session", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Controls for the active baby movement session"
+                setShowBadge(false)
+            })
+        }
+        fun action(action: String, code: Int): PendingIntent =
+            PendingIntent.getBroadcast(context, code,
+                Intent(context, BabySessionActionReceiver::class.java).setAction(action)
+                    .putExtra("session_id", sessionId).putExtra("category_id", categoryId),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("Baby movement session")
+            .setContentText("$movementCount movements recorded · Tap to open")
+            .setContentIntent(CounterQuickActions.activityPending(context, "BABY", 7202))
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .addAction(android.R.drawable.ic_input_add, "+1", action(ACTION_ADD, 7203))
+            .addAction(android.R.drawable.ic_menu_revert, "Undo", action(ACTION_UNDO, 7204))
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Finish", action(ACTION_FINISH, 7205))
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
+    }
+
+    fun cancel(context: Context) {
+        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+    }
+}
+
+class BabySessionActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        val action = intent?.action ?: return
+        val sessionId = intent.getLongExtra("session_id", -1L)
+        val categoryId = intent.getLongExtra("category_id", -1L)
+        if (sessionId <= 0L || categoryId <= 0L) return
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                val repo = CounterRepository(CounterDatabase.get(context).dao())
+                val session = repo.latestBabySession(categoryId).first()
+                if (session == null || session.id != sessionId || session.endedAt != null) {
+                    BabySessionNotification.cancel(context)
+                    return@launch
+                }
+                when (action) {
+                    BabySessionNotification.ACTION_ADD -> repo.addBabyMovement(categoryId, sessionId, null)
+                    BabySessionNotification.ACTION_UNDO -> repo.undoBabyMovement(sessionId)
+                    BabySessionNotification.ACTION_FINISH -> {
+                        repo.finishBabySession(sessionId, null)
+                        BabySessionNotification.cancel(context)
+                        CounterHomeWidget.refresh(context)
+                        return@launch
+                    }
+                    else -> return@launch
+                }
+                val updated = repo.latestBabySession(categoryId).first()
+                if (updated != null && updated.id == sessionId && updated.endedAt == null) {
+                    BabySessionNotification.show(context, updated.id, updated.categoryId, updated.movementCount)
+                } else BabySessionNotification.cancel(context)
+                CounterHomeWidget.refresh(context)
+            } catch (_: Exception) {
+                // Keep the action silent; the app can reopen the session if the database is unavailable.
+            } finally {
+                pending.finish()
+            }
+        }
+    }
+}
