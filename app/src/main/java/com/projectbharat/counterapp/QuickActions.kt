@@ -100,6 +100,9 @@ class QuickActionReceiver : BroadcastReceiver() {
                 }
             } catch (_: Exception) {
                 // Permission and foreground-service failures are handled when the user opens the selected counter.
+                CounterHomeWidget.refresh(app)
+            } catch (_: Exception) {
+                // No action is run when a required counter is unavailable.
             } finally {
                 pending.finish()
             }
@@ -142,9 +145,9 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                 ids.forEach { id ->
                     val views = RemoteViews(context.packageName, R.layout.counter_widget)
                     views.setTextViewText(R.id.widget_date, today)
-                    views.setTextViewText(R.id.widget_baby_count, babyCount.toString())
-                    views.setTextViewText(R.id.widget_japa_count, mantraCount.toString())
-                    views.setTextViewText(R.id.widget_steps_count, stepCount.toString())
+                    views.setTextViewText(R.id.widget_baby_action, "BABY\\n$babyCount moves\\n＋ Session")
+                    views.setTextViewText(R.id.widget_japa_action, "JAPA\\n$mantraCount chants\\n＋ Start")
+                    views.setTextViewText(R.id.widget_steps_action, "WALK\\n$stepCount steps\\n＋ Start")
                     views.setOnClickPendingIntent(R.id.widget_baby_action, CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_BABY, 8101))
                     views.setOnClickPendingIntent(R.id.widget_japa_action, CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_JAPA, 8102))
                     views.setOnClickPendingIntent(R.id.widget_steps_action, CounterQuickActions.pending(context, CounterQuickActions.ACTION_START_WALK, 8103))
