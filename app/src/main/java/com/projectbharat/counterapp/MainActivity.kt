@@ -655,6 +655,7 @@ private fun BabyMovementScreen(
                             }
                         }
                     }
+                    Spacer(Modifier.height(20.dp))
                     Box(Modifier.size(166.dp), contentAlignment = Alignment.Center) {
                         Canvas(Modifier.fillMaxSize()) {
                             drawCircle(tapSurface, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx()))
