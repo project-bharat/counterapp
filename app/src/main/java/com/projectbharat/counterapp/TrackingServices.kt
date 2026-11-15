@@ -263,24 +263,25 @@ class ChantRecognitionService : Service() {
             if (stopRequested || Thread.currentThread().isInterrupted) return
             model = Model(modelDir.absolutePath)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
-            val grammarPhrases = linkedSetOf(mantra, cleanMantra)
-            // Allow consecutive repetitions to be decoded as one continuous utterance.
-            if (cleanMantra.split(" ").size <= 14) {
-                grammarPhrases.add("$cleanMantra $cleanMantra")
-                grammarPhrases.add("$cleanMantra $cleanMantra $cleanMantra")
+            val grammarPhrases = linkedSetOf<String>()
+            grammarPhrases.add(cleanMantra)
+            val mantraTokens = cleanMantra.split(Regex("\\s+")).filter { it.isNotBlank() }
+            mantraTokens.forEach { grammarPhrases.add(it) }
+            if (mantraTokens.size > 1) {
+                for (start in mantraTokens.indices) {
+                    for (end in start + 2..mantraTokens.size) {
+                        grammarPhrases.add(mantraTokens.subList(start, end).joinToString(" "))
+                    }
+                }
             }
-            if (language == "hi") {
-                grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
-                grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
-            } else {
-                grammarPhrases.add(cleanMantra.replace("Aum", "Om").replace("aum", "om"))
-                grammarPhrases.add(cleanMantra.replace("Shivaaya", "Shivaya").replace("shivaaya", "shivaya"))
-            }
+            grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
+            grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
+            grammarPhrases.add(cleanMantra.replace("Aum", "Om").replace("aum", "om"))
+            grammarPhrases.add(cleanMantra.replace("Shivaaya", "Shivaya").replace("shivaaya", "shivaya"))
             val grammarJson = JSONArray()
             grammarPhrases.forEach { grammarJson.put(it) }
             grammarJson.put("[unk]")
-            val grammar = grammarJson.toString()
-            recognizer = Recognizer(model, 16000.0f, grammar)
+            recognizer = Recognizer(model, 16000.0f, grammarJson.toString())
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
             val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
@@ -348,37 +349,47 @@ class ChantRecognitionService : Service() {
 
     private fun countPhrase(transcript: String, phrase: String): Int {
         if (transcript.isBlank() || phrase.isBlank()) return 0
-        val normalize = { value: String ->
-            value.lowercase(Locale.ROOT)
-                .replace("ॐ", "ओम")
-                .replace("aum", "om")
-                .replace("shivaaya", "shivaya")
-                .replace("namaha", "namah")
-                .replace("tryambakam", "tryambakam")
+        fun normalize(value: String): List<String> {
+            val normalized = java.text.Normalizer.normalize(value.lowercase(Locale.ROOT), java.text.Normalizer.Form.NFC)
+                .replace("ॐ", "ओम").replace("aum", "om")
+                .replace("shivaaya", "shivaya").replace("namaha", "नमः")
+                .replace(Regex("\\s+([\\p{M}])"), "$1")
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .replace(Regex("\\s+"), " ").trim()
+            return normalized.split(" ").filter { it.isNotBlank() }
         }
-        val text = normalize(transcript)
-        val target = normalize(phrase)
-        if (target.isBlank()) return 0
-        val exact = Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(target) + "(?![\\p{L}\\p{N}])")
-            .findAll(text).count()
-        if (exact > 0) return exact
+        val spoken = normalize(transcript)
+        val expected = normalize(phrase)
+        if (spoken.isEmpty() || expected.isEmpty()) return 0
+        var exactCount = 0
+        var cursor = 0
+        while (cursor <= spoken.size - expected.size) {
+            if (spoken.subList(cursor, cursor + expected.size) == expected) {
+                exactCount++
+                cursor += expected.size
+            } else cursor++
+        }
+        if (exactCount > 0) return exactCount
 
-        // Longer Sanskrit verses often lose one or two syllables in speech recognition.
-        // Accept a single near-complete ordered match, but keep short mantras exact.
-        val expected = target.split(" ").filter { it.isNotBlank() }
-        val spoken = text.split(" ").filter { it.isNotBlank() }
-        if (expected.size < 5 || spoken.isEmpty() || expected.first() != spoken.first()) return 0
-        var i = 0
-        var j = 0
-        var matchedTokens = 0
-        while (i < expected.size && j < spoken.size) {
-            if (expected[i] == spoken[j]) { matchedTokens++; i++; j++ }
-            else if (j + 1 < spoken.size && expected[i] == spoken[j + 1]) j++
-            else i++
+        // Allow two or more consecutive mantra words when Vosk omits a boundary word.
+        // Never count a single generic token such as "Om" or "नमः" on its own.
+        for (length in minOf(expected.size, spoken.size) downTo 2) {
+            val spokenWindows = (0..spoken.size - length).map { spoken.subList(it, it + length) }
+            val expectedWindows = (0..expected.size - length).map { expected.subList(it, it + length) }
+            if (spokenWindows.any { it in expectedWindows }) return 1
         }
-        return if (matchedTokens.toDouble() / expected.size >= 0.78) 1 else 0
+        if (expected.size >= 5 && spoken.size >= 4) {
+            var i = 0
+            var j = 0
+            var matchedTokens = 0
+            while (i < expected.size && j < spoken.size) {
+                if (expected[i] == spoken[j]) { matchedTokens++; i++; j++ }
+                else if (j + 1 < spoken.size && expected[i] == spoken[j + 1]) j++
+                else i++
+            }
+            if (matchedTokens.toDouble() / expected.size >= 0.78) return 1
+        }
+        return 0
     }
 
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
