@@ -43,6 +43,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -257,7 +259,22 @@ private val chantPresets = listOf(
     ChantPreset("Om Hanumate Namah", "ॐ हनुमते नमः", "Om Hanumate Namah"),
     ChantPreset("Guru Mantra", "गुरुर्ब्रह्मा गुरुर्विष्णुः गुरुर्देवो महेश्वरः। गुरुः साक्षात् परब्रह्म तस्मै श्रीगुरवे नमः॥", "Gurur Brahma Gurur Vishnuh Gurur Devo Maheshwarah Guruh Sakshat Parabrahma Tasmai Shri Gurave Namah"),
     ChantPreset("Om (Pranava)", "ॐ", "Om"),
-    ChantPreset("Lokah Samastah Sukhino Bhavantu", "लोकाः समस्ताः सुखिनो भवन्तु", "Lokah Samastah Sukhino Bhavantu")
+    ChantPreset("Lokah Samastah Sukhino Bhavantu", "लोकाः समस्ताः सुखिनो भवन्तु", "Lokah Samastah Sukhino Bhavantu"),
+    ChantPreset("Ram Krishna Hari", "राम कृष्ण हरी ॥", "Ram Krishna Hari"),
+    ChantPreset("Om Namo Narayanaya", "ॐ नमो नारायणाय ॥", "Om Namo Narayanaya"),
+    ChantPreset("Om Dram Dattatreyaya Namah", "ॐ द्रां दत्तात्रेयाय नमः ॥", "Om Draam Dattatreyaya Namah"),
+    ChantPreset("Digambara Digambara", "दिगंबरा दिगंबरा श्रीपाद वल्लभ दिगंबरा ॥", "Digambara Digambara Shripada Vallabha Digambara"),
+    ChantPreset("Om Aim Saraswatyai Namah", "ॐ ऐं सरस्वत्यै नमः ॥", "Om Aim Saraswatyai Namah"),
+    ChantPreset("Om Mahalakshmyai Namah", "ॐ महालक्ष्म्यै नमः ॥", "Om Mahalakshmyai Namah"),
+    ChantPreset("Mahalakshmi Mantra", "ॐ श्रीं ह्रीं श्रीं कमले कमलालये प्रसीद प्रसीद श्रीं ह्रीं श्रीं ॐ महालक्ष्म्यै नमः ॥", "Om Shreem Hreem Shreem Kamale Kamalalaye Praseeda Praseeda Shreem Hreem Shreem Om Mahalakshmyai Namah"),
+    ChantPreset("Om Ghrini Suryaya Namah", "ॐ घृणि सूर्याय नमः ॥", "Om Ghrini Suryaya Namah"),
+    ChantPreset("Om Mitraya Namah", "ॐ मित्राय नमः ॥", "Om Mitraya Namah"),
+    ChantPreset("Chamunda Mantra", "ॐ ऐं ह्रीं क्लीं चामुण्डायै विच्चे ॥", "Om Aim Hreem Kleem Chamundayai Vichche"),
+    ChantPreset("Rudra Gayatri", "ॐ तत्पुरुषाय विद्महे महादेवाय धीमहि । तन्नो रुद्रः प्रचोदयात् ॥", "Om Tatpurushaya Vidmahe Mahadevaya Dhimahi Tanno Rudrah Prachodayat"),
+    ChantPreset("Vakratunda Mahakaya", "वक्रतुण्ड महाकाय सूर्यकोटि समप्रभ । निर्विघ्नं कुरु मे देव सर्वकार्येषु सर्वदा ॥", "Vakratunda Mahakaya Suryakoti Samaprabha Nirvighnam Kuru Me Deva Sarvakaryeshu Sarvada"),
+    ChantPreset("Asato Ma Sadgamaya", "ॐ असतो मा सद्गमय । तमसो मा ज्योतिर्गमय । मृत्योर्मा अमृतं गमय । ॐ शान्तिः शान्तिः शान्तिः ॥", "Om Asato Ma Sadgamaya Tamaso Ma Jyotirgamaya Mrityor Ma Amritam Gamaya Om Shantih Shantih Shantih"),
+    ChantPreset("Pandurang Hari", "पांडुरंग हरी", "Pandurang Hari"),
+    ChantPreset("Pandurang", "पांडुरंग", "Pandurang")
 )
 
 @Composable
@@ -482,12 +499,13 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (automatic && !running && status.isNotBlank() && status != "Stopped" && status != "थांबवले") {
                             Button(
                                 onClick = startService,
-                                modifier = Modifier.weight(1f).height(48.dp),
+                                modifier = Modifier.widthIn(min = 116.dp).height(48.dp).wrapContentWidth(),
                                 shape = RoundedCornerShape(14.dp)
                             ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = null)
@@ -497,7 +515,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         }
                         OutlinedButton(
                             onClick = stopRecognition,
-                            modifier = Modifier.weight(1f).height(48.dp),
+                            modifier = Modifier.widthIn(min = 112.dp).height(48.dp).wrapContentWidth(),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
