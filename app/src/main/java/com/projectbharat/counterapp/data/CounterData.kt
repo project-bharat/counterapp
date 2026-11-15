@@ -61,9 +61,9 @@ data class WalkingSession(
     val date: String,
     val startedAt: Long,
     val endedAt: Long? = null,
-    val steps: Int = 0,
-    val distanceMeters: Double = 0.0,
-    val gpsReliable: Boolean = false
+    @ColumnInfo(defaultValue = "0") val steps: Int = 0,
+    @ColumnInfo(defaultValue = "0.0") val distanceMeters: Double = 0.0,
+    @ColumnInfo(defaultValue = "0") val gpsReliable: Boolean = false
 )
 
 @Dao
