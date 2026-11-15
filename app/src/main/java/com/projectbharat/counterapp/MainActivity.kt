@@ -102,6 +102,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        QuickActionsNotification.show(this)
+    }
+
     override fun onStop() {
         // Keep the step foreground service alive; stop microphone recognition when the app leaves the foreground.
         ChantRecognitionService.stop(this)
@@ -230,6 +235,7 @@ fun CounterApp(repo: CounterRepository) {
     val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
         showPermissionIntro = false
+        QuickActionsNotification.show(context)
     }
     val jsonExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
