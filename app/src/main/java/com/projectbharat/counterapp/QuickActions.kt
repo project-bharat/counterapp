@@ -10,6 +10,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.RemoteViews
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import androidx.core.content.ContextCompat
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -61,6 +65,41 @@ object CounterQuickActions {
                 .build()
         }
         ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+    }
+}
+
+
+object QuickActionsNotification {
+    private const val CHANNEL = "counter_quick_actions"
+    private const val NOTIFICATION_ID = 7100
+
+    fun show(context: Context) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Counter quick actions", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Shortcuts to start a baby movement session or Japa"
+                setShowBadge(false)
+            })
+        }
+        val open = PendingIntent.getActivity(context, 7100,
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_today)
+            .setContentTitle("Daily Counter")
+            .setContentText("Quick start · Baby session · Japa")
+            .setContentIntent(open)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .addAction(android.R.drawable.ic_menu_my_calendar, "Start session",
+                CounterQuickActions.activityPending(context, "BABY", 7103))
+            .addAction(android.R.drawable.ic_media_play, "Start Japa",
+                CounterQuickActions.activityPending(context, "MANTRA", 7104))
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
     }
 }
 
