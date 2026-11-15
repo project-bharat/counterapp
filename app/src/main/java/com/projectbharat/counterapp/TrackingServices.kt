@@ -100,7 +100,10 @@ class StepTrackingService : Service(), SensorEventListener {
         val state = getSharedPreferences("tracking_state", MODE_PRIVATE)
         if (intent?.action == ACTION_STOP) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
-            stopSelf()
+            scope.launch {
+                if (walkSessionId > 0L) CounterDatabase.get(this@StepTrackingService).dao().finishWalkingSession(walkSessionId, System.currentTimeMillis())
+                stopSelf(startId)
+            }
             return START_NOT_STICKY
         }
         categoryId = intent?.getLongExtra(EXTRA_CATEGORY_ID, -1L) ?: state.getLong("step_category", -1L)
@@ -128,6 +131,8 @@ class StepTrackingService : Service(), SensorEventListener {
         today = LocalDate.now().toString()
         scope.launch {
             val dao = CounterDatabase.get(this@StepTrackingService).dao()
+            val sessionStart = System.currentTimeMillis()
+            dao.finishOpenWalkingSessions(categoryId, sessionStart)
             walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = System.currentTimeMillis()))
             sensorManager.registerListener(this@StepTrackingService, accelerometer, SensorManager.SENSOR_DELAY_GAME)
             sensorManager.registerListener(this@StepTrackingService, detector, SensorManager.SENSOR_DELAY_GAME)
@@ -206,7 +211,7 @@ class StepTrackingService : Service(), SensorEventListener {
         const val EXTRA_CATEGORY_ID = "category_id"
         fun start(context: Context, categoryId: Long) = ContextCompat.startForegroundService(
             context, Intent(context, StepTrackingService::class.java).putExtra(EXTRA_CATEGORY_ID, categoryId))
-        fun stop(context: Context) { context.stopService(Intent(context, StepTrackingService::class.java)) }
+        fun stop(context: Context) { context.startService(Intent(context, StepTrackingService::class.java).setAction(ACTION_STOP)) }
     }
 }
 class ChantRecognitionService : Service() {
