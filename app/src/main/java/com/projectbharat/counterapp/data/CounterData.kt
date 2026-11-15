@@ -346,6 +346,7 @@ abstract class CounterDatabase : RoomDatabase() {
         private val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE baby_sessions ADD COLUMN firstHourCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE baby_sessions SET firstHourCount=(SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE counter_logs.sessionId=baby_sessions.id AND counter_logs.timestamp < baby_sessions.startedAt+3600000)")
                 db.execSQL("CREATE TABLE IF NOT EXISTS walking_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, categoryId INTEGER NOT NULL, date TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, steps INTEGER NOT NULL DEFAULT 0, distanceMeters REAL NOT NULL DEFAULT 0.0, gpsReliable INTEGER NOT NULL DEFAULT 0)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_walking_sessions_categoryId ON walking_sessions(categoryId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_walking_sessions_date ON walking_sessions(date)")
