@@ -698,17 +698,15 @@ private fun BabyMovementScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (activeSession != null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                    Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt),
-                        color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(if (english) "Auto count" else "ऑटो", color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                    Switch(checked = autoDetect, onCheckedChange = { autoDetect = it }, modifier = Modifier.size(width = 48.dp, height = 32.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text(if (english) "Auto" else "ऑटो", color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Switch(checked = autoDetect, onCheckedChange = { autoDetect = it }, modifier = Modifier.size(width = 44.dp, height = 30.dp))
                 }
                 BabyVoiceCountControl(
                     activeSessionId = activeSession.id,
@@ -834,12 +832,23 @@ private fun BabyMovementScreen(
                             Text(added.toString(), color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center)
                         }
                     }
-                    if (pending > 0) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                        TextButton(onClick = { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)) {
-                            Text(if (english) "Add all" else "सर्व जोडा", style = MaterialTheme.typography.labelSmall)
+                    if (pending > 0) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            modifier = Modifier.weight(1f).height(40.dp).clickable { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) },
+                            shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(if (english) "Add all" else "सर्व जोडा", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                            }
                         }
-                        TextButton(onClick = { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) }, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)) {
-                            Text(if (english) "Dismiss" else "वगळा", style = MaterialTheme.typography.labelSmall)
+                        Surface(
+                            modifier = Modifier.weight(1f).height(40.dp).clickable { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) },
+                            shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(if (english) "Dismiss" else "वगळा", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                            }
                         }
                     }
                 }
