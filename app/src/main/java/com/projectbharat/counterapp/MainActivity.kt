@@ -688,6 +688,9 @@ private fun BabyMovementScreen(
     val tapScope = rememberCoroutineScope()
     var autoDetect by remember(activeSession?.id) { mutableStateOf(false) }
     var autoStatus by remember(activeSession?.id) { mutableStateOf("") }
+    var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
+    var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
+    var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -698,18 +701,27 @@ private fun BabyMovementScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(if (english) "BABY MOVEMENTS" else "बाळाची हालचाल", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt), color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                Row(Modifier.padding(end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (english) "Auto count" else "स्वयंचलित मोजणी", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
-                    Switch(checked = autoDetect, onCheckedChange = { autoDetect = it })
+                    Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt),
+                        color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
-            BabyVoiceCountControl(
-                activeSessionId = activeSession.id,
-                english = english,
-                onCount = { spokenCount -> repeat(spokenCount) { onTap(activeSession.id) } }
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(if (english) "Auto count" else "ऑटो", color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Switch(checked = autoDetect, onCheckedChange = { autoDetect = it }, modifier = Modifier.size(width = 48.dp, height = 32.dp))
+                }
+                BabyVoiceCountControl(
+                    activeSessionId = activeSession.id,
+                    english = english,
+                    onCount = { spokenCount -> repeat(spokenCount) { onTap(activeSession.id) } },
+                    onRecognitionState = { active, status, transcript ->
+                        voiceListening = active; voiceStatus = status; voiceTranscript = transcript
+                    }
+                )
+            }
+            if (voiceListening || voiceStatus.isNotBlank() || voiceTranscript.isNotBlank()) {
+                BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript)
+            }
             Spacer(Modifier.height(6.dp))
             BabyMotionSensorEngine(
                 activeSessionId = activeSession.id, enabled = autoDetect,
