@@ -573,6 +573,9 @@ fun CounterApp(repo: CounterRepository) {
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
                             scope.launch { vm.addMovement(selected.id, sessionId) }
                         },
+                        onVoiceCount = { sessionId, amount ->
+                            scope.launch { repeat(amount) { vm.addMovement(selected.id, sessionId) } }
+                        },
                         onUndo = { sessionId -> scope.launch { vm.undoMovement(sessionId) } },
                         onFinish = { finishDialog = true },
                         onAutoMovement = { sessionId, timestamp, magnitude -> scope.launch { vm.recordDetection(sessionId, timestamp, magnitude) } },
@@ -676,7 +679,7 @@ private fun BabyMovementScreen(
     english: Boolean, ink: Color, tapSurface: Color, latestSession: BabySession?, activeSession: BabySession?,
     resumableSession: BabySession?, lockedSession: BabySession?, remainingMs: Long, sessions: List<BabySession>, detections: List<BabyDetection>, recentLogs: List<CounterLog>, onViewHistory: () -> Unit, historyDate: LocalDate,
     onPreviousDay: () -> Unit, onNextDay: () -> Unit, onStart: () -> Unit, onResume: (Long) -> Unit, onTap: (Long) -> Unit,
-    onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long, Long, Float) -> Unit,
+    onVoiceCount: (Long, Int) -> Unit, onUndo: (Long) -> Unit, onFinish: () -> Unit, onAutoMovement: (Long, Long, Float) -> Unit,
     onConfirmDetections: (List<Long>) -> Unit, onDismissDetections: (List<Long>) -> Unit
 ) {
     val context = LocalContext.current
@@ -711,13 +714,13 @@ private fun BabyMovementScreen(
                 BabyVoiceCountControl(
                     activeSessionId = activeSession.id,
                     english = english,
-                    onCount = { spokenCount -> repeat(spokenCount) { onTap(activeSession.id) } },
+                    onCount = { spokenCount -> onVoiceCount(activeSession.id, spokenCount) },
                     onRecognitionState = { active, status, transcript ->
                         voiceListening = active; voiceStatus = status; voiceTranscript = transcript
                     }
                 )
             }
-            if (voiceListening || voiceStatus.isNotBlank() || voiceTranscript.isNotBlank()) {
+            if (voiceListening) {
                 BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript)
             }
             Spacer(Modifier.height(6.dp))
