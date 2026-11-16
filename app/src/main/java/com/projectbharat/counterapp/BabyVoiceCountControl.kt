@@ -11,15 +11,35 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -30,7 +50,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -41,33 +63,31 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 fun BabyVoiceCountControl(
     activeSessionId: Long,
     english: Boolean,
-    onCount: (Int) -> Unit
+    onCount: (Int) -> Unit,
+    onRecognitionState: (Boolean, String, String) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var listening by remember(activeSessionId) { mutableStateOf(false) }
-    var status by remember(activeSessionId) { mutableStateOf("") }
     val callback = rememberUpdatedState(onCount)
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    val stateCallback = rememberUpdatedState(onRecognitionState)
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) listening = true
-        else status = if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक"
+        else stateCallback.value(false, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "")
     }
 
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) listening = false
-        }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) listening = false }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     DisposableEffect(listening, activeSessionId, english) {
         if (!listening) {
+            stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "")
             onDispose { }
         } else if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            status = if (english) "Speech recognition unavailable" else "आवाज ओळख उपलब्ध नाही"
+            stateCallback.value(false, if (english) "Speech recognition unavailable" else "आवाज ओळख उपलब्ध नाही", "")
             listening = false
             onDispose { }
         } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -77,49 +97,57 @@ fun BabyVoiceCountControl(
             val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
             val handler = Handler(Looper.getMainLooper())
             var disposed = false
+            var ready = false
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (english) "en-IN" else "mr-IN")
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (english) "en-IN" else "mr-IN")
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             }
             lateinit var restart: Runnable
             fun startAgain() {
                 if (!disposed && listening) {
-                    try { recognizer.startListening(intent) } catch (_: Exception) {
-                        handler.postDelayed(restart, 900)
-                    }
+                    try {
+                        ready = false
+                        stateCallback.value(true, if (english) "Preparing offline speech recognition…" else "ऑफलाइन आवाज ओळख तयार होत आहे…", "")
+                        recognizer.startListening(intent)
+                    } catch (_: Exception) { handler.postDelayed(restart, 900) }
                 }
             }
             restart = Runnable { startAgain() }
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
-                    status = if (english) "Listening — say one, two, three…" else "ऐकत आहे — एक, दोन, तीन म्हणा…"
+                    ready = true
+                    stateCallback.value(true, if (english) "Listening offline — say one, two, three…" else "ऑफलाइन ऐकत आहे — एक, दोन, तीन म्हणा…", "")
                 }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
                 override fun onError(error: Int) {
-                    if (!disposed && listening) handler.postDelayed(restart, if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1200 else 650)
+                    if (!disposed && listening) {
+                        if (!ready && error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+                            stateCallback.value(true, if (english) "Offline language model unavailable. Check speech services." else "ऑफलाइन भाषा मॉडेल उपलब्ध नाही. Speech Services तपासा.", "")
+                        }
+                        handler.postDelayed(restart, if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1200 else 650)
+                    }
                 }
                 override fun onResults(results: Bundle?) {
-                    val phrases = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
-                    val words = phrases.firstOrNull().orEmpty().lowercase()
-                        .replace(Regex("[^\\p{L}\\s]"), " ")
-                        .split(Regex("\\s+"))
-                    val numberWords = if (english) {
-                        setOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
-                    } else {
-                        setOf("एक", "दोन", "तीन", "चार", "पाच", "सहा", "सात", "आठ", "नऊ", "दहा", "दो", "चार")
-                    }
+                    val phrase = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    stateCallback.value(true, if (english) "Listening offline — say one, two, three…" else "ऑफलाइन ऐकत आहे — एक, दोन, तीन म्हणा…", phrase)
+                    val words = phrase.lowercase().replace(Regex("[^\\p{L}\\s]"), " ").split(Regex("\\s+"))
+                    val numberWords = if (english) setOf("one","two","three","four","five","six","seven","eight","nine","ten")
+                        else setOf("एक","दोन","तीन","चार","पाच","सहा","सात","आठ","नऊ","दहा","दो")
                     val count = words.count { it in numberWords }
                     if (count > 0) callback.value(count)
                     handler.postDelayed(restart, 350)
                 }
-                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val phrase = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+                    if (phrase.isNotBlank()) stateCallback.value(true, if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", phrase)
+                }
                 override fun onEvent(eventType: Int, params: Bundle?) {}
             })
             startAgain()
@@ -131,22 +159,55 @@ fun BabyVoiceCountControl(
         }
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
-            onClick = {
-                if (listening) listening = false
-                else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    status = ""
-                    listening = true
-                } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Icon(if (listening) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = null)
-            Text(if (listening) (if (english) "Stop voice" else "आवाज बंद") else (if (english) "Voice count" else "आवाजाने मोजा"))
+    Button(
+        onClick = {
+            if (listening) listening = false
+            else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listening = true
+            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        },
+        modifier = Modifier.height(40.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = if (listening) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Icon(if (listening) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.size(5.dp))
+        Text(if (listening) (if (english) "Stop" else "बंद") else (if (english) "Voice count" else "आवाज मोजा"), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+    }
+}
+
+@Composable
+fun BabyVoiceRecognitionPanel(listening: Boolean, english: Boolean, status: String, transcript: String) {
+    val pulse = rememberInfiniteTransition(label = "babyVoicePulse")
+    val scale by pulse.animateFloat(1f, 1.15f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "babyVoiceMic")
+    Surface(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (listening) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Icon(Icons.Default.Mic, null, modifier = Modifier.size(21.dp).graphicsLayer(scaleX = if (listening) scale else 1f, scaleY = if (listening) scale else 1f), tint = MaterialTheme.colorScheme.primary)
+                Text(if (listening) (if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख") else (if (english) "VOICE RECOGNITION" else "आवाज ओळख"), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(7.dp))
+            if (listening && (status.contains("Preparing", true) || status.contains("तयार होत", true))) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(if (english) "Starting speech recognition…" else "आवाज ओळख सुरू होत आहे…", style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                AnimatedContent(
+                    targetState = transcript.ifBlank { status.ifBlank { if (listening) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Voice count is off" else "आवाज मोजणी बंद") } },
+                    transitionSpec = { (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut()) },
+                    label = "babyVoiceTranscript"
+                ) { phrase ->
+                    Text(phrase, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                }
+            }
+            if (status.contains("unavailable", true) || status.contains("उपलब्ध नाही", true)) {
+                Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+            }
         }
-        if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.labelSmall, maxLines = 2)
     }
 }
