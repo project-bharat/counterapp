@@ -137,10 +137,23 @@ fun BabyVoiceCountControl(
                 override fun onResults(results: Bundle?) {
                     val phrase = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                     stateCallback.value(true, if (english) "Listening offline — say one, two, three…" else "ऑफलाइन ऐकत आहे — एक, दोन, तीन म्हणा…", phrase)
-                    val words = phrase.lowercase().replace(Regex("[^\\p{L}\\s]"), " ").split(Regex("\\s+"))
-                    val numberWords = if (english) setOf("one","two","three","four","five","six","seven","eight","nine","ten")
-                        else setOf("एक","दोन","तीन","चार","पाच","सहा","सात","आठ","नऊ","दहा","दो")
-                    val count = words.count { it in numberWords }
+                    val words = phrase.lowercase()
+                        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                        .split(Regex("\\s+"))
+                        .filter { it.isNotBlank() }
+                    val numberWords = setOf(
+                        "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5,
+                        "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10,
+                        "एक" to 1, "दोन" to 2, "तीन" to 3, "चार" to 4, "पाच" to 5,
+                        "सहा" to 6, "सात" to 7, "आठ" to 8, "नऊ" to 9, "दहा" to 10,
+                        "एक" to 1, "दो" to 2, "दोनों" to 2, "पाँच" to 5, "छह" to 6,
+                        "आठ" to 8, "नौ" to 9
+                    )
+                    val count = words.sumOf { token ->
+                        numberWords[token] ?: token.mapNotNull { ch ->
+                            Character.digit(ch, 10).takeIf { it >= 0 }
+                        }.joinToString("").toIntOrNull()?.takeIf { it in 1..10 }?.let { 1 } ?: 0
+                    }
                     if (count > 0) callback.value(count)
                     handler.postDelayed(restart, 350)
                 }
