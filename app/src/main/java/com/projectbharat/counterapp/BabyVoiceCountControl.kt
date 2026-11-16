@@ -152,7 +152,7 @@ fun BabyVoiceCountControl(
                     val count = words.sumOf { token ->
                         numberWords[token] ?: token.mapNotNull { ch ->
                             Character.digit(ch, 10).takeIf { it >= 0 }
-                        }.joinToString("").toIntOrNull()?.takeIf { it in 1..10 }?.let { 1 } ?: 0
+                        }.joinToString("").toIntOrNull()?.takeIf { it in 1..10 } ?: 0
                     }
                     if (count > 0) callback.value(count)
                     handler.postDelayed(restart, 350)
