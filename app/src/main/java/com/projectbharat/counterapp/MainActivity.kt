@@ -705,6 +705,12 @@ private fun BabyMovementScreen(
                     Switch(checked = autoDetect, onCheckedChange = { autoDetect = it })
                 }
             }
+            BabyVoiceCountControl(
+                activeSessionId = activeSession.id,
+                english = english,
+                onCount = { spokenCount -> repeat(spokenCount) { onTap(activeSession.id) } }
+            )
+            Spacer(Modifier.height(6.dp))
             BabyMotionSensorEngine(
                 activeSessionId = activeSession.id, enabled = autoDetect,
                 onDetected = { timestamp, magnitude -> onAutoMovement(activeSession.id, timestamp, magnitude) },
