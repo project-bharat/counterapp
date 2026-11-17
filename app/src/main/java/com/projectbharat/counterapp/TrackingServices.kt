@@ -121,7 +121,6 @@ class StepTrackingService : Service(), SensorEventListener {
     @Volatile private var walkSessionId = -1L
     @Volatile private var activityTransitionsReady = false
     private var lastReliableLocation: Location? = null
-    private val motionValidator = StepMotionValidator()
     private lateinit var stepCounterDelta: StepCounterDeltaTracker
     private var transitionPendingIntent: PendingIntent? = null
 
@@ -136,7 +135,6 @@ class StepTrackingService : Service(), SensorEventListener {
         if (intent?.action == ACTION_STOP) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false)
                 .putBoolean("activity_on_foot", false).apply()
-            removeActivityTransitions()
             scope.launch {
                 if (walkSessionId > 0L) CounterDatabase.get(this@StepTrackingService).dao()
                     .finishWalkingSession(walkSessionId, System.currentTimeMillis())
@@ -159,24 +157,24 @@ class StepTrackingService : Service(), SensorEventListener {
             ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
         }
 
-        val stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        // Prefer Android's dedicated hardware step detector for prompt, per-step events.
+        // Use the cumulative hardware counter only on devices without a detector.
         val stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (stepCounter == null && (stepDetector == null || accelerometer == null)) {
+        val stepCounter = if (stepDetector == null) sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) else null
+        if (stepDetector == null && stepCounter == null) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
             stopSelf(); return START_NOT_STICKY
         }
         stepCounterDelta = StepCounterDeltaTracker(state.getInt("last_hardware_step_total", -1))
-        requestActivityTransitions()
         today = LocalDate.now().toString()
         scope.launch {
             val dao = CounterDatabase.get(this@StepTrackingService).dao()
             val sessionStart = System.currentTimeMillis()
             dao.finishOpenWalkingSessions(categoryId, sessionStart)
             walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = sessionStart))
-            stepCounter?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL) }
-            stepDetector?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL) }
-            accelerometer?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_GAME) }
+            // Zero batching latency: deliver events as soon as the sensor reports them.
+            stepDetector?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL, 0) }
+            stepCounter?.let { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL, 0) }
 
             // GPS is optional and is used only for distance; step counting never depends on it.
             if (ContextCompat.checkSelfPermission(this@StepTrackingService, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
@@ -218,63 +216,19 @@ class StepTrackingService : Service(), SensorEventListener {
         return START_STICKY
     }
 
-    private fun requestActivityTransitions() {
-        val transitions = listOf(
-            com.google.android.gms.location.ActivityTransition.Builder()
-                .setActivityType(com.google.android.gms.location.DetectedActivity.ON_FOOT)
-                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build(),
-            com.google.android.gms.location.ActivityTransition.Builder()
-                .setActivityType(com.google.android.gms.location.DetectedActivity.STILL)
-                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build(),
-            com.google.android.gms.location.ActivityTransition.Builder()
-                .setActivityType(com.google.android.gms.location.DetectedActivity.IN_VEHICLE)
-                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build(),
-            com.google.android.gms.location.ActivityTransition.Builder()
-                .setActivityType(com.google.android.gms.location.DetectedActivity.ON_BICYCLE)
-                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build()
-        )
-        val pendingFlags = PendingIntent.FLAG_UPDATE_CURRENT or
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-        val pending = PendingIntent.getBroadcast(this, ACTIVITY_TRANSITION_REQUEST_CODE,
-            Intent(this, ActivityTransitionReceiver::class.java).setAction(ACTION_ACTIVITY_TRANSITIONS), pendingFlags)
-        transitionPendingIntent = pending
-        com.google.android.gms.location.ActivityRecognition.getClient(this)
-            .requestActivityTransitionUpdates(com.google.android.gms.location.ActivityTransitionRequest(transitions), pending)
-            .addOnSuccessListener { activityTransitionsReady = true }
-            .addOnFailureListener { activityTransitionsReady = false }
-    }
-
-    private fun removeActivityTransitions() {
-        val pending = transitionPendingIntent ?: run {
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
-                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
-            PendingIntent.getBroadcast(this, ACTIVITY_TRANSITION_REQUEST_CODE,
-                Intent(this, ActivityTransitionReceiver::class.java).setAction(ACTION_ACTIVITY_TRANSITIONS), flags)
-        }
-        runCatching { com.google.android.gms.location.ActivityRecognition.getClient(this).removeActivityTransitionUpdates(pending) }
-        pending.cancel()
-        transitionPendingIntent = null
-        activityTransitionsReady = false
-    }
-
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            motionValidator.addAcceleration(event.timestamp, event.values[0], event.values[1], event.values[2])
+        if (event.sensor.type == Sensor.TYPE_STEP_DETECTOR) {
+            // The hardware detector already classifies steps. Avoid cadence warm-up
+            // and accelerometer peak matching, which delay and discard real steps.
+            recordSteps(1, "HARDWARE_STEP_DETECTOR")
             return
         }
         if (event.sensor.type == Sensor.TYPE_STEP_COUNTER) {
             val delta = stepCounterDelta.update(event.values[0].toInt())
             getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
                 .putInt("last_hardware_step_total", stepCounterDelta.lastValue).apply()
-            if (activityTransitionsReady && delta > 0 &&
-                getSharedPreferences("tracking_state", MODE_PRIVATE).getBoolean("activity_on_foot", false)) {
-                recordSteps(delta, "ACTIVITY_GATED_STEP_COUNTER")
-            }
-            return
+            if (delta > 0) recordSteps(delta, "HARDWARE_STEP_COUNTER")
         }
-        if (event.sensor.type != Sensor.TYPE_STEP_DETECTOR || activityTransitionsReady) return
-        val validatedSteps = motionValidator.acceptStepDetector(event.timestamp)
-        if (validatedSteps > 0) recordSteps(validatedSteps, "VALIDATED_STEP_DETECTOR")
     }
 
     private fun recordSteps(steps: Int, source: String) {
