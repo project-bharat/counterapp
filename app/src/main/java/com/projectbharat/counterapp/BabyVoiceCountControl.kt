@@ -149,8 +149,12 @@ fun BabyVoiceCountControl(
                         "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10,
                         "एक" to 1, "दोन" to 2, "तीन" to 3, "चार" to 4, "पाच" to 5,
                         "सहा" to 6, "सात" to 7, "आठ" to 8, "नऊ" to 9, "दहा" to 10,
-                        "एक" to 1, "दो" to 2, "दोनों" to 2, "पाँच" to 5, "छह" to 6,
-                        "आठ" to 8, "नौ" to 9
+                        "दो" to 2, "दोनों" to 2, "पाँच" to 5, "छह" to 6, "नौ" to 9,
+                        "ek" to 1, "eka" to 1, "don" to 2, "dona" to 2, "do" to 2,
+                        "teen" to 3, "tin" to 3, "tīn" to 3, "char" to 4,
+                        "chaar" to 4, "pach" to 5, "paach" to 5, "saha" to 6,
+                        "saat" to 7, "sat" to 7, "aath" to 8, "ath" to 8,
+                        "nau" to 9, "nav" to 9, "daha" to 10, "daha" to 10
                     )
                     val count = words.sumOf { token ->
                         numberWords[token] ?: token.mapNotNull { ch ->
