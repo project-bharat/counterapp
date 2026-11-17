@@ -4,6 +4,9 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -44,26 +47,31 @@ class OfflineSpeechModelManager(context: Context) {
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit
     ): ModelFiles = withContext(Dispatchers.IO) {
         val language = if (english) "en" else "mr"
-        val dir = File(root, language).apply { if (!exists() && !mkdirs()) error("Cannot create model directory") }
-        val modelUrl = if (english) EN_MODEL_URL else MR_MODEL_URL
-        val tokensUrl = if (english) EN_TOKENS_URL else MR_TOKENS_URL
-        val model = File(dir, "model.int8.onnx")
-        val tokens = File(dir, "tokens.txt")
+        // The screen-triggered recognizer and WorkManager prefetch share these locks.
+        // This prevents both paths from writing the same model/.part files concurrently.
+        val lock = downloadLocks.getOrPut(language) { Mutex() }
+        lock.withLock {
+            val dir = File(root, language).apply { if (!exists() && !mkdirs()) error("Cannot create model directory") }
+            val modelUrl = if (english) EN_MODEL_URL else MR_MODEL_URL
+            val tokensUrl = if (english) EN_TOKENS_URL else MR_TOKENS_URL
+            val model = File(dir, "model.int8.onnx")
+            val tokens = File(dir, "tokens.txt")
 
-        if (!isValid(model, MIN_MODEL_BYTES)) {
-            downloadFile(modelUrl, model, MIN_MODEL_BYTES, onProgress)
-        } else {
-            onProgress(model.length(), model.length())
-        }
-        if (!isValid(tokens, MIN_TOKENS_BYTES)) {
-            downloadFile(tokensUrl, tokens, MIN_TOKENS_BYTES) { done, total ->
-                onProgress(model.length() + done, model.length() + total)
+            if (!isValid(model, MIN_MODEL_BYTES)) {
+                downloadFile(modelUrl, model, MIN_MODEL_BYTES, onProgress)
+            } else {
+                onProgress(model.length(), model.length())
             }
+            if (!isValid(tokens, MIN_TOKENS_BYTES)) {
+                downloadFile(tokensUrl, tokens, MIN_TOKENS_BYTES) { done, total ->
+                    onProgress(model.length() + done, model.length() + total)
+                }
+            }
+            check(isValid(model, MIN_MODEL_BYTES) && isValid(tokens, MIN_TOKENS_BYTES)) {
+                "Downloaded speech model files failed validation"
+            }
+            ModelFiles(model, tokens, language)
         }
-        check(isValid(model, MIN_MODEL_BYTES) && isValid(tokens, MIN_TOKENS_BYTES)) {
-            "Downloaded speech model files failed validation"
-        }
-        ModelFiles(model, tokens, language)
     }
 
     private suspend fun downloadFile(
@@ -130,6 +138,7 @@ class OfflineSpeechModelManager(context: Context) {
         file.isFile && file.length() >= minimumBytes
 
     companion object {
+        private val downloadLocks = ConcurrentHashMap<String, Mutex>()
         private const val MIN_MODEL_BYTES = 50L * 1024L * 1024L
         private const val MIN_TOKENS_BYTES = 100L
         private const val BASE = "https://huggingface.co/parismitaglobalsolutions/indicconformer-sherpa-onnx/resolve/main/"
