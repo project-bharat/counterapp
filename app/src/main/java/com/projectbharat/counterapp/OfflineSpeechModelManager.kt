@@ -73,23 +73,37 @@ class OfflineSpeechModelManager(context: Context) {
         onProgress: (Long, Long) -> Unit
     ) {
         val partial = File(destination.parentFile, destination.name + ".part")
-        partial.delete()
+        val existing = if (partial.isFile) partial.length() else 0L
         val connection = (URL(address).openConnection() as HttpURLConnection).apply {
             connectTimeout = 20_000
-            readTimeout = 45_000
+            readTimeout = 60_000
             requestMethod = "GET"
             instanceFollowRedirects = true
             setRequestProperty("User-Agent", "BilanCounter-OfflineSpeech/1.0")
+            if (existing > 0L) setRequestProperty("Range", "bytes=$existing-")
         }
         try {
             connection.connect()
-            check(connection.responseCode in 200..299) { "Model server returned HTTP ${connection.responseCode}" }
+            val response = connection.responseCode
+            if (response == 416 && existing >= minimumBytes) {
+                check(partial.renameTo(destination)) { "Could not finalize resumed model file" }
+                onProgress(destination.length(), destination.length())
+                return
+            }
+            check(response == HttpURLConnection.HTTP_OK || response == HttpURLConnection.HTTP_PARTIAL) {
+                "Model server returned HTTP $response"
+            }
+            val append = response == HttpURLConnection.HTTP_PARTIAL && existing > 0L
+            val total = if (append && connection.contentLengthLong > 0L) existing + connection.contentLengthLong else connection.contentLengthLong
+            var copied = if (append) existing else 0L
+            if (!append && partial.exists()) partial.delete()
+            onProgress(copied, total)
             val contentType = connection.contentType.orEmpty()
-            check(!contentType.contains("text/html", ignoreCase = true)) { "Model server returned a web page instead of a model file" }
-            val total = connection.contentLengthLong
-            var copied = 0L
+            check(!contentType.contains("text/html", ignoreCase = true)) {
+                "Model server returned a web page instead of a model file"
+            }
             connection.inputStream.use { input ->
-                FileOutputStream(partial).use { output ->
+                FileOutputStream(partial, append).use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE * 8)
                     while (true) {
                         coroutineContext.ensureActive()
@@ -103,13 +117,11 @@ class OfflineSpeechModelManager(context: Context) {
                 }
             }
             check(copied >= minimumBytes) { "Downloaded file is incomplete ($copied bytes)" }
-            if (total > 0) check(copied == total) { "Downloaded file size does not match server size" }
+            if (total > 0L) check(copied == total) { "Downloaded file size does not match server size" }
             if (destination.exists()) destination.delete()
-            check(partial.renameTo(destination)) { "Could not finalize downloaded model file" }
-        } catch (error: Throwable) {
-            partial.delete()
-            throw error
+            check(partial.renameTo(destination)) { "Could not finalize model file" }
         } finally {
+            // Keep the .part file on interruption/network loss so the next worker can resume it.
             connection.disconnect()
         }
     }
