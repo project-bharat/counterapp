@@ -106,11 +106,11 @@ fun BabyVoiceCountControl(
                     mainHandler.post {
                         stateCallback.value(true,
                             if (english) "Downloading offline model… $percent%" else "ऑफलाइन मॉडेल डाउनलोड होत आहे… $percent%",
-                            "")
+                            "", null)
                     }
                 }
             }
-            stateCallback.value(true, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "")
+            stateCallback.value(true, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "", null)
             engine = SherpaOfflineSpeechEngine(
                 modelFiles = files,
                 english = english,
