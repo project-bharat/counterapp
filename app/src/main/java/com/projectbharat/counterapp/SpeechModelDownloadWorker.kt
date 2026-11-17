@@ -17,6 +17,8 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -31,6 +33,7 @@ class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : Co
             else -> return Result.failure()
         }
         return try {
+            val taskContext = currentCoroutineContext()
             setForeground(foregroundInfo(title, "Preparing download…", 0))
             when (key) {
                 "sherpa_en", "sherpa_mr" -> {
@@ -45,6 +48,7 @@ class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : Co
                 "vosk_en", "vosk_hi" -> withContext(Dispatchers.IO) {
                     val language = if (key == "vosk_hi") "hi" else "en"
                     VoskOfflineModelInstaller.install(applicationContext, language) { message ->
+                        taskContext.ensureActive()
                         val percent = Regex("(\\d+)%").find(message)?.groupValues?.get(1)?.toIntOrNull() ?: 0
                         publishProgress(title, message, percent)
                     }
