@@ -118,7 +118,11 @@ fun BabyVoiceCountControl(
                     stateCallback.value(true, if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", phrase)
                 },
                 onCount = { amount -> callback.value(amount) },
-                onStatus = { status -> stateCallback.value(true, status, "") }
+                onStatus = { status -> stateCallback.value(true, status, "") },
+                onStopped = { error ->
+                    stateCallback.value(false, error ?: if (english) "Voice count stopped" else "आवाज मोजणी थांबली", "")
+                    listening = false
+                }
             )
             withContext(Dispatchers.IO) { engine.start() }
             awaitCancellation()
