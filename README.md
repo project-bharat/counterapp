@@ -50,3 +50,8 @@ The repository includes editable adaptive launcher vector resources. To replace 
 
 ## Baby movement records
 Movement logging is a personal diary, not a fetal-wellbeing assessment. There is no universal target in this app. Contact your maternity-care professional promptly if the baby's usual movement pattern changes or movements reduce; do not wait for an app target or timer.
+
+
+## Walking step detection
+
+The tracker prefers Android's hardware `TYPE_STEP_DETECTOR` and records each event immediately. It does not wait for a multi-step cadence warm-up or require a matching accelerometer peak, because those software gates add latency and can reject genuine steps. On devices without a step detector, it falls back to deltas from `TYPE_STEP_COUNTER`. The dashboard displays only the walking-step total; raw accelerometer samples are not displayed or counted as steps. Android sensor latency and accuracy remain device-dependent and must be validated with real-world walking tests.
