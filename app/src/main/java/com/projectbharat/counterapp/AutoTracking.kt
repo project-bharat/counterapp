@@ -228,7 +228,7 @@ fun AutoStepCounterScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(if (english) "WALK STEPS" else "चालण्याची पावले", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall)
                                 Text(NumberFormat.getIntegerInstance().format(count), color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
-                                Text("\${(progress * 100).toInt()}% " + if (english) "of goal" else "लक्ष्य पूर्ण", color = Color(0xFF9A7435), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                Text("${(progress * 100).toInt()}% " + if (english) "of goal" else "लक्ष्य पूर्ण", color = Color(0xFF9A7435), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -272,7 +272,7 @@ fun AutoStepCounterScreen(
                         WeeklyChart(chartDays, Modifier.fillMaxWidth().height(185.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             StepMetricCard(if (english) "TOTAL STEPS" else "एकूण पावले", NumberFormat.getIntegerInstance().format(chartDays.sumOf { it.total }), if (english) "Selected period" else "निवडलेला कालावधी", ink, Modifier.weight(1f))
-                            StepMetricCard(if (english) "ACTIVE DAYS" else "सक्रिय दिवस", "\${chartDays.count { it.total > 0 }} / \${chartDays.size}", if (english) "Days with steps" else "पावले असलेले दिवस", ink, Modifier.weight(1f))
+                            StepMetricCard(if (english) "ACTIVE DAYS" else "सक्रिय दिवस", "${chartDays.count { it.total > 0 }} / ${chartDays.size}", if (english) "Days with steps" else "पावले असलेले दिवस", ink, Modifier.weight(1f))
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val active = chartDays.filter { it.total > 0 }
@@ -292,9 +292,9 @@ fun AutoStepCounterScreen(
                             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(date, color = ink, fontWeight = FontWeight.SemiBold)
-                                    Text(if (english) "\${records.size} sessions · $totalSteps steps · $totalMinutes min" else "\${records.size} सत्रे · $totalSteps पावले · $totalMinutes मि.", color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelSmall)
+                                    Text(if (english) "${records.size} sessions · $totalSteps steps · $totalMinutes min" else "${records.size} सत्रे · $totalSteps पावले · $totalMinutes मि.", color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelSmall)
                                 }
-                                Text(if (gpsDistance > 0.0) { if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "\${gpsDistance.toInt()} m" } else "—",
+                                Text(if (gpsDistance > 0.0) { if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "${gpsDistance.toInt()} m" } else "—",
                                     color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
