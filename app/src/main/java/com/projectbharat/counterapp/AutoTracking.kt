@@ -17,6 +17,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import java.text.NumberFormat
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clipToBounds
@@ -111,16 +118,22 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
 }
 
 @Composable
-fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, sessions: List<WalkingSession>, range: String, onRangeChange: (String) -> Unit, english: Boolean, ink: Color) {
+fun AutoStepCounterScreen(
+    categoryId: Long, count: Int, goal: Int, days: List<DayTotal>, sessions: List<WalkingSession>,
+    range: String, onRangeChange: (String) -> Unit, onGoalChange: (Int) -> Unit,
+    english: Boolean, ink: Color
+) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null || sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null }
     var permissionGranted by remember {
-        mutableStateOf(Build.VERSION.SDK_INT < 29 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
+        mutableStateOf(Build.VERSION.SDK_INT < 29 || ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
     }
     var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", false)) }
     var message by remember { mutableStateOf("") }
+    var selectedTab by remember(categoryId) { mutableIntStateOf(0) }
+    var showGoalDialog by remember { mutableStateOf(false) }
+    var goalText by remember(goal) { mutableStateOf(goal.toString()) }
 
     val startService = {
         try {
@@ -142,13 +155,11 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, se
             else startService()
         } else message = if (english) "Physical activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
     }
-
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, intent: Intent?) {
-                if (intent?.getStringExtra(EXTRA_TRACKING_KIND) == "steps" && intent.hasExtra("active")) {
+                if (intent?.getStringExtra(EXTRA_TRACKING_KIND) == "steps" && intent.hasExtra("active"))
                     running = intent.getBooleanExtra("active", false)
-                }
             }
         }
         registerTrackingReceiver(context, receiver)
@@ -160,87 +171,194 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, se
             delay(1500)
         }
     }
+    // Resume only when the user had previously enabled tracking; an explicit Stop disables this flag.
+    LaunchedEffect(categoryId, permissionGranted) {
+        val state = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE)
+        if (permissionGranted && available && state.getBoolean("steps_enabled", false) && !state.getBoolean("steps_running", false)) startService()
+    }
 
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (english) "STEPS TODAY" else "आजची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            Surface(shape = CircleShape, color = if (running) Color(0xFFE1F3E9) else Color(0xFFF1EAF7)) {
-                Text(if (running) if (english) "● AUTO ON" else "● सुरू" else if (english) "PAUSED" else "थांबले",
-                    color = if (running) Color(0xFF16764E) else Color(0xFF76528D),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+    val safeGoal = goal.coerceAtLeast(1)
+    val progress = (count.toFloat() / safeGoal).coerceIn(0f, 1f)
+    val distanceKm = count * 0.00075
+    val calories = (count * 0.04).toInt()
+    val today = LocalDate.now()
+    val chartDates = when (range) {
+        "30D" -> (29 downTo 0).map { today.minusDays(it.toLong()) }
+        "MONTH" -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
+        else -> (6 downTo 0).map { today.minusDays(it.toLong()) }
+    }
+    val totalsByDate = days.associate { it.date to it.total }
+    val chartDays = chartDates.map { date -> DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
+    val weekDays = (6 downTo 0).map { today.minusDays(it.toLong()) }.map { date ->
+        DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0)
+    }
+    val groupedWalks = sessions.groupBy { it.date }.entries.take(8)
+
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            listOf(0 to if (english) "Today" else "आज", 1 to if (english) "Stats" else "आकडेवारी", 2 to if (english) "Goals" else "लक्ष्य").forEach { (tab, label) ->
+                FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(label) })
+            }
+            Spacer(Modifier.weight(1f))
+            Surface(shape = CircleShape, color = if (running) Color(0xFFE1F3E9) else MaterialTheme.colorScheme.surfaceVariant) {
+                Text(if (running) (if (english) "AUTO ON" else "सुरू") else if (english) "PAUSED" else "थांबले",
+                    color = if (running) Color(0xFF16764E) else ink.copy(alpha = .7f),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
-        Spacer(Modifier.height(18.dp))
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 30.dp, horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Surface(shape = CircleShape, color = Color(0xFFE5F0FA), modifier = Modifier.size(76.dp)) {
-                    Icon(Icons.Default.DirectionsWalk, null, tint = Color(0xFF3977A8), modifier = Modifier.padding(18.dp))
-                }
-                Spacer(Modifier.height(14.dp))
-                Text(count.toString(), color = ink, style = MaterialTheme.typography.displayLarge, fontWeight = FontWeight.ExtraBold)
-                Text(if (english) "steps today" else "आजची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf("7D" to if (english) "7 days" else "७ दिवस", "30D" to if (english) "30 days" else "३० दिवस", "MONTH" to if (english) "Month" else "महिना").forEach { (key, label) ->
-                        FilterChip(selected = range == key, onClick = { onRangeChange(key) }, label = { Text(label) })
+        when (selectedTab) {
+            0 -> {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(if (english) "TODAY'S WALK" else "आजचे चालणे", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text(today.dayOfWeek.name.take(3), color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
+                            Canvas(Modifier.fillMaxSize()) {
+                                val stroke = 13.dp.toPx()
+                                val arcSize = Size(size.width - stroke * 2, size.height - stroke * 2)
+                                val topLeft = Offset(stroke, stroke)
+                                drawArc(MaterialTheme.colorScheme.surfaceVariant, 135f, 270f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                                drawArc(Color(0xFFD5A757), 135f, 270f * progress, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(if (english) "WALK STEPS" else "चालण्याची पावले", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall)
+                                Text(NumberFormat.getIntegerInstance().format(count), color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                                Text("\${(progress * 100).toInt()}% " + if (english) "of goal" else "लक्ष्य पूर्ण", color = Color(0xFF9A7435), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column {
+                                Text(if (english) "GOAL" else "लक्ष्य", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+                                Text(NumberFormat.getIntegerInstance().format(goal), color = ink, fontWeight = FontWeight.SemiBold)
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(if (english) "REMAINING" else "उर्वरित", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+                                Text(NumberFormat.getIntegerInstance().format((goal - count).coerceAtLeast(0)), color = ink, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        androidx.compose.material3.LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(6.dp), color = Color(0xFFD5A757), trackColor = MaterialTheme.colorScheme.surfaceVariant)
                     }
                 }
-                val today = LocalDate.now()
-                val chartDates = when (range) {
-                    "30D" -> (29 downTo 0).map { today.minusDays(it.toLong()) }
-                    "MONTH" -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
-                    else -> (6 downTo 0).map { today.minusDays(it.toLong()) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    StepMetricCard(if (english) "DISTANCE" else "अंतर", String.format(java.util.Locale.getDefault(), "%.2f km", distanceKm), if (english) "Estimated" else "अंदाजे", ink, Modifier.weight(1f))
+                    StepMetricCard(if (english) "CALORIES" else "कॅलरी", "$calories kcal", if (english) "Estimated" else "अंदाजे", ink, Modifier.weight(1f))
                 }
-                val totalsByDate = days.associate { it.date to it.total }
-                val chartDays = chartDates.map { date -> DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
-                Text(if (english) when (range) { "30D" -> "LAST 30 DAYS"; "MONTH" -> "THIS MONTH"; else -> "LAST 7 DAYS" } else when (range) { "30D" -> "मागील ३० दिवस"; "MONTH" -> "हा महिना"; else -> "मागील ७ दिवस" },
-                    color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                WeeklyChart(chartDays, Modifier.fillMaxWidth().height(190.dp))
-                Spacer(Modifier.height(8.dp))
-                Text(if (english) "DAILY WALK SUMMARIES" else "दैनिक चालण्याचा सारांश", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                val groupedWalks = sessions.groupBy { it.date }.entries.take(5)
-                if (groupedWalks.isEmpty()) {
-                    Text(if (english) "No walking sessions in this period" else "या कालावधीत चालण्याची नोंद नाही", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.bodySmall)
-                } else {
-                    groupedWalks.forEach { (date, records) ->
-                        val totalSteps = records.sumOf { it.steps }
-                        val totalMinutes = records.sumOf { (((it.endedAt ?: System.currentTimeMillis()) - it.startedAt).coerceAtLeast(0L) / 60000L).toInt() }
-                        val gpsDistance = records.filter { it.gpsReliable }.sumOf { it.distanceMeters }
-                        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f))) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(15.dp)) {
+                        Text(if (english) "THIS WEEK" else "या आठवड्यात", color = ink, fontWeight = FontWeight.SemiBold)
+                        Text(if (english) "Daily walking steps" else "दररोजची चालण्याची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(12.dp))
+                        WeeklyChart(weekDays, Modifier.fillMaxWidth().height(145.dp))
+                    }
+                }
+            }
+            1 -> {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                        Text(if (english) "YOUR ACTIVITY" else "तुमची चालण्याची नोंद", color = ink, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            listOf("7D" to if (english) "7 days" else "७ दिवस", "30D" to if (english) "30 days" else "३० दिवस", "MONTH" to if (english) "Month" else "महिना").forEach { (key, label) ->
+                                FilterChip(selected = range == key, onClick = { onRangeChange(key) }, label = { Text(label) })
+                            }
+                        }
+                        Text(if (english) when (range) { "30D" -> "LAST 30 DAYS"; "MONTH" -> "THIS MONTH"; else -> "LAST 7 DAYS" } else when (range) { "30D" -> "मागील ३० दिवस"; "MONTH" -> "हा महिना"; else -> "मागील ७ दिवस" },
+                            color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        WeeklyChart(chartDays, Modifier.fillMaxWidth().height(185.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StepMetricCard(if (english) "TOTAL STEPS" else "एकूण पावले", NumberFormat.getIntegerInstance().format(chartDays.sumOf { it.total }), if (english) "Selected period" else "निवडलेला कालावधी", ink, Modifier.weight(1f))
+                            StepMetricCard(if (english) "ACTIVE DAYS" else "सक्रिय दिवस", "\${chartDays.count { it.total > 0 }} / \${chartDays.size}", if (english) "Days with steps" else "पावले असलेले दिवस", ink, Modifier.weight(1f))
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val active = chartDays.filter { it.total > 0 }
+                            StepMetricCard(if (english) "AVERAGE" else "सरासरी", NumberFormat.getIntegerInstance().format(active.map { it.total }.average().takeIf { it.isFinite() }?.toInt() ?: 0), if (english) "Per active day" else "प्रति सक्रिय दिवस", ink, Modifier.weight(1f))
+                            StepMetricCard(if (english) "BEST DAY" else "सर्वोत्तम दिवस", NumberFormat.getIntegerInstance().format(chartDays.maxOfOrNull { it.total } ?: 0), if (english) "Highest count" else "सर्वाधिक पावले", ink, Modifier.weight(1f))
+                        }
+                    }
+                }
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (english) "WALKING SESSIONS" else "चालण्याची सत्रे", color = ink, fontWeight = FontWeight.SemiBold)
+                        if (groupedWalks.isEmpty()) Text(if (english) "No walking sessions in this period" else "या कालावधीत चालण्याची नोंद नाही", color = ink.copy(alpha = .58f))
+                        groupedWalks.forEach { (date, records) ->
+                            val totalSteps = records.sumOf { it.steps }
+                            val totalMinutes = records.sumOf { (((it.endedAt ?: System.currentTimeMillis()) - it.startedAt).coerceAtLeast(0L) / 60000L).toInt() }
+                            val gpsDistance = records.filter { it.gpsReliable }.sumOf { it.distanceMeters }
+                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(date, color = ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
-                                    Text((if (english) "${records.size} sessions · ${totalSteps} steps · ${totalMinutes} min" else "${records.size} सत्रे · ${totalSteps} पावले · ${totalMinutes} मि."), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.labelSmall)
+                                    Text(date, color = ink, fontWeight = FontWeight.SemiBold)
+                                    Text(if (english) "\${records.size} sessions · $totalSteps steps · $totalMinutes min" else "\${records.size} सत्रे · $totalSteps पावले · $totalMinutes मि.", color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelSmall)
                                 }
-                                Text(if (gpsDistance > 0.0) {
-                                    if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "${gpsDistance.toInt()} m"
-                                } else if (english) "GPS distance —" else "GPS अंतर —", color = if (gpsDistance > 0.0) Color(0xFF238451) else ink.copy(alpha = .5f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Text(if (gpsDistance > 0.0) { if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "\${gpsDistance.toInt()} m" } else "—",
+                                    color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                when {
-                    !available -> Text(if (english) "This phone has no hardware step sensor" else "या फोनमध्ये हार्डवेअर स्टेप सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
-                    !permissionGranted -> Text(if (english) "Allow physical activity access to count automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
-                    else -> Text(if (running) if (english) "Motion tracking active" else "हालचाल मोजणी सुरू आहे" else if (english) "Hardware step detection active" else "हार्डवेअर स्टेप डिटेक्शन सुरू आहे", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
-                }
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    enabled = available,
-                    onClick = {
-                        if (running) { StepTrackingService.stop(context); running = false }
-                        else if (Build.VERSION.SDK_INT >= 29 && ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-                        else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        else startService()
-                    },
-                    modifier = Modifier.fillMaxWidth(.82f)
-                ) {
-                    Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow, null)
-                    Text(if (running) if (english) "Stop tracking" else "मोजणी थांबवा" else if (english) "Start step tracking" else "पावले मोजणे सुरू करा")
-                }
-                if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 8.dp))
             }
+            else -> {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(if (english) "DAILY STEP TARGET" else "दैनिक पावलांचे लक्ष्य", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text(NumberFormat.getIntegerInstance().format(goal), color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                        Text(if (english) "steps per day" else "पावले प्रतिदिन", color = ink.copy(alpha = .65f))
+                        Button(onClick = { goalText = goal.toString(); showGoalDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF31413A), contentColor = Color(0xFFF3EEE3))) {
+                            Text(if (english) "Change goal" else "लक्ष्य बदला")
+                        }
+                    }
+                }
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(17.dp)) {
+                        Text(if (english) "Your walking data stays on this device" else "तुमची चालण्याची नोंद याच फोनमध्ये सुरक्षित राहते", color = ink, fontWeight = FontWeight.SemiBold)
+                        Text(if (english) "Android hardware step sensors provide the count. GPS is optional and is used only for reliable distance." else "पावले Android च्या हार्डवेअर स्टेप सेन्सरने मोजली जातात. GPS ऐच्छिक असून विश्वसनीय अंतरासाठीच वापरले जाते.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text(if (english) "LIVE WALK TRACKING" else "लाईव्ह चालण्याची मोजणी", color = ink, fontWeight = FontWeight.SemiBold)
+                when {
+                    !available -> Text(if (english) "No hardware step detector or counter is available on this phone." else "या फोनमध्ये हार्डवेअर स्टेप डिटेक्टर किंवा स्टेप काउंटर उपलब्ध नाही.", color = Color(0xFFB45353))
+                    !permissionGranted -> Text(if (english) "Allow Physical Activity access to count steps automatically." else "पावले आपोआप मोजण्यासाठी शारीरिक हालचालींची परवानगी द्या.", color = ink.copy(alpha = .65f))
+                    else -> Text(if (running) (if (english) "Hardware sensor active. Steps update as Android reports them." else "हार्डवेअर सेन्सर सुरू आहे. Android कडून पावले मिळताच मोजणी अद्ययावत होते.") else if (english) "Tracking is paused." else "मोजणी थांबलेली आहे.", color = ink.copy(alpha = .65f))
+                }
+                Button(enabled = available, onClick = {
+                    if (running) { StepTrackingService.stop(context); running = false }
+                    else if (Build.VERSION.SDK_INT >= 29 && ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                    else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    else startService()
+                }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow, null)
+                    Text(if (running) (if (english) "Stop tracking" else "मोजणी थांबवा") else if (english) "Start step tracking" else "पावले मोजणे सुरू करा")
+                }
+                if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+    if (showGoalDialog) {
+        AlertDialog(
+            onDismissRequest = { showGoalDialog = false },
+            title = { Text(if (english) "Daily step goal" else "दैनिक पावलांचे लक्ष्य") },
+            text = { OutlinedTextField(value = goalText, onValueChange = { goalText = it.filter(Char::isDigit).take(6) }, label = { Text(if (english) "Steps" else "पावले") }, singleLine = true) },
+            confirmButton = { TextButton(onClick = { goalText.toIntOrNull()?.takeIf { it in 1000..100000 }?.let(onGoalChange); showGoalDialog = false }) { Text(if (english) "Save" else "जतन करा") } },
+            dismissButton = { TextButton(onClick = { showGoalDialog = false }) { Text(if (english) "Cancel" else "रद्द") } }
+        )
+    }
+}
+
+@Composable
+private fun StepMetricCard(label: String, value: String, note: String, ink: Color, modifier: Modifier = Modifier) {
+    Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(13.dp)) {
+            Text(label, color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text(value, color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(note, color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
         }
     }
 }
