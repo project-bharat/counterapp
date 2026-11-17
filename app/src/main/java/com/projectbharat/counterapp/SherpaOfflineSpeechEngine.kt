@@ -32,11 +32,32 @@ class SherpaOfflineSpeechEngine(
         }
     }
 
+    /**
+     * Stop capture and wait until the worker has released AudioRecord and the native
+     * recognizer. A timed join can let a language restart open a second microphone
+     * while the previous decode thread is still shutting down.
+     *
+     * Call from an IO/background dispatcher, never the main thread.
+     */
     fun stop() {
         running.set(false)
-        try { recorder?.stop() } catch (_: Exception) {}
-        try { worker?.join(900) } catch (_: InterruptedException) { Thread.currentThread().interrupt() }
-        try { recorder?.release() } catch (_: Exception) {}
+        val activeRecorder = recorder
+        try { activeRecorder?.stop() } catch (_: Exception) {}
+
+        val activeWorker = worker
+        if (activeWorker != null && activeWorker !== Thread.currentThread()) {
+            var interrupted = false
+            while (activeWorker.isAlive) {
+                try {
+                    activeWorker.join()
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                }
+            }
+            if (interrupted) Thread.currentThread().interrupt()
+        }
+
+        // The worker's finally block owns release(); only clear references after it exits.
         recorder = null
         worker = null
     }
