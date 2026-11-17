@@ -16,7 +16,8 @@ object VoskOfflineModelInstaller {
         return File(File(context.filesDir, name), "am/final.mdl").isFile
     }
 
-    @Synchronized\n    fun install(context: Context, language: String, onProgress: (String) -> Unit) {
+    @Synchronized
+    fun install(context: Context, language: String, onProgress: (String) -> Unit) {
         val name = modelName(language)
         val address = modelUrl(language)
         val target = File(context.filesDir, name)
