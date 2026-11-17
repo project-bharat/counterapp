@@ -85,7 +85,7 @@ fun BabyVoiceCountControl(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    DisposableEffect(listening, activeSessionId, english) {
+    DisposableEffect(listening, activeSessionId, english, recognitionLanguage) {
         if (!listening) {
             stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "")
             onDispose { }
@@ -114,7 +114,7 @@ fun BabyVoiceCountControl(
                 if (!disposed && listening) {
                     try {
                         ready = false
-                        stateCallback.value(true, if (english) "Preparing offline speech recognition…" else "ऑफलाइन आवाज ओळख तयार होत आहे…", "")
+                        stateCallback.value(true, if (english) "Starting speech recognition…" else "आवाज ओळख सुरू होत आहे…", "")
                         recognizer.startListening(intent)
                     } catch (_: Exception) { handler.postDelayed(restart, 900) }
                 }
@@ -123,7 +123,7 @@ fun BabyVoiceCountControl(
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
                     ready = true
-                    stateCallback.value(true, if (english) "Listening offline — say one, two, three…" else "ऑफलाइन ऐकत आहे — एक, दोन, तीन म्हणा…", "")
+                    stateCallback.value(true, if (recognitionLanguage == "mr-IN") "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", "")
                 }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
@@ -139,7 +139,7 @@ fun BabyVoiceCountControl(
                 }
                 override fun onResults(results: Bundle?) {
                     val phrase = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    stateCallback.value(true, if (english) "Listening offline — say one, two, three…" else "ऑफलाइन ऐकत आहे — एक, दोन, तीन म्हणा…", phrase)
+                    stateCallback.value(true, if (recognitionLanguage == "mr-IN") "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", phrase)
                     val words = phrase.lowercase()
                         .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                         .split(Regex("\\s+"))
