@@ -452,64 +452,10 @@ class ChantRecognitionService : Service() {
     }
 
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
-        val zipFile = File(cacheDir, modelName + ".zip")
-        val existingBytes = if (zipFile.exists()) zipFile.length() else 0L
-        sendState(true, "Downloading offline model · starting")
-        val connection = URL(modelUrl).openConnection() as HttpURLConnection
-        connection.connectTimeout = 20000; connection.readTimeout = 60000; connection.instanceFollowRedirects = true
-        try {
-            if (existingBytes > 0L) connection.setRequestProperty("Range", "bytes=$existingBytes-")
-            connection.connect()
-            val response = connection.responseCode
-            if (response == 416 && existingBytes > 0L) {
-                connection.disconnect()
-                zipFile.delete()
-                downloadAndExtractModel(modelUrl, modelName, target)
-                return
-            }
-            if (response !in 200..299) throw IllegalStateException("Model download failed (" + response + ")")
-            val append = response == HttpURLConnection.HTTP_PARTIAL && existingBytes > 0L
-            val totalBytes = if (append) existingBytes + connection.contentLengthLong else connection.contentLengthLong
-            var downloadedBytes = if (append) existingBytes else 0L
-            var lastProgressBytes = downloadedBytes
-            connection.inputStream.use { input ->
-                BufferedOutputStream(FileOutputStream(zipFile, append), 128 * 1024).use { output ->
-                    val chunk = ByteArray(128 * 1024)
-                    while (true) {
-                        if (Thread.currentThread().isInterrupted || stopRequested) throw InterruptedException("Model preparation paused")
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        output.write(chunk, 0, read)
-                        downloadedBytes += read
-                        if (downloadedBytes - lastProgressBytes >= 4L * 1024L * 1024L) {
-                            lastProgressBytes = downloadedBytes
-                            val percent = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt().coerceIn(0, 100) else -1
-                            sendState(true, if (percent >= 0) "Downloading offline model · $percent%" else "Downloading offline model · " + downloadedBytes + " bytes")
-                        }
-                    }
-                }
-            }
-            sendState(true, "Extracting offline model…")
-        } finally { connection.disconnect() }
-        val staging = File(filesDir, modelName + "_extract").apply { deleteRecursively(); mkdirs() }
-        ZipInputStream(BufferedInputStream(zipFile.inputStream(), 128 * 1024)).use { zip ->
-            var entry = zip.nextEntry
-            while (entry != null) {
-                val safeName = entry.name.replace('\\', '/')
-                if (safeName.startsWith("/") || safeName.split('/').any { it == ".." }) throw SecurityException("Invalid model archive path")
-                val output = File(staging, safeName)
-                if (entry.isDirectory) output.mkdirs() else {
-                    output.parentFile?.mkdirs()
-                    BufferedOutputStream(FileOutputStream(output), 128 * 1024).use { zip.copyTo(it, 128 * 1024) }
-                }
-                zip.closeEntry(); entry = zip.nextEntry
-            }
+        val selectedLanguage = if (modelName.contains("-hi-")) "hi" else "en"
+        VoskOfflineModelInstaller.install(this, selectedLanguage) { status ->
+            sendState(true, status)
         }
-        val extractedRoot = File(staging, modelName)
-        if (!File(extractedRoot, "am/final.mdl").exists()) throw IllegalStateException("Downloaded model is incomplete")
-        target.deleteRecursively()
-        if (!extractedRoot.renameTo(target)) throw IllegalStateException("Could not install offline model")
-        staging.deleteRecursively(); zipFile.delete()
     }
 
     private fun stopRecognition() {
