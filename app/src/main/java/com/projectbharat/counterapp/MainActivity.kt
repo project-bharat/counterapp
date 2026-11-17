@@ -694,6 +694,7 @@ private fun BabyMovementScreen(
     var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
     var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
+    var voiceDetectedCount by remember(activeSession?.id) { mutableStateOf(0) }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -725,13 +726,20 @@ private fun BabyMovementScreen(
                     activeSessionId = activeSession.id,
                     english = english,
                     onCount = { spokenCount -> onVoiceCount(activeSession.id, spokenCount) },
-                    onRecognitionState = { active, status, transcript ->
-                        voiceListening = active; voiceStatus = status; voiceTranscript = transcript
+                    onRecognitionState = { active, status, transcript, detectedCount ->
+                        voiceListening = active
+                        voiceStatus = status
+                        if (transcript != null) voiceTranscript = transcript
+                        if (detectedCount != null) voiceDetectedCount = detectedCount
+                        if (!active) {
+                            voiceTranscript = ""
+                            voiceDetectedCount = 0
+                        }
                     }
                 )
             }
             if (voiceListening) {
-                BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript)
+                BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript, voiceDetectedCount)
             }
             Spacer(Modifier.height(6.dp))
             BabyMotionSensorEngine(
