@@ -593,7 +593,16 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected?.kind == "STEPS") {
                     AutoStepCounterScreen(
-                        categoryId = selected.id, count = count, days = walkDays, sessions = walkSessions, range = stepGraphRange, onRangeChange = { stepGraphRange = it }, english = english, ink = ink
+                        categoryId = selected.id,
+                        count = count,
+                        goal = selected.goal,
+                        days = walkDays,
+                        sessions = walkSessions,
+                        range = stepGraphRange,
+                        onRangeChange = { stepGraphRange = it },
+                        onGoalChange = { newGoal -> scope.launch { vm.updateCategory(selected.copy(goal = newGoal)) } },
+                        english = english,
+                        ink = ink
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
