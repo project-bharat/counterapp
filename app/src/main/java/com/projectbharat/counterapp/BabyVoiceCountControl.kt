@@ -164,6 +164,9 @@ fun BabyVoiceCountControl(
 
     Button(
         onClick = {
+            // Invalidate any queued transcript/progress callback at the exact tap,
+            // not only when Compose later restarts the effect.
+            runGeneration.incrementAndGet()
             if (listening) {
                 // Close the panel synchronously on an explicit stop. The next tap
                 // opens it synchronously again, without waiting for LaunchedEffect.
