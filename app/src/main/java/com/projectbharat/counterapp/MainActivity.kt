@@ -694,7 +694,7 @@ private fun BabyMovementScreen(
     var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
     var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
-    val recognitionLanguage = if (english) "en-IN" else "mr-IN"
+    var recognitionLanguage by remember(activeSession?.id) { mutableStateOf(if (english) "en-IN" else "mr-IN") }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
