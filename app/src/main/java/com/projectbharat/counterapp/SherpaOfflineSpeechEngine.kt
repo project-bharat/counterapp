@@ -16,7 +16,7 @@ import kotlin.math.sqrt
 class SherpaOfflineSpeechEngine(
     private val modelFiles: OfflineSpeechModelManager.ModelFiles,
     private val english: Boolean,
-    private val onTranscript: (String) -> Unit,
+    private val onTranscript: (String, Int) -> Unit,
     private val onCount: (Int) -> Unit,
     private val onStatus: (String) -> Unit,
     private val onStopped: (String?) -> Unit
@@ -153,8 +153,8 @@ class SherpaOfflineSpeechEngine(
                 recognizer.decode(stream)
                 val phrase = recognizer.getResult(stream).text.trim()
                 if (phrase.isNotBlank()) {
-                    main.post { if (running.get()) onTranscript(phrase) }
                     val count = extractCount(phrase, english)
+                    main.post { if (running.get()) onTranscript(phrase, count) }
                     if (count > 0) main.post { if (running.get()) onCount(count) }
                 }
             } finally {
