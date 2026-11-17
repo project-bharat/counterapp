@@ -58,6 +58,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.atomic.AtomicLong
 
 @Composable
@@ -74,6 +75,7 @@ fun BabyVoiceCountControl(
     val stateCallback = rememberUpdatedState(onRecognitionState)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val runGeneration = remember(activeSessionId) { AtomicLong(0L) }
+    val engineMutex = remember(activeSessionId) { Mutex() }
     var listening by remember(activeSessionId) { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -102,6 +104,9 @@ fun BabyVoiceCountControl(
             return@LaunchedEffect
         }
 
+        // Serialize engines: the next language cannot claim the microphone until the old
+        // engine has released AudioRecord and its native recognizer.
+        engineMutex.lock()
         var engine: SherpaOfflineSpeechEngine? = null
         try {
             stateCallback.value(true, if (english) "Checking offline model…" else "ऑफलाइन मॉडेल तपासत आहे…", "", 0)
@@ -143,6 +148,7 @@ fun BabyVoiceCountControl(
             // LaunchedEffect is cancelled on language changes. Cleanup must outlive that
             // cancellation so the previous AudioRecord/model is fully stopped before restart.
             withContext(NonCancellable + Dispatchers.IO) { engine?.stop() }
+            engineMutex.unlock()
         }
     }
 
