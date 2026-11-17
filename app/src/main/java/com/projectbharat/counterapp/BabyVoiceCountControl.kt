@@ -147,7 +147,7 @@ fun BabyVoiceCountControl(
                 }
                 override fun onResults(results: Bundle?) {
                     val phrase = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    stateCallback.value(true, if (recognitionLanguage == "mr-IN") "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", phrase)
+                    stateCallback.value(true, if (!english) "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", phrase)
                     val words = phrase.lowercase()
                         .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                         .split(Regex("\\s+"))
