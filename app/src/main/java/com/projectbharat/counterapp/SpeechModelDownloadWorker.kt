@@ -1,0 +1,129 @@
+package com.projectbharat.counterapp
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.ServiceInfo
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.ForegroundInfo
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import androidx.work.workDataOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+
+class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val key = inputData.getString(KEY_MODEL) ?: return Result.failure()
+        val title = when (key) {
+            "sherpa_en" -> "English baby-movement voice model"
+            "sherpa_mr" -> "Marathi baby-movement voice model"
+            "vosk_en" -> "English Japa voice model"
+            "vosk_hi" -> "Hindi/Marathi Japa voice model"
+            else -> return Result.failure()
+        }
+        return try {
+            setForeground(foregroundInfo(title, "Preparing download…", 0))
+            when (key) {
+                "sherpa_en", "sherpa_mr" -> {
+                    val english = key == "sherpa_en"
+                    val manager = OfflineSpeechModelManager(applicationContext)
+                    manager.download(english) { done, total ->
+                        val percent = if (total > 0L) ((done * 100L) / total).toInt().coerceIn(0, 100) else 0
+                        val message = if (total > 0L) "Downloading · $percent%" else "Downloading model…"
+                        publishProgress(title, message, percent)
+                    }
+                }
+                "vosk_en", "vosk_hi" -> withContext(Dispatchers.IO) {
+                    val language = if (key == "vosk_hi") "hi" else "en"
+                    VoskOfflineModelInstaller.install(applicationContext, language) { message ->
+                        val percent = Regex("(\\d+)%").find(message)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                        publishProgress(title, message, percent)
+                    }
+                }
+            }
+            setProgress(workDataOf("complete" to true))
+            Result.success()
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            if (runAttemptCount < 4) Result.retry() else Result.failure(workDataOf("error" to (error.message ?: "Download failed")))
+        }
+    }
+
+    private fun publishProgress(title: String, message: String, percent: Int) {
+        runBlocking {
+            setProgress(workDataOf("progress" to percent, "message" to message))
+            setForeground(foregroundInfo(title, message, percent))
+        }
+    }
+
+    private fun foregroundInfo(title: String, message: String, percent: Int): ForegroundInfo {
+        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, "Offline voice models", NotificationManager.IMPORTANCE_LOW))
+        }
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setProgress(100, percent, percent <= 0)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .build()
+        return if (Build.VERSION.SDK_INT >= 29) {
+            ForegroundInfo(NOTIFICATION_ID + keyOffset(title), notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            ForegroundInfo(NOTIFICATION_ID + keyOffset(title), notification)
+        }
+    }
+
+    private fun keyOffset(title: String) = title.hashCode().and(0x7fff)
+
+    companion object {
+        const val KEY_MODEL = "model_key"
+        private const val CHANNEL_ID = "offline_voice_model_downloads"
+        private const val NOTIFICATION_ID = 7400
+    }
+}
+
+/** Queues each voice model once, one after another, so large model downloads do not compete. */
+object SpeechModelDownloadScheduler {
+    private val modelKeys = listOf("sherpa_mr", "sherpa_en", "vosk_hi", "vosk_en")
+
+    fun enqueueAll(context: Context, wifiOnly: Boolean) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
+            .build()
+        val requests = modelKeys.map { key ->
+            OneTimeWorkRequestBuilder<SpeechModelDownloadWorker>()
+                .setInputData(workDataOf(SpeechModelDownloadWorker.KEY_MODEL to key))
+                .setConstraints(constraints)
+                .build()
+        }
+        var chain = WorkManager.getInstance(context).beginUniqueWork(
+            if (wifiOnly) "voice-model-prefetch-wifi" else "voice-model-prefetch-any-network",
+            ExistingWorkPolicy.KEEP,
+            requests.first()
+        )
+        requests.drop(1).forEach { request -> chain = chain.then(request) }
+        chain.enqueue()
+    }
+
+    fun enqueueFirstInstall(context: Context) {
+        val prefs = context.getSharedPreferences("speech_model_setup", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("prefetch_scheduled", false)) {
+            prefs.edit().putBoolean("prefetch_scheduled", true).apply()
+            enqueueAll(context, wifiOnly = true)
+        }
+    }
+}
