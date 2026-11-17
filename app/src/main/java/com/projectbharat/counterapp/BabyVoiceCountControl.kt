@@ -55,8 +55,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 
 @Composable
 fun BabyVoiceCountControl(
@@ -71,6 +73,7 @@ fun BabyVoiceCountControl(
     val callback = rememberUpdatedState(onCount)
     val stateCallback = rememberUpdatedState(onRecognitionState)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val runGeneration = remember(activeSessionId) { AtomicLong(0L) }
     var listening by remember(activeSessionId) { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -87,6 +90,8 @@ fun BabyVoiceCountControl(
     }
 
     LaunchedEffect(listening, activeSessionId, english) {
+        // Every language/start-stop transition invalidates callbacks from the previous engine.
+        val runId = runGeneration.incrementAndGet()
         if (!listening) {
             stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "", null)
             return@LaunchedEffect
@@ -99,29 +104,32 @@ fun BabyVoiceCountControl(
 
         var engine: SherpaOfflineSpeechEngine? = null
         try {
-            stateCallback.value(true, if (english) "Checking offline model…" else "ऑफलाइन मॉडेल तपासत आहे…", "", null)
+            stateCallback.value(true, if (english) "Checking offline model…" else "ऑफलाइन मॉडेल तपासत आहे…", "", 0)
             val files = withContext(Dispatchers.IO) {
                 manager.installedFiles(english) ?: manager.download(english) { done, total ->
                     val percent = if (total > 0) ((done * 100) / total).toInt().coerceIn(0, 100) else 0
                     mainHandler.post {
-                        stateCallback.value(true,
+                        if (runGeneration.get() == runId) stateCallback.value(true,
                             if (english) "Downloading offline model… $percent%" else "ऑफलाइन मॉडेल डाउनलोड होत आहे… $percent%",
                             "", null)
                     }
                 }
             }
-            stateCallback.value(true, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "", null)
+            check(files.language == if (english) "en" else "mr") { "The downloaded speech model does not match the selected app language" }
+            stateCallback.value(true, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "", 0)
             engine = SherpaOfflineSpeechEngine(
                 modelFiles = files,
                 english = english,
                 onTranscript = { phrase, detectedCount ->
-                    stateCallback.value(true, if (english) "Listening offline…" else "ऑफलाइन ऐकत आहे…", phrase, detectedCount)
+                    if (runGeneration.get() == runId) stateCallback.value(true, if (english) "Listening offline…" else "ऑफलाइन ऐकत आहे…", phrase, detectedCount)
                 },
-                onCount = { amount -> callback.value(amount) },
-                onStatus = { status -> stateCallback.value(true, status, null, null) },
+                onCount = { amount -> if (runGeneration.get() == runId) callback.value(amount) },
+                onStatus = { status -> if (runGeneration.get() == runId) stateCallback.value(true, status, null, null) },
                 onStopped = { error ->
-                    stateCallback.value(false, error ?: if (english) "Voice count stopped" else "आवाज मोजणी थांबली", null, null)
-                    listening = false
+                    if (runGeneration.get() == runId) {
+                        stateCallback.value(false, error ?: if (english) "Voice count stopped" else "आवाज मोजणी थांबली", null, null)
+                        listening = false
+                    }
                 }
             )
             withContext(Dispatchers.IO) { engine.start() }
@@ -132,7 +140,9 @@ fun BabyVoiceCountControl(
             stateCallback.value(false, "Offline voice setup failed: " + (error.message ?: "try again"), null, null)
             listening = false
         } finally {
-            withContext(Dispatchers.IO) { engine?.stop() }
+            // LaunchedEffect is cancelled on language changes. Cleanup must outlive that
+            // cancellation so the previous AudioRecord/model is fully stopped before restart.
+            withContext(NonCancellable + Dispatchers.IO) { engine?.stop() }
         }
     }
 
