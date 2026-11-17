@@ -450,7 +450,18 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Language, null) }, label = { Text(if (english) "मराठी" else "English") }, selected = false, onClick = { english = !english; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(
+                            icon = { Icon(Icons.Default.Language, null) },
+                            label = { Text(if (english) "मराठी" else "English") },
+                            selected = false,
+                            onClick = {
+                                val nextLanguage = !english
+                                english = nextLanguage
+                                context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
+                                    .edit().putBoolean("english_language", nextLanguage).apply()
+                                scope.launch { drawerState.close() }
+                            }
+                        )
                         Spacer(Modifier.weight(1f))
                         Text(
                             if (english) "Designed & developed by Bharat Rasave" else "निर्मिती व संकल्पना · Bharat Rasave",
