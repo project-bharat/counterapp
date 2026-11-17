@@ -721,6 +721,7 @@ private fun BabyMovementScreen(
     var autoDetect by remember(activeSession?.id) { mutableStateOf(false) }
     var autoStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
+    var voicePanelVisible by remember(activeSession?.id) { mutableStateOf(false) }
     var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
     var voiceDetectedCount by remember(activeSession?.id) { mutableStateOf(0) }
@@ -758,6 +759,10 @@ private fun BabyMovementScreen(
                     onRecognitionState = { active, status, transcript, detectedCount ->
                         voiceListening = active
                         voiceStatus = status
+                        // Keep the panel visible for setup/reload and actionable errors.
+                        // Hide it only for an explicit user stop / inactive state.
+                        voicePanelVisible = active ||
+                            (status != "Voice count is off" && status != "आवाज मोजणी बंद")
                         if (transcript != null) voiceTranscript = transcript
                         if (detectedCount != null) voiceDetectedCount = detectedCount
                         if (!active) {
@@ -767,7 +772,7 @@ private fun BabyMovementScreen(
                     }
                 )
             }
-            if (voiceListening) {
+            if (voicePanelVisible) {
                 BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript, voiceDetectedCount)
             }
             Spacer(Modifier.height(6.dp))
