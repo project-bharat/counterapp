@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -63,6 +65,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 fun BabyVoiceCountControl(
     activeSessionId: Long,
     english: Boolean,
+    recognitionLanguage: String,
     onCount: (Int) -> Unit,
     onRecognitionState: (Boolean, String, String) -> Unit
 ) {
@@ -100,10 +103,10 @@ fun BabyVoiceCountControl(
             var ready = false
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (english) "en-IN" else "mr-IN")
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, if (english) "en-IN" else "mr-IN")
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLanguage)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguage)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             }
             lateinit var restart: Runnable
@@ -154,7 +157,7 @@ fun BabyVoiceCountControl(
                             Character.digit(ch, 10).takeIf { it >= 0 }
                         }.joinToString("").toIntOrNull()?.takeIf { it in 1..10 } ?: 0
                     }
-                    if (count > 0) callback.value(count)
+                    if (count > 0) { callback.value(count); val feedback = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 75); feedback.startTone(ToneGenerator.TONE_PROP_ACK, 130); handler.postDelayed({ feedback.release() }, 220) }
                     handler.postDelayed(restart, 350)
                 }
                 override fun onPartialResults(partialResults: Bundle?) {
