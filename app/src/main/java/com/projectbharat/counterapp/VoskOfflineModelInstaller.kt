@@ -79,7 +79,7 @@ object VoskOfflineModelInstaller {
             ZipInputStream(BufferedInputStream(zipFile.inputStream(), 128 * 1024)).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
-                    val safeName = entry.name.replace('\\\\', '/')
+                    val safeName = entry.name.replace('\\', '/')
                     if (safeName.startsWith("/") || safeName.split('/').any { it == ".." }) {
                         throw SecurityException("Invalid model archive path")
                     }
