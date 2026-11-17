@@ -245,8 +245,18 @@ fun CounterApp(repo: CounterRepository) {
     val vm: CounterViewModel = viewModel(factory = CounterViewModel.Factory(repo))
     val categories by vm.categories.collectAsStateWithLifecycle()
     val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var selectedId by remember { mutableLongStateOf(1L) }
-    var english by remember { mutableStateOf(false) }
+    var english by remember(context) {
+        mutableStateOf(
+            context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
+                .getBoolean("english_language", false)
+        )
+    }
+    LaunchedEffect(english) {
+        context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean("english_language", english).apply()
+    }
     var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
@@ -264,7 +274,6 @@ fun CounterApp(repo: CounterRepository) {
     var stepGraphRange by remember { mutableStateOf("7D") }
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
     val shortcutQuickStart = activity?.launchCounterQuickStart == true
