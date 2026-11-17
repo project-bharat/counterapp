@@ -18,7 +18,8 @@ class SherpaOfflineSpeechEngine(
     private val english: Boolean,
     private val onTranscript: (String) -> Unit,
     private val onCount: (Int) -> Unit,
-    private val onStatus: (String) -> Unit
+    private val onStatus: (String) -> Unit,
+    private val onStopped: (String?) -> Unit
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
@@ -43,6 +44,7 @@ class SherpaOfflineSpeechEngine(
     private fun captureAndDecode() {
         var recognizer: OfflineRecognizer? = null
         var audio: AudioRecord? = null
+        var failureMessage: String? = null
         try {
             postStatus(if (english) "Loading offline English model…" else "मराठी ऑफलाइन मॉडेल लोड होत आहे…")
             val config = OfflineRecognizerConfig(
@@ -112,13 +114,14 @@ class SherpaOfflineSpeechEngine(
                 }
             }
         } catch (error: Throwable) {
-            if (running.get()) postStatus("Offline voice error: " + (error.message ?: "could not start"))
+            failureMessage = "Offline voice error: " + (error.message ?: "could not start")
         } finally {
-            running.set(false)
+            val endedUnexpectedly = running.getAndSet(false)
             try { audio?.stop() } catch (_: Exception) {}
             try { audio?.release() } catch (_: Exception) {}
             recorder = null
             try { recognizer?.release() } catch (_: Exception) {}
+            if (endedUnexpectedly) main.post { onStopped(failureMessage) }
         }
     }
 
@@ -151,7 +154,11 @@ class SherpaOfflineSpeechEngine(
         private const val FRAME_SAMPLES = 320
 
         fun extractCount(phrase: String, english: Boolean): Int {
-            val words = phrase.lowercase()
+            return BabyMovementNumberParser.extract(phrase, english)
+        }
+    }
+}
+
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .split(Regex("\\s+"))
                 .filter { it.isNotBlank() }
