@@ -114,7 +114,7 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
 fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, sessions: List<WalkingSession>, range: String, onRangeChange: (String) -> Unit, english: Boolean, ink: Color) {
     val context = LocalContext.current
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null || (sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null && sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) }
+    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null || sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null }
     var permissionGranted by remember {
         mutableStateOf(Build.VERSION.SDK_INT < 29 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
@@ -221,9 +221,9 @@ fun AutoStepCounterScreen(categoryId: Long, count: Int, days: List<DayTotal>, se
                 }
                 Spacer(Modifier.height(8.dp))
                 when {
-                    !available -> Text(if (english) "This phone has no step-counter sensor" else "या फोनमध्ये स्टेप काउंटर सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
+                    !available -> Text(if (english) "This phone has no hardware step sensor" else "या फोनमध्ये हार्डवेअर स्टेप सेन्सर नाही", color = Color(0xFFB45353), textAlign = TextAlign.Center)
                     !permissionGranted -> Text(if (english) "Allow physical activity access to count automatically" else "पावले आपोआप मोजण्यासाठी हालचाल परवानगी द्या", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
-                    else -> Text(if (running) if (english) "Motion tracking active" else "हालचाल मोजणी सुरू आहे" else if (english) "Motion-validated steps are counted" else "हालचाल पडताळलेली पावले मोजली जातात", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
+                    else -> Text(if (running) if (english) "Motion tracking active" else "हालचाल मोजणी सुरू आहे" else if (english) "Hardware step detection active" else "हार्डवेअर स्टेप डिटेक्शन सुरू आहे", color = ink.copy(alpha = .65f), textAlign = TextAlign.Center)
                 }
                 Spacer(Modifier.height(16.dp))
                 Button(
