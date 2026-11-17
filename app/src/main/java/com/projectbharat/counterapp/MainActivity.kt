@@ -694,7 +694,6 @@ private fun BabyMovementScreen(
     var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
     var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
-    var recognitionLanguage by remember(activeSession?.id) { mutableStateOf(if (english) "en-IN" else "mr-IN") }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -725,7 +724,6 @@ private fun BabyMovementScreen(
                 BabyVoiceCountControl(
                     activeSessionId = activeSession.id,
                     english = english,
-                    recognitionLanguage = recognitionLanguage,
                     onCount = { spokenCount -> onVoiceCount(activeSession.id, spokenCount) },
                     onRecognitionState = { active, status, transcript ->
                         voiceListening = active; voiceStatus = status; voiceTranscript = transcript
@@ -734,16 +732,6 @@ private fun BabyMovementScreen(
             }
             if (voiceListening) {
                 BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript)
-                Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (english) "Recognition language:" else "ओळख भाषा:", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelSmall)
-                    Spacer(Modifier.width(6.dp))
-                    listOf("en-IN" to "English", "mr-IN" to "मराठी").forEach { (code, label) ->
-                        TextButton(onClick = { recognitionLanguage = code }) {
-                            Text(label, fontWeight = if (recognitionLanguage == code) FontWeight.Bold else FontWeight.Normal,
-                                color = if (recognitionLanguage == code) MaterialTheme.colorScheme.primary else ink.copy(alpha = .65f))
-                        }
-                    }
-                }
             }
             Spacer(Modifier.height(6.dp))
             BabyMotionSensorEngine(
