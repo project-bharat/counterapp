@@ -75,6 +75,10 @@ class SherpaOfflineSpeechEngine(
 
             val pcm = ShortArray(FRAME_SAMPLES)
             val phraseSamples = ArrayList<Float>(SAMPLE_RATE * 5)
+            // Keep a short rolling buffer so the first syllable is not clipped by the voice gate.
+            val preRoll = java.util.ArrayDeque<FloatArray>()
+            val preRollFrames = 10 // 200 ms at 16 kHz / 20 ms per frame
+            var noiseFloor = 0.002f
             var speaking = false
             var silence = 0
             var phraseLength = 0
@@ -92,9 +96,20 @@ class SherpaOfflineSpeechEngine(
                     frame[i] = value
                     energy += value * value
                 }
-                val hasVoice = sqrt(energy / read).toFloat() >= 0.010f
+                val rms = sqrt(energy / read).toFloat()
+                // Track quiet-room noise slowly and clamp the gate to avoid suppressing soft speech.
+                val voiceThreshold = (noiseFloor * 2.8f).coerceIn(0.0045f, 0.018f)
+                val hasVoice = rms >= voiceThreshold
+
                 if (hasVoice) {
-                    speaking = true
+                    if (!speaking) {
+                        speaking = true
+                        while (preRoll.isNotEmpty()) {
+                            val earlierFrame = preRoll.removeFirst()
+                            earlierFrame.forEach { phraseSamples.add(it) }
+                            phraseLength += earlierFrame.size
+                        }
+                    }
                     silence = 0
                     phraseLength += read
                     frame.forEach { phraseSamples.add(it) }
@@ -102,11 +117,16 @@ class SherpaOfflineSpeechEngine(
                     silence += read
                     phraseLength += read
                     frame.forEach { phraseSamples.add(it) }
+                } else {
+                    noiseFloor = (noiseFloor * 0.95f + rms * 0.05f).coerceIn(0.0005f, 0.012f)
+                    preRoll.addLast(frame)
+                    while (preRoll.size > preRollFrames) preRoll.removeFirst()
                 }
 
                 if (speaking && (silence >= silenceLimit || phraseLength >= maximumPhrase)) {
                     if (phraseLength >= minimumPhrase && running.get()) decodePhrase(recognizer, phraseSamples)
                     phraseSamples.clear()
+                    preRoll.clear()
                     speaking = false
                     silence = 0
                     phraseLength = 0
