@@ -694,7 +694,7 @@ private fun BabyMovementScreen(
     var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
     var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
-    var recognitionLanguage by remember(activeSession?.id) { mutableStateOf(if (english) "en-IN" else "mr-IN") }
+    val recognitionLanguage = if (english) "en-IN" else "mr-IN"
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -843,8 +843,15 @@ private fun BabyMovementScreen(
                         Text(if (english) "AUTO DETECTED" else "स्वयंचलित ओळख", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         if (autoDetect) {
                             val ready = autoStatus.contains("Ready", true) || autoStatus.contains("तयार", true)
-                            Text(if (ready) (if (english) "READY" else "तयार") else if (autoStatus.isNotBlank()) autoStatus else (if (english) "STARTING…" else "सुरू होत आहे…"),
-                                color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (ready) {
+                                    Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF45D483)))
+                                    Text(if (english) "READY" else "तयार", color = Color(0xFF72E3A0), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                } else {
+                                    CircularProgressIndicator(Modifier.size(13.dp), color = Color(0xFFFF7777), strokeWidth = 2.dp)
+                                    Text(if (english) "CALIBRATING…" else "कॅलिब्रेट होत आहे…", color = Color(0xFFFF7777), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
+                            }
                         } else Text(if (english) "OFF" else "बंद", color = Color.White.copy(alpha = .8f), style = MaterialTheme.typography.labelSmall)
                     }
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -859,20 +866,19 @@ private fun BabyMovementScreen(
                     }
                     if (pending > 0) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Surface(
-                            modifier = Modifier.weight(1f).height(40.dp).clickable { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) },
-                            shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primaryContainer
+                            modifier = Modifier.height(36.dp).widthIn(min = 92.dp).clickable { onConfirmDetections(detections.filter { it.status == "PENDING" }.map { it.id }) },
+                            shape = CircleShape, color = Color(0xFFE4EFFB)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(if (english) "Add all" else "सर्व जोडा", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                Text(if (english) "Add all" else "सर्व जोडा", color = Color(0xFF174A7E), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
                         Surface(
-                            modifier = Modifier.weight(1f).height(40.dp).clickable { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) },
-                            shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            modifier = Modifier.height(36.dp).widthIn(min = 92.dp).clickable { onDismissDetections(detections.filter { it.status == "PENDING" }.map { it.id }) },
+                            shape = CircleShape, color = Color(0xFFFCE8E7)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(if (english) "Dismiss" else "वगळा", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                                Text(if (english) "Dismiss" else "वगळा", color = Color(0xFFB3261E), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
