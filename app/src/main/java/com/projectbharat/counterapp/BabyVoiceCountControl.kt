@@ -137,10 +137,12 @@ fun BabyVoiceCountControl(
                 override fun onEndOfSpeech() {}
                 override fun onError(error: Int) {
                     if (!disposed && listening) {
-                        if (!ready && error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
-                            stateCallback.value(true, if (english) "Offline language model unavailable. Check speech services." else "ऑफलाइन भाषा मॉडेल उपलब्ध नाही. Speech Services तपासा.", "")
+                        if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
+                            stateCallback.value(false, if (english) "Offline language model for this language is not installed. Download it in Android speech settings, then try again." else "या भाषेचे ऑफलाइन मॉडेल स्थापित नाही. Android आवाज सेटिंग्जमधून डाउनलोड करून पुन्हा प्रयत्न करा.", "")
+                            listening = false
+                        } else {
+                            handler.postDelayed(restart, if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1200 else 650)
                         }
-                        handler.postDelayed(restart, if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1200 else 650)
                     }
                 }
                 override fun onResults(results: Bundle?) {
