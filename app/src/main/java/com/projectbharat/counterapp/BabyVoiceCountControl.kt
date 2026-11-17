@@ -1,16 +1,9 @@
 package com.projectbharat.counterapp
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -45,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +54,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withContext
 
 @Composable
 fun BabyVoiceCountControl(
@@ -70,119 +67,68 @@ fun BabyVoiceCountControl(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    var listening by remember(activeSessionId) { mutableStateOf(false) }
+    val manager = remember(context) { OfflineSpeechModelManager(context.applicationContext) }
     val callback = rememberUpdatedState(onCount)
     val stateCallback = rememberUpdatedState(onRecognitionState)
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    var listening by remember(activeSessionId) { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) listening = true
         else stateCallback.value(false, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "")
     }
 
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) listening = false }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) listening = false
+        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    DisposableEffect(listening, activeSessionId, english) {
+    LaunchedEffect(listening, activeSessionId, english) {
         if (!listening) {
             stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "")
-            onDispose { }
-        } else if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            stateCallback.value(false, if (english) "Speech recognition unavailable" else "आवाज ओळख उपलब्ध नाही", "")
+            return@LaunchedEffect
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             listening = false
-            onDispose { }
-        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            listening = false
-            onDispose { }
-        } else {
-            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
-                !SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-                stateCallback.value(false, if (english) "Offline speech recognition is unavailable. Install the offline voice model for this language in Android settings." else "ऑफलाइन आवाज ओळख उपलब्ध नाही. Android सेटिंग्जमध्ये या भाषेचे ऑफलाइन मॉडेल स्थापित करा.", "")
-                listening = false
-                onDispose { }
-            } else {
-            val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            val handler = Handler(Looper.getMainLooper())
-            var disposed = false
-            var ready = false
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                val recognitionLanguage = if (english) "en-IN" else "mr-IN"
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLanguage)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguage)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            }
-            lateinit var restart: Runnable
-            fun startAgain() {
-                if (!disposed && listening) {
-                    try {
-                        ready = false
-                        stateCallback.value(true, if (english) "Starting speech recognition…" else "आवाज ओळख सुरू होत आहे…", "")
-                        recognizer.startListening(intent)
-                    } catch (_: Exception) { handler.postDelayed(restart, 900) }
-                }
-            }
-            restart = Runnable { startAgain() }
-            recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    ready = true
-                    stateCallback.value(true, if (!english) "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", "")
-                }
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-                override fun onError(error: Int) {
-                    if (!disposed && listening) {
-                        if (error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
-                            stateCallback.value(false, if (english) "Offline language model for this language is not installed. Download it in Android speech settings, then try again." else "या भाषेचे ऑफलाइन मॉडेल स्थापित नाही. Android आवाज सेटिंग्जमधून डाउनलोड करून पुन्हा प्रयत्न करा.", "")
-                            listening = false
-                        } else {
-                            handler.postDelayed(restart, if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) 1200 else 650)
-                        }
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return@LaunchedEffect
+        }
+
+        var engine: SherpaOfflineSpeechEngine? = null
+        try {
+            stateCallback.value(true, if (english) "Checking offline model…" else "ऑफलाइन मॉडेल तपासत आहे…", "")
+            val files = withContext(Dispatchers.IO) {
+                manager.installedFiles(english) ?: manager.download(english) { done, total ->
+                    val percent = if (total > 0) ((done * 100) / total).toInt().coerceIn(0, 100) else 0
+                    mainHandler.post {
+                        stateCallback.value(true,
+                            if (english) "Downloading offline model… $percent%" else "ऑफलाइन मॉडेल डाउनलोड होत आहे… $percent%",
+                            "")
                     }
                 }
-                override fun onResults(results: Bundle?) {
-                    val phrase = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    stateCallback.value(true, if (!english) "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", phrase)
-                    val words = phrase.lowercase()
-                        .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
-                        .split(Regex("\\s+"))
-                        .filter { it.isNotBlank() }
-                    val numberWords = if (english) mapOf(
-                        "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5,
-                        "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10
-                    ) else mapOf(
-                        "एक" to 1, "दोन" to 2, "तीन" to 3, "चार" to 4, "पाच" to 5,
-                        "सहा" to 6, "सात" to 7, "आठ" to 8, "नऊ" to 9, "दहा" to 10,
-                        "ek" to 1, "don" to 2, "teen" to 3, "tin" to 3, "char" to 4,
-                        "chaar" to 4, "pach" to 5, "paach" to 5, "saha" to 6,
-                        "saat" to 7, "aath" to 8, "nau" to 9, "daha" to 10
-                    )
-                    val count = words.sumOf { token ->
-                        numberWords[token] ?: token.mapNotNull { ch ->
-                            Character.digit(ch, 10).takeIf { it >= 0 }
-                        }.joinToString("").toIntOrNull()?.takeIf { it in 1..10 } ?: 0
-                    }
-                    if (count > 0) { callback.value(count); val feedback = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 75); feedback.startTone(ToneGenerator.TONE_PROP_ACK, 130); handler.postDelayed({ feedback.release() }, 220) }
-                    handler.postDelayed(restart, 350)
-                }
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val phrase = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
-                    if (phrase.isNotBlank()) stateCallback.value(true, if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", phrase)
-                }
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            startAgain()
-            onDispose {
-                disposed = true
-                handler.removeCallbacksAndMessages(null)
-                try { recognizer.cancel(); recognizer.destroy() } catch (_: Exception) {}
             }
-            }
+            stateCallback.value(true, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "")
+            engine = SherpaOfflineSpeechEngine(
+                modelFiles = files,
+                english = english,
+                onTranscript = { phrase ->
+                    stateCallback.value(true, if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", phrase)
+                },
+                onCount = { amount -> callback.value(amount) },
+                onStatus = { status -> stateCallback.value(true, status, "") }
+            )
+            withContext(Dispatchers.IO) { engine.start() }
+            awaitCancellation()
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            stateCallback.value(false, "Offline voice setup failed: " + (error.message ?: "try again"), "")
+            listening = false
+        } finally {
+            withContext(Dispatchers.IO) { engine?.stop() }
         }
     }
 
@@ -218,22 +164,19 @@ fun BabyVoiceRecognitionPanel(listening: Boolean, english: Boolean, status: Stri
                 Text(if (listening) (if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख") else (if (english) "VOICE RECOGNITION" else "आवाज ओळख"), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(7.dp))
-            if (listening && (status.contains("Preparing", true) || status.contains("तयार होत", true))) {
+            if (listening && (status.contains("Loading", true) || status.contains("Downloading", true) || status.contains("तपास", true) || status.contains("डाउनलोड", true) || status.contains("लोड होत", true))) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text(if (english) "Starting speech recognition…" else "आवाज ओळख सुरू होत आहे…", style = MaterialTheme.typography.bodySmall)
+                    Text(status, style = MaterialTheme.typography.bodySmall)
                 }
             } else {
                 AnimatedContent(
-                    targetState = transcript.ifBlank { status.ifBlank { if (listening) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Voice count is off" else "आवाज मोजणी बंद") } },
+                    targetState = transcript.ifBlank { status.ifBlank { if (listening) (if (english) "Listening offline…" else "ऑफलाइन ऐकत आहे…") else (if (english) "Voice count is off" else "आवाज मोजणी बंद") } },
                     transitionSpec = { (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut()) },
                     label = "babyVoiceTranscript"
                 ) { phrase ->
                     Text(phrase, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                 }
-            }
-            if (status.contains("unavailable", true) || status.contains("उपलब्ध नाही", true)) {
-                Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
         }
     }
