@@ -216,12 +216,13 @@ fun AutoStepCounterScreen(
                             Text(today.dayOfWeek.name.take(3), color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall)
                         }
                         Spacer(Modifier.height(10.dp))
+                        val ringTrackColor = MaterialTheme.colorScheme.surfaceVariant
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
                             Canvas(Modifier.fillMaxSize()) {
                                 val stroke = 13.dp.toPx()
                                 val arcSize = Size(size.width - stroke * 2, size.height - stroke * 2)
                                 val topLeft = Offset(stroke, stroke)
-                                drawArc(MaterialTheme.colorScheme.surfaceVariant, 135f, 270f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                                drawArc(ringTrackColor, 135f, 270f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                                 drawArc(Color(0xFFD5A757), 135f, 270f * progress, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
