@@ -59,6 +59,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -447,7 +448,7 @@ fun CounterApp(repo: CounterRepository) {
                         Divider(Modifier.padding(vertical = 8.dp))
                         NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })\n                        NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text(if (english) "Prepare voice models" else "आवाज मॉडेल डाउनलोड करा") }, selected = false, onClick = { SpeechModelDownloadScheduler.enqueueAll(context, wifiOnly = false); scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(
@@ -798,7 +799,7 @@ private fun BabyMovementScreen(
                         }
                     }
                     Spacer(Modifier.height(20.dp))
-                    Box(Modifier.size(166.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(232.dp), contentAlignment = Alignment.Center) {
                         Canvas(Modifier.fillMaxSize()) {
                             drawCircle(tapSurface, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx()))
                             drawArc(Gold, -90f, 360f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round))
