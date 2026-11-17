@@ -694,6 +694,7 @@ private fun BabyMovementScreen(
     var voiceListening by remember(activeSession?.id) { mutableStateOf(false) }
     var voiceStatus by remember(activeSession?.id) { mutableStateOf("") }
     var voiceTranscript by remember(activeSession?.id) { mutableStateOf("") }
+    var recognitionLanguage by remember(activeSession?.id) { mutableStateOf(if (english) "en-IN" else "mr-IN") }
     val pending = detections.count { it.status == "PENDING" }
     val added = detections.count { it.status == "CONFIRMED" }
     Column(
@@ -707,13 +708,24 @@ private fun BabyMovementScreen(
                     Text(periodLabel(activeSession.dayPeriod, english) + " · " + sessionTime(activeSession.startedAt),
                         color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text(if (english) "Auto" else "ऑटो", color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                    Switch(checked = autoDetect, onCheckedChange = { autoDetect = it }, modifier = Modifier.size(width = 44.dp, height = 30.dp))
+                Button(
+                    onClick = { autoDetect = !autoDetect },
+                    modifier = Modifier.height(40.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (autoDetect) Color(0xFF26734D) else Color(0xFFE6EEF6),
+                        contentColor = if (autoDetect) Color.White else ink
+                    )
+                ) {
+                    Icon(Icons.Default.DirectionsWalk, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(if (autoDetect) (if (english) "Auto on" else "ऑटो सुरू") else (if (english) "Auto count" else "ऑटो मोजणी"), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                 }
                 BabyVoiceCountControl(
                     activeSessionId = activeSession.id,
                     english = english,
+                    recognitionLanguage = recognitionLanguage,
                     onCount = { spokenCount -> onVoiceCount(activeSession.id, spokenCount) },
                     onRecognitionState = { active, status, transcript ->
                         voiceListening = active; voiceStatus = status; voiceTranscript = transcript
@@ -722,6 +734,16 @@ private fun BabyMovementScreen(
             }
             if (voiceListening) {
                 BabyVoiceRecognitionPanel(voiceListening, english, voiceStatus, voiceTranscript)
+                Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (english) "Recognition language:" else "ओळख भाषा:", color = ink.copy(alpha = .7f), style = MaterialTheme.typography.labelSmall)
+                    Spacer(Modifier.width(6.dp))
+                    listOf("en-IN" to "English", "mr-IN" to "मराठी").forEach { (code, label) ->
+                        TextButton(onClick = { recognitionLanguage = code }) {
+                            Text(label, fontWeight = if (recognitionLanguage == code) FontWeight.Bold else FontWeight.Normal,
+                                color = if (recognitionLanguage == code) MaterialTheme.colorScheme.primary else ink.copy(alpha = .65f))
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(6.dp))
             BabyMotionSensorEngine(
