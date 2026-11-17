@@ -1,10 +1,14 @@
 package com.projectbharat.counterapp
 
+import java.text.Normalizer
+
 /** Converts number words or numeric tokens found anywhere in a recognized phrase to a count. */
 object BabyMovementNumberParser {
     fun extract(phrase: String, english: Boolean): Int {
-        val words = phrase.lowercase()
-            .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+        // Preserve Marathi vowel signs and other Unicode combining marks during tokenization.
+        val normalizedPhrase = Normalizer.normalize(phrase.lowercase(), Normalizer.Form.NFC)
+        val words = normalizedPhrase
+            .replace(Regex("[^\\p{L}\\p{M}\\p{N}\\s]"), " ")
             .split(Regex("\\s+"))
             .filter { it.isNotBlank() }
         val numberMap = if (english) mapOf(
