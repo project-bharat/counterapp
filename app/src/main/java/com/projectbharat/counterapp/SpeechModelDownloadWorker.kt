@@ -111,8 +111,8 @@ object SpeechModelDownloadScheduler {
                 .build()
         }
         var chain = WorkManager.getInstance(context).beginUniqueWork(
-            if (wifiOnly) "voice-model-prefetch-wifi" else "voice-model-prefetch-any-network",
-            ExistingWorkPolicy.KEEP,
+            "voice-model-prefetch",
+            if (wifiOnly) ExistingWorkPolicy.KEEP else ExistingWorkPolicy.REPLACE,
             requests.first()
         )
         requests.drop(1).forEach { request -> chain = chain.then(request) }
