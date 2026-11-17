@@ -65,7 +65,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 fun BabyVoiceCountControl(
     activeSessionId: Long,
     english: Boolean,
-    recognitionLanguage: String,
     onCount: (Int) -> Unit,
     onRecognitionState: (Boolean, String, String) -> Unit
 ) {
@@ -85,7 +84,7 @@ fun BabyVoiceCountControl(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    DisposableEffect(listening, activeSessionId, english, recognitionLanguage) {
+    DisposableEffect(listening, activeSessionId, english) {
         if (!listening) {
             stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "")
             onDispose { }
@@ -97,16 +96,23 @@ fun BabyVoiceCountControl(
             listening = false
             onDispose { }
         } else {
-            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S ||
+                !SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+                stateCallback.value(false, if (english) "Offline speech recognition is unavailable. Install the offline voice model for this language in Android settings." else "ऑफलाइन आवाज ओळख उपलब्ध नाही. Android सेटिंग्जमध्ये या भाषेचे ऑफलाइन मॉडेल स्थापित करा.", "")
+                listening = false
+                onDispose { }
+            } else {
+            val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             val handler = Handler(Looper.getMainLooper())
             var disposed = false
             var ready = false
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                val recognitionLanguage = if (english) "en-IN" else "mr-IN"
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLanguage)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, recognitionLanguage)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             }
             lateinit var restart: Runnable
@@ -123,7 +129,7 @@ fun BabyVoiceCountControl(
             recognizer.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) {
                     ready = true
-                    stateCallback.value(true, if (recognitionLanguage == "mr-IN") "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", "")
+                    stateCallback.value(true, if (!english) "मराठी ऐकत आहे — एक, दोन, तीन म्हणा…" else "Listening — say one, two, three…", "")
                 }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
@@ -144,17 +150,15 @@ fun BabyVoiceCountControl(
                         .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                         .split(Regex("\\s+"))
                         .filter { it.isNotBlank() }
-                    val numberWords = mapOf(
+                    val numberWords = if (english) mapOf(
                         "one" to 1, "two" to 2, "three" to 3, "four" to 4, "five" to 5,
-                        "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10,
+                        "six" to 6, "seven" to 7, "eight" to 8, "nine" to 9, "ten" to 10
+                    ) else mapOf(
                         "एक" to 1, "दोन" to 2, "तीन" to 3, "चार" to 4, "पाच" to 5,
                         "सहा" to 6, "सात" to 7, "आठ" to 8, "नऊ" to 9, "दहा" to 10,
-                        "दो" to 2, "दोनों" to 2, "पाँच" to 5, "छह" to 6, "नौ" to 9,
-                        "ek" to 1, "eka" to 1, "don" to 2, "dona" to 2, "do" to 2,
-                        "teen" to 3, "tin" to 3, "tīn" to 3, "char" to 4,
+                        "ek" to 1, "don" to 2, "teen" to 3, "tin" to 3, "char" to 4,
                         "chaar" to 4, "pach" to 5, "paach" to 5, "saha" to 6,
-                        "saat" to 7, "sat" to 7, "aath" to 8, "ath" to 8,
-                        "nau" to 9, "nav" to 9, "daha" to 10, "daha" to 10
+                        "saat" to 7, "aath" to 8, "nau" to 9, "daha" to 10
                     )
                     val count = words.sumOf { token ->
                         numberWords[token] ?: token.mapNotNull { ch ->
@@ -175,6 +179,7 @@ fun BabyVoiceCountControl(
                 disposed = true
                 handler.removeCallbacksAndMessages(null)
                 try { recognizer.cancel(); recognizer.destroy() } catch (_: Exception) {}
+            }
             }
         }
     }
