@@ -155,6 +155,7 @@ class MainActivity : ComponentActivity() {
         // automatically as soon as the first app frame is ready.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        SpeechModelDownloadScheduler.enqueueFirstInstall(this)
         stopService(Intent(this, ChantRecognitionService::class.java))
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit()
             .putBoolean("chant_enabled", false).apply()
@@ -806,7 +807,7 @@ private fun BabyMovementScreen(
                         }
                         val tapInteraction = remember { MutableInteractionSource() }
                         Box(
-                            Modifier.size(138.dp)
+                            Modifier.size(193.dp)
                                 .graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value)
                                 .background(Brush.linearGradient(if (activeSession.movementCount >= 10) listOf(Color(0xFFE2F5E8), Color(0xFFC6EBD2)) else listOf(Color(0xFFFFE6DD), Color(0xFFFFC9B9))), CircleShape)
                                 .clickable(interactionSource = tapInteraction, indication = null) {
