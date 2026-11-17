@@ -79,8 +79,12 @@ fun BabyVoiceCountControl(
     var listening by remember(activeSessionId) { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) listening = true
-        else stateCallback.value(false, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "", null)
+        if (granted) {
+            stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
+            listening = true
+        } else {
+            stateCallback.value(false, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "", null)
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -98,6 +102,12 @@ fun BabyVoiceCountControl(
             stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "", null)
             return@LaunchedEffect
         }
+
+        // Publish the opening state before waiting for cleanup, model download, or
+        // microphone acquisition. This makes the recognition panel appear immediately,
+        // including during rapid start/stop and language changes.
+        stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
+
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             listening = false
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -154,9 +164,20 @@ fun BabyVoiceCountControl(
 
     Button(
         onClick = {
-            if (listening) listening = false
-            else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) listening = true
-            else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            if (listening) {
+                // Close the panel synchronously on an explicit stop. The next tap
+                // opens it synchronously again, without waiting for LaunchedEffect.
+                listening = false
+                stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "", null)
+            } else {
+                stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    listening = true
+                } else {
+                    stateCallback.value(true, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "", 0)
+                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
         },
         modifier = Modifier.height(40.dp),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 5.dp),
