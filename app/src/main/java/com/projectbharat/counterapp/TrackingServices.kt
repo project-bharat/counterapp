@@ -365,6 +365,12 @@ class ChantRecognitionService : Service() {
             if (language == "hi") {
                 grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
                 grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
+                // Hindi Vosk commonly alternates anusvara spellings and joins Sanskrit compounds.
+                if (cleanMantra.contains("दिगंबरा")) {
+                    grammarPhrases.add(cleanMantra.replace("दिगंबरा", "दिगम्बरा"))
+                    grammarPhrases.add(cleanMantra.replace("दिगंबरा", "दिगम्बरा").replace("श्रीपाद वल्लभ", "श्रीपादवल्लभ"))
+                    grammarPhrases.add(cleanMantra.replace("श्रीपाद वल्लभ", "श्रीपादवल्लभ"))
+                }
             } else {
                 grammarPhrases.add(cleanMantra.replace("Aum", "Om").replace("aum", "om"))
                 grammarPhrases.add(cleanMantra.replace("Shivaaya", "Shivaya").replace("shivaaya", "shivaya"))
@@ -447,6 +453,8 @@ class ChantRecognitionService : Service() {
                 .replace("aum", "om")
                 .replace("shivaaya", "shivaya")
                 .replace("namaha", "namah")
+                .replace("दिगम्बरा", "दिगंबरा")
+                .replace("श्रीपादवल्लभ", "श्रीपाद वल्लभ")
                 .replace("tryambakam", "tryambakam")
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .replace(Regex("\\s+"), " ").trim()
