@@ -13,6 +13,35 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
 
 /** Local microphone capture with silence-based utterance segmentation and offline decoding. */
+/** Keeps the native recognizer warm between sessions; only one language model stays resident. */
+private object SherpaRecognizerCache {
+    private var cachedKey: String? = null
+    private var cached: OfflineRecognizer? = null
+
+    @Synchronized
+    fun get(files: OfflineSpeechModelManager.ModelFiles): OfflineRecognizer {
+        val key = files.model.absolutePath + "|" + files.tokens.absolutePath
+        if (cachedKey == key && cached != null) return cached!!
+        cached?.release()
+        cached = null
+        cachedKey = null
+        val config = OfflineRecognizerConfig(
+            modelConfig = OfflineModelConfig(
+                nemo = OfflineNemoEncDecCtcModelConfig(model = files.model.absolutePath),
+                tokens = files.tokens.absolutePath,
+                numThreads = 2,
+                debug = false,
+                provider = "cpu",
+                modelType = "nemo"
+            )
+        )
+        return OfflineRecognizer(config = config).also {
+            cached = it
+            cachedKey = key
+        }
+    }
+}
+
 class SherpaOfflineSpeechEngine(
     private val modelFiles: OfflineSpeechModelManager.ModelFiles,
     private val english: Boolean,
@@ -68,17 +97,8 @@ class SherpaOfflineSpeechEngine(
         var failureMessage: String? = null
         try {
             postStatus(if (english) "Loading offline English model…" else "मराठी ऑफलाइन मॉडेल लोड होत आहे…")
-            val config = OfflineRecognizerConfig(
-                modelConfig = OfflineModelConfig(
-                    nemo = OfflineNemoEncDecCtcModelConfig(model = modelFiles.model.absolutePath),
-                    tokens = modelFiles.tokens.absolutePath,
-                    numThreads = 2,
-                    debug = false,
-                    provider = "cpu",
-                    modelType = "nemo"
-                )
-            )
-            recognizer = OfflineRecognizer(config = config)
+            // Reuse the already-loaded native recognizer on subsequent sessions.
+            recognizer = SherpaRecognizerCache.get(modelFiles)
 
             val minBuffer = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             check(minBuffer > 0) { "Microphone audio format is not supported" }
@@ -161,7 +181,7 @@ class SherpaOfflineSpeechEngine(
             try { audio?.stop() } catch (_: Exception) {}
             try { audio?.release() } catch (_: Exception) {}
             recorder = null
-            try { recognizer?.release() } catch (_: Exception) {}
+            // The process-wide cache owns the recognizer; keep it warm for the next session.
             if (endedUnexpectedly) main.post { onStopped(failureMessage) }
         }
     }
