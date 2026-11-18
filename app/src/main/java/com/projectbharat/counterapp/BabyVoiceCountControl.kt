@@ -17,7 +17,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
@@ -46,6 +49,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -195,30 +199,72 @@ fun BabyVoiceCountControl(
 
 @Composable
 fun BabyVoiceRecognitionPanel(listening: Boolean, english: Boolean, status: String, transcript: String, detectedCount: Int) {
-    val pulse = rememberInfiniteTransition(label = "babyVoicePulse")
-    val scale by pulse.animateFloat(1f, 1.15f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "babyVoiceMic")
+    val pulse = rememberInfiniteTransition(label = "babyVoiceLiveDot")
+    val dotScale by pulse.animateFloat(
+        0.78f, 1.18f,
+        infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "babyVoiceDotScale"
+    )
+    val dotAlpha by pulse.animateFloat(
+        0.55f, 1f,
+        infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "babyVoiceDotAlpha"
+    )
     val loading = status.contains("Loading", true) || status.contains("Downloading", true) ||
         status.contains("तपास", true) || status.contains("डाउनलोड", true) || status.contains("लोड होत", true)
-    Surface(Modifier.fillMaxWidth().padding(top = 8.dp), shape = RoundedCornerShape(14.dp),
-        color = if (listening) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Default.Mic, null, modifier = Modifier.size(20.dp).graphicsLayer(scaleX = if (listening) scale else 1f, scaleY = if (listening) scale else 1f), tint = MaterialTheme.colorScheme.primary)
-                    Text(if (listening) "LIVE RECOGNITION" else if (english) "VOICE RECOGNITION" else "आवाज ओळख", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (loading) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
-                    Text(status.ifBlank { if (listening) (if (english) "Listening offline…" else "ऑफलाइन ऐकत आहे…") else (if (english) "Voice count is off" else "आवाज मोजणी बंद") }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+    val liveGreen = Color(0xFF16A34A)
+
+    Surface(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = if (listening) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (listening) {
+                    Box(
+                        Modifier.size(9.dp)
+                            .graphicsLayer(scaleX = dotScale, scaleY = dotScale, alpha = dotAlpha)
+                            .background(liveGreen, CircleShape)
+                    )
+                    Text(
+                        if (english) "Listening" else "ऐकत आहे",
+                        color = liveGreen,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Text(
+                        if (english) "Voice recognition off" else "आवाज बंद",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
             }
-            Spacer(Modifier.height(9.dp))
-            Text(transcript.ifBlank { if (english) "Speak a number from one to ten" else "एक ते दहा अंक बोला" }, style = MaterialTheme.typography.bodyMedium,
-                color = if (transcript.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .65f) else MaterialTheme.colorScheme.onSurface, maxLines = 2)
+
+            if (transcript.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    transcript,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2
+                )
+            }
             if (detectedCount > 0) {
-                Spacer(Modifier.height(7.dp))
+                Spacer(Modifier.height(6.dp))
                 Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = .12f)) {
-                    Text("+$detectedCount", modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "+$detectedCount",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
