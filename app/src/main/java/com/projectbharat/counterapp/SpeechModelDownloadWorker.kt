@@ -112,6 +112,7 @@ object SpeechModelDownloadScheduler {
             OneTimeWorkRequestBuilder<SpeechModelDownloadWorker>()
                 .setInputData(workDataOf(SpeechModelDownloadWorker.KEY_MODEL to key))
                 .setConstraints(constraints)
+                .addTag(key)
                 .build()
         }
         var chain = WorkManager.getInstance(context).beginUniqueWork(
