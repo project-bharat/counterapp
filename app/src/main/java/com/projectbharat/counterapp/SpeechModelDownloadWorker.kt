@@ -126,9 +126,14 @@ object SpeechModelDownloadScheduler {
 
     fun enqueueFirstInstall(context: Context) {
         val prefs = context.getSharedPreferences("speech_model_setup", Context.MODE_PRIVATE)
-        if (!prefs.getBoolean("prefetch_scheduled", false)) {
-            prefs.edit().putBoolean("prefetch_scheduled", true).apply()
-            enqueueAll(context, wifiOnly = true)
+        // v2 migrates earlier Wi-Fi-only queues to a connected-network queue so setup
+        // does not silently wait for Wi-Fi when the user needs offline voice features.
+        if (!prefs.getBoolean("prefetch_connected_network_v2", false)) {
+            enqueueAll(context, wifiOnly = false)
+            prefs.edit()
+                .putBoolean("prefetch_scheduled", true)
+                .putBoolean("prefetch_connected_network_v2", true)
+                .apply()
         }
     }
 }
