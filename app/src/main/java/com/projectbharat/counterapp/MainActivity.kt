@@ -266,6 +266,7 @@ fun CounterApp(repo: CounterRepository) {
     var remindersScreen by remember { mutableStateOf(false) }
     var categoryScreen by remember { mutableStateOf(false) }
     var backupScreen by remember { mutableStateOf(false) }
+    var voiceModelsDialog by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -429,6 +430,7 @@ fun CounterApp(repo: CounterRepository) {
                 }
             )
         }
+        if (voiceModelsDialog) VoiceModelsDialog(english = english, onDismiss = { voiceModelsDialog = false })
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
@@ -450,7 +452,7 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text(if (english) "Prepare voice models" else "आवाज मॉडेल डाउनलोड करा") }, selected = false, onClick = { SpeechModelDownloadScheduler.enqueueAll(context, wifiOnly = false); scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text(if (english) "Offline voice models" else "ऑफलाइन आवाज मॉडेल") }, selected = voiceModelsDialog, onClick = { voiceModelsDialog = true; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(
