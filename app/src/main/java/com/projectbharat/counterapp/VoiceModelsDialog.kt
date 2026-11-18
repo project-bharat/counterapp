@@ -55,9 +55,7 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
         while (isActive) {
             val snapshot = withContext(Dispatchers.IO) {
                 val manager = OfflineSpeechModelManager(context.applicationContext)
-                val work = runCatching {
-                    WorkManager.getInstance(context).getWorkInfosForUniqueWork("voice-model-prefetch").get()
-                }.getOrDefault(emptyList())
+                val workManager = WorkManager.getInstance(context)
                 val definitions = listOf(
                     Triple("sherpa_mr", "Sherpa-ONNX · Marathi", "Baby movement voice counting"),
                     Triple("sherpa_en", "Sherpa-ONNX · English", "Baby movement voice counting"),
@@ -71,7 +69,7 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
                         "vosk_hi" -> VoskOfflineModelInstaller.isInstalled(context, "hi")
                         else -> VoskOfflineModelInstaller.isInstalled(context, "en")
                     }
-                    val info = work.lastOrNull { it.inputData.getString(SpeechModelDownloadWorker.KEY_MODEL) == key }
+                    val info = runCatching { workManager.getWorkInfosByTag(key).get().lastOrNull() }.getOrNull()
                     VoiceModelStatus(
                         key, title, purpose, installed, info?.state,
                         info?.progress?.getInt("progress", 0) ?: 0,
