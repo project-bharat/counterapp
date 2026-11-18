@@ -328,14 +328,25 @@ fun AutoStepCounterScreen(
                     !permissionGranted -> Text(if (english) "Allow Physical Activity access to count steps automatically." else "पावले आपोआप मोजण्यासाठी शारीरिक हालचालींची परवानगी द्या.", color = ink.copy(alpha = .65f))
                     else -> Text(if (running) (if (english) "Hardware sensor active. Steps update as Android reports them." else "हार्डवेअर सेन्सर सुरू आहे. Android कडून पावले मिळताच मोजणी अद्ययावत होते.") else if (english) "Tracking is paused." else "मोजणी थांबलेली आहे.", color = ink.copy(alpha = .65f))
                 }
-                Button(enabled = available, onClick = {
-                    if (running) { StepTrackingService.stop(context); running = false }
-                    else if (Build.VERSION.SDK_INT >= 29 && ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-                    else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    else startService()
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(if (running) Icons.Default.Pause else Icons.Default.PlayArrow, null)
-                    Text(if (running) (if (english) "Stop tracking" else "मोजणी थांबवा") else if (english) "Start step tracking" else "पावले मोजणे सुरू करा")
+                if (!permissionGranted && available) {
+                    OutlinedButton(
+                        onClick = { activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (english) "Grant physical activity permission" else "शारीरिक हालचालींची परवानगी द्या")
+                    }
+                } else if (running) {
+                    Text(
+                        if (english) "Automatic tracking is active. Steps continue to count when the app is in the background or the screen is off."
+                        else "आपोआप मोजणी सुरू आहे. अॅप पार्श्वभूमीत असतानाही किंवा स्क्रीन बंद असतानाही पावले मोजली जातात.",
+                        color = Color(0xFF16764E), style = MaterialTheme.typography.bodySmall
+                    )
+                } else if (available && permissionGranted) {
+                    Text(
+                        if (english) "Automatic tracking is starting. Keep the app open briefly while Android starts the step service."
+                        else "आपोआप मोजणी सुरू होत आहे. Android स्टेप सेवा सुरू करेपर्यंत अॅप थोडा वेळ उघडे ठेवा.",
+                        color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall
+                    )
                 }
                 if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
             }
