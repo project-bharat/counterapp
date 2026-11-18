@@ -32,6 +32,10 @@ object CounterQuickActions {
     const val ACTION_START_BABY = "com.projectbharat.counterapp.action.START_BABY"
     const val ACTION_START_WALK = "com.projectbharat.counterapp.action.START_WALK"
     const val ACTION_START_JAPA = "com.projectbharat.counterapp.action.START_JAPA"
+    const val ACTION_BABY_ADD = "com.projectbharat.counterapp.action.BABY_ADD"
+    const val ACTION_BABY_UNDO = "com.projectbharat.counterapp.action.BABY_UNDO"
+    const val EXTRA_BABY_SESSION_ID = "baby_session_id"
+    const val EXTRA_BABY_CATEGORY_ID = "baby_category_id"
     const val EXTRA_COUNTER_KIND = "counter_kind"
 
     fun pending(context: Context, action: String, requestCode: Int): PendingIntent =
@@ -104,6 +108,59 @@ object QuickActionsNotification {
     }
 }
 
+
+object BabySessionNotification {
+    private const val CHANNEL = "baby_active_session"
+    const val NOTIFICATION_ID = 7105
+
+    fun show(context: Context, sessionId: Long, categoryId: Long, count: Int, english: Boolean) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
+            NotificationChannel(CHANNEL, if (english) "Baby movement session" else "बाळाच्या हालचालींचे सत्र", NotificationManager.IMPORTANCE_LOW).apply {
+                description = if (english) "Quick controls for the active baby movement session" else "सुरू असलेल्या सत्रासाठी झटपट नोंदी"
+                setShowBadge(false)
+            }
+        )
+        fun actionPending(action: String, requestCode: Int): PendingIntent =
+            PendingIntent.getBroadcast(context, requestCode,
+                Intent(context, QuickActionReceiver::class.java).setAction(action)
+                    .putExtra(CounterQuickActions.EXTRA_BABY_SESSION_ID, sessionId)
+                    .putExtra(CounterQuickActions.EXTRA_BABY_CATEGORY_ID, categoryId),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(context, 7110,
+            Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_COUNTER)
+                .putExtra(CounterQuickActions.EXTRA_COUNTER_KIND, "BABY")
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val voice = PendingIntent.getActivity(context, 7113,
+            Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_COUNTER)
+                .putExtra(CounterQuickActions.EXTRA_COUNTER_KIND, "BABY")
+                .putExtra("baby_voice", true)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_my_calendar)
+            .setContentTitle(if (english) "Baby movement session" else "बाळाच्या हालचालींचे सत्र")
+            .setContentText((if (english) "Movements: " else "हालचाली: ") + count + (if (english) " · Active" else " · सुरू"))
+            .setContentIntent(open)
+            .setOngoing(true).setOnlyAlertOnce(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(android.R.drawable.ic_input_add, if (english) "+1 Add" else "+१ जोडा",
+                actionPending(CounterQuickActions.ACTION_BABY_ADD, 7111))
+            .addAction(android.R.drawable.ic_menu_revert, if (english) "Undo" else "मागे",
+                actionPending(CounterQuickActions.ACTION_BABY_UNDO, 7112))
+            .addAction(android.R.drawable.ic_btn_speak_now, if (english) "Voice count" else "आवाज मोजा", voice)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
+    }
+
+    fun cancel(context: Context) {
+        NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+    }
+}
+
 class QuickActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
@@ -117,6 +174,23 @@ class QuickActionReceiver : BroadcastReceiver() {
                 val mantra = categories.firstOrNull { it.kind == "MANTRA" }
                 val steps = categories.firstOrNull { it.kind == "STEPS" }
                 when (action) {
+                    CounterQuickActions.ACTION_BABY_ADD, CounterQuickActions.ACTION_BABY_UNDO -> {
+                        val sessionId = intent?.getLongExtra(CounterQuickActions.EXTRA_BABY_SESSION_ID, -1L) ?: -1L
+                        val categoryId = intent?.getLongExtra(CounterQuickActions.EXTRA_BABY_CATEGORY_ID, -1L) ?: -1L
+                        val session = dao.babySession(sessionId)
+                        if (session != null && session.categoryId == categoryId && session.endedAt == null &&
+                            System.currentTimeMillis() < session.startedAt + CounterRepository.TWO_HOURS_MS) {
+                            val repository = CounterRepository(dao)
+                            if (action == CounterQuickActions.ACTION_BABY_ADD) repository.addBabyMovement(categoryId, sessionId, null)
+                            else repository.undoBabyMovement(sessionId)
+                            val refreshed = dao.babySession(sessionId)
+                            if (refreshed != null && refreshed.endedAt == null &&
+                                System.currentTimeMillis() < refreshed.startedAt + CounterRepository.TWO_HOURS_MS) {
+                                val english = app.getSharedPreferences("app_preferences", Context.MODE_PRIVATE).getBoolean("english_language", false)
+                                BabySessionNotification.show(app, sessionId, categoryId, refreshed.movementCount, english)
+                            } else BabySessionNotification.cancel(app)
+                        } else BabySessionNotification.cancel(app)
+                    }
                     CounterQuickActions.ACTION_START_BABY -> {
                         baby?.let {
                             CounterRepository(dao).startBabySession(it.id)
