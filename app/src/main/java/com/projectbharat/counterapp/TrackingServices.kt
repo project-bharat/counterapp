@@ -287,6 +287,25 @@ class StepTrackingService : Service(), SensorEventListener {
         fun stop(context: Context) { context.startService(Intent(context, StepTrackingService::class.java).setAction(ACTION_STOP)) }
     }
 }
+/** Reuses the loaded Vosk acoustic model between Japa sessions in this app process. */
+private object VoskModelCache {
+    private var cachedPath: String? = null
+    private var cachedModel: Model? = null
+
+    @Synchronized
+    fun get(directory: File): Model {
+        val path = directory.absolutePath
+        if (cachedPath == path && cachedModel != null) return cachedModel!!
+        cachedModel?.close()
+        cachedModel = null
+        cachedPath = null
+        return Model(path).also {
+            cachedModel = it
+            cachedPath = path
+        }
+    }
+}
+
 class ChantRecognitionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var recording = false
@@ -331,7 +350,7 @@ class ChantRecognitionService : Service() {
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
             sendState(true, "Loading offline speech model…")
-            model = Model(modelDir.absolutePath)
+            model = VoskModelCache.get(modelDir)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
             // Allow consecutive repetitions to be decoded as one continuous utterance.
@@ -398,7 +417,7 @@ class ChantRecognitionService : Service() {
             try { audioRecord?.stop() } catch (_: Exception) { }
             audioRecord?.release(); audioRecord = null
             recognizer?.close(); recognizer = null
-            model?.close(); model = null
+            // VoskModelCache retains the acoustic model for the next Japa session.
         }
     }
 
@@ -435,20 +454,52 @@ class ChantRecognitionService : Service() {
             .findAll(text).count()
         if (exact > 0) return exact
 
-        // Longer Sanskrit verses often lose one or two syllables in speech recognition.
-        // Accept a single near-complete ordered match, but keep short mantras exact.
+        // Vosk may return a close Sanskrit/Hindi spelling for a syllable.
+        // Keep short mantras exact; for longer selections allow small token-level
+        // spelling differences, but require a high ordered match from the first word.
         val expected = target.split(" ").filter { it.isNotBlank() }
         val spoken = text.split(" ").filter { it.isNotBlank() }
-        if (expected.size < 5 || spoken.isEmpty() || expected.first() != spoken.first()) return 0
-        var i = 0
-        var j = 0
+        if (expected.size < 3 || spoken.isEmpty()) return 0
+        if (tokenSimilarity(expected.first(), spoken.first()) < 0.70) return 0
+
+        var cursor = 0
         var matchedTokens = 0
-        while (i < expected.size && j < spoken.size) {
-            if (expected[i] == spoken[j]) { matchedTokens++; i++; j++ }
-            else if (j + 1 < spoken.size && expected[i] == spoken[j + 1]) j++
-            else i++
+        for (word in spoken) {
+            var bestIndex = -1
+            var bestScore = 0.0
+            for (index in cursor until expected.size) {
+                val score = tokenSimilarity(expected[index], word)
+                if (score > bestScore) { bestScore = score; bestIndex = index }
+            }
+            if (bestIndex >= 0 && bestScore >= 0.70) {
+                matchedTokens++
+                cursor = bestIndex + 1
+                if (cursor >= expected.size) break
+            }
         }
         return if (matchedTokens.toDouble() / expected.size >= 0.78) 1 else 0
+    }
+
+    private fun tokenSimilarity(first: String, second: String): Double {
+        if (first == second) return 1.0
+        if (first.isBlank() || second.isBlank()) return 0.0
+        val previous = IntArray(second.length + 1) { it }
+        var current = IntArray(second.length + 1)
+        for (i in first.indices) {
+            current[0] = i + 1
+            for (j in second.indices) {
+                val cost = if (first[i] == second[j]) 0 else 1
+                current[j + 1] = minOf(
+                    current[j] + 1,
+                    previous[j + 1] + 1,
+                    previous[j] + cost
+                )
+            }
+            for (j in previous.indices) previous[j] = current[j]
+        }
+        val distance = previous[second.length]
+        return 1.0 - distance.toDouble() / maxOf(first.length, second.length)
+
     }
 
     private fun downloadAndExtractModel(modelUrl: String, modelName: String, target: File) {
