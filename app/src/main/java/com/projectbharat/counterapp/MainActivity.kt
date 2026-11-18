@@ -291,6 +291,10 @@ fun CounterApp(repo: CounterRepository) {
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
     }
+    var stepPermissionGranted by remember {
+        mutableStateOf(Build.VERSION.SDK_INT < 29 ||
+            ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
+    }
     val firstRunPermissions = remember {
         buildList {
             if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
@@ -298,8 +302,11 @@ fun CounterApp(repo: CounterRepository) {
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
         }.toTypedArray()
     }
-    val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+    val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
+        stepPermissionGranted = Build.VERSION.SDK_INT < 29 ||
+            (results[Manifest.permission.ACTIVITY_RECOGNITION] == true ||
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
         showPermissionIntro = false
         QuickActionsNotification.show(context)
     }
@@ -329,6 +336,15 @@ fun CounterApp(repo: CounterRepository) {
         CounterQuickActions.publishShortcuts(context, categories)
         CounterHomeWidget.refresh(context)
     }
+    // Start the daily step sensor automatically once Android's activity permission is granted.
+    // This runs while the Activity is visible, which is required to start a health foreground service.
+    LaunchedEffect(categories, stepPermissionGranted) {
+        val stepCategory = categories.firstOrNull { it.kind == "STEPS" }
+        if (stepPermissionGranted && stepCategory != null) {
+            runCatching { StepTrackingService.start(context, stepCategory.id) }
+                .onFailure { android.util.Log.w("CounterAppSteps", "Automatic step tracking could not start", it) }
+        }
+    }
     LaunchedEffect(categories, shortcutKind, shortcutQuickStart, shortcutBabyVoice) {
         shortcutKind?.let { kind ->
             categories.firstOrNull { it.kind == kind }?.let { category ->
@@ -356,7 +372,15 @@ fun CounterApp(repo: CounterRepository) {
         if (shortcutKind != null) activity?.consumeLaunchCounterKind()
     }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
-    LaunchedEffect(Unit) { while (true) { delay(1000); clock = System.currentTimeMillis() } }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            clock = System.currentTimeMillis()
+            val granted = Build.VERSION.SDK_INT < 29 ||
+                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
+            if (granted != stepPermissionGranted) stepPermissionGranted = granted
+        }
+    }
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
 
     LaunchedEffect(selected?.id, selected?.kind) {
