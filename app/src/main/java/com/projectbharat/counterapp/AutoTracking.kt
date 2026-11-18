@@ -323,30 +323,15 @@ fun AutoStepCounterScreen(
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text(if (english) "LIVE WALK TRACKING" else "लाईव्ह चालण्याची मोजणी", color = ink, fontWeight = FontWeight.SemiBold)
-                when {
-                    !available -> Text(if (english) "No hardware step detector or counter is available on this phone." else "या फोनमध्ये हार्डवेअर स्टेप डिटेक्टर किंवा स्टेप काउंटर उपलब्ध नाही.", color = Color(0xFFB45353))
-                    !permissionGranted -> Text(if (english) "Allow Physical Activity access to count steps automatically." else "पावले आपोआप मोजण्यासाठी शारीरिक हालचालींची परवानगी द्या.", color = ink.copy(alpha = .65f))
-                    else -> Text(if (running) (if (english) "Hardware sensor active. Steps update as Android reports them." else "हार्डवेअर सेन्सर सुरू आहे. Android कडून पावले मिळताच मोजणी अद्ययावत होते.") else if (english) "Tracking is paused." else "मोजणी थांबलेली आहे.", color = ink.copy(alpha = .65f))
-                }
-                if (!permissionGranted && available) {
+                if (!available) {
+                    Text(if (english) "Step counting is not supported by this device." else "या डिव्हाइसवर पावले मोजण्याची सुविधा उपलब्ध नाही.", color = Color(0xFFB45353))
+                } else if (!permissionGranted) {
                     OutlinedButton(
                         onClick = { activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (english) "Grant physical activity permission" else "शारीरिक हालचालींची परवानगी द्या")
                     }
-                } else if (running) {
-                    Text(
-                        if (english) "Automatic tracking is active. Steps continue to count when the app is in the background or the screen is off."
-                        else "आपोआप मोजणी सुरू आहे. अॅप पार्श्वभूमीत असतानाही किंवा स्क्रीन बंद असतानाही पावले मोजली जातात.",
-                        color = Color(0xFF16764E), style = MaterialTheme.typography.bodySmall
-                    )
-                } else if (available && permissionGranted) {
-                    Text(
-                        if (english) "Automatic tracking is starting. Keep the app open briefly while Android starts the step service."
-                        else "आपोआप मोजणी सुरू होत आहे. Android स्टेप सेवा सुरू करेपर्यंत अॅप थोडा वेळ उघडे ठेवा.",
-                        color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall
-                    )
                 }
                 if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
             }
@@ -544,7 +529,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     Box(Modifier.weight(1f)) {
                         OutlinedButton(
                             onClick = { presetMenu = true },
-                            enabled = !running,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp)
                         ) {
@@ -558,6 +542,13 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                                     target = mantra
                                     prefs.edit().putString("target_$categoryId", target).apply()
                                     onMantraChange(target)
+                                    if (running) {
+                                        transcript = ""
+                                        matched = false
+                                        matchedCount = 0
+                                        status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
+                                        ChantRecognitionService.start(context, categoryId, target.trim(), language)
+                                    }
                                     presetMenu = false
                                 })
                             }
@@ -565,7 +556,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     }
                     Button(
                         onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
-                        enabled = !running,
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(if (english) "+ Add" else "+ जोडा", maxLines = 1) }
                 }
@@ -674,6 +664,13 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             .putString("target_$categoryId", selectedText).apply()
                         target = selectedText
                         onMantraChange(selectedText)
+                        if (running) {
+                            transcript = ""
+                            matched = false
+                            matchedCount = 0
+                            status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
+                            ChantRecognitionService.start(context, categoryId, selectedText, language)
+                        }
                     }
                     addMantraDialog = false
                 }, enabled = newMantraMr.isNotBlank() && newMantraEn.isNotBlank()) { Text(if (english) "Add" else "जोडा") }
