@@ -325,8 +325,13 @@ class ChantRecognitionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
-        stopRequested = false
-        partialCounted = 0
+        val previousWorker = worker
+        if (previousWorker?.isAlive == true) {
+            stopRequested = true
+            recording = false
+            try { audioRecord?.stop() } catch (_: Exception) { }
+            previousWorker.interrupt()
+        }
         categoryId = intent?.getLongExtra(StepTrackingService.EXTRA_CATEGORY_ID, -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
         language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
@@ -340,7 +345,18 @@ class ChantRecognitionService : Service() {
         else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).apply()
         sendState(true, "Preparing offline speech model")
-        worker = Thread { runRecognition() }.also { it.name = "CounterApp-Vosk"; it.start() }
+        worker = Thread {
+            try {
+                if (previousWorker?.isAlive == true) previousWorker.join()
+                if (!Thread.currentThread().isInterrupted) {
+                    stopRequested = false
+                    partialCounted = 0
+                    runRecognition()
+                }
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+        }.also { it.name = "CounterApp-Vosk"; it.start() }
         return START_NOT_STICKY
     }
 
@@ -366,7 +382,16 @@ class ChantRecognitionService : Service() {
                 grammarPhrases.add(cleanMantra.replace("ॐ", "ओम").replace("नमः", "नम"))
                 grammarPhrases.add(cleanMantra.replace("त्र्यम्बकं", "त्र्यंबकं"))
                 // Hindi Vosk commonly alternates anusvara spellings and joins Sanskrit compounds.
-                if (cleanMantra.contains("दिगंबरा")) {
+                if (cleanMantra.contains("दिगंबरा") || cleanMantra.contains("दिगम्बरा")) {
+                    // Short phrase alternatives help the small Hindi model retain repeated opening words.
+                    grammarPhrases.add("दिगंबरा")
+                    grammarPhrases.add("दिगम्बरा")
+                    grammarPhrases.add("दिगंबरा दिगंबरा")
+                    grammarPhrases.add("दिगम्बरा दिगम्बरा")
+                    grammarPhrases.add("श्रीपाद वल्लभ")
+                    grammarPhrases.add("श्रीपादवल्लभ")
+                    grammarPhrases.add("दिगंबरा दिगंबरा श्रीपाद वल्लभ दिगंबरा")
+                    grammarPhrases.add("दिगम्बरा दिगम्बरा श्रीपाद वल्लभ दिगम्बरा")
                     grammarPhrases.add(cleanMantra.replace("दिगंबरा", "दिगम्बरा"))
                     grammarPhrases.add(cleanMantra.replace("दिगंबरा", "दिगम्बरा").replace("श्रीपाद वल्लभ", "श्रीपादवल्लभ"))
                     grammarPhrases.add(cleanMantra.replace("श्रीपाद वल्लभ", "श्रीपादवल्लभ"))
@@ -462,6 +487,15 @@ class ChantRecognitionService : Service() {
         val text = normalize(transcript)
         val target = normalize(phrase)
         if (target.isBlank()) return 0
+
+        // Vosk often drops "दिगंबरा" and returns only repeated "श्रीपाद वल्लभ".
+        if (target.contains("दिगंबरा")) {
+            val vallabhaCount = Regex("श्रीपाद\\s+वल्लभ").findAll(text).count()
+            val digambaraCount = text.split(" ").count { it == "दिगंबरा" || it == "दिगम्बरा" }
+            val recoveredCount = maxOf(vallabhaCount, (digambaraCount + 2) / 3)
+            if (recoveredCount > 0) return recoveredCount
+        }
+
         val exact = Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(target) + "(?![\\p{L}\\p{N}])")
             .findAll(text).count()
         if (exact > 0) return exact
