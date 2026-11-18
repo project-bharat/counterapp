@@ -91,12 +91,6 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
                 Modifier.fillMaxWidth().height(390.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    if (english) "4 model packages · download once, then use offline"
-                    else "४ मॉडेल पॅकेज · एकदा डाउनलोड करा आणि ऑफलाइन वापरा",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 models.forEach { model ->
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
