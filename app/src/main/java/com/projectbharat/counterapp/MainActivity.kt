@@ -663,7 +663,19 @@ fun CounterApp(repo: CounterRepository) {
                     AutoChantCounterScreen(
                         categoryId = selected.id, count = count, english = english, ink = ink,
                         onMantraChange = { mantra -> mantraTarget = mantra },
-                        onManualCount = { mantra -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.addMantra(selected.id, mantra) } }
+                        onManualCount = { mantra -> scope.launch { vm.addMantra(selected.id, mantra) } },
+                        onCountFeedback = { amount ->
+                            scope.launch {
+                                val feedbackPrefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
+                                repeat(amount.coerceAtLeast(1)) { index ->
+                                    if (feedbackPrefs.getBoolean("count_sound_enabled", true))
+                                        clickTone.startTone(ToneGenerator.TONE_PROP_ACK, 75)
+                                    if (feedbackPrefs.getBoolean("count_vibration_enabled", true))
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    if (index < amount - 1) kotlinx.coroutines.delay(110)
+                                }
+                            }
+                        }
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
