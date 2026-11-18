@@ -64,7 +64,7 @@ private object TrackingNotifications {
     const val CHANNEL_ID = "active_tracking"
     const val STEP_ID = 7101
     const val CHANT_ID = 7102
-    fun show(context: Context, id: Int, title: String, text: String, stopIntent: PendingIntent): Notification {
+    fun show(context: Context, id: Int, title: String, text: String, stopIntent: PendingIntent?): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Active tracking", NotificationManager.IMPORTANCE_LOW).apply {
@@ -80,7 +80,8 @@ private object TrackingNotifications {
                 CounterQuickActions.activityPending(context, "BABY", 7103))
             .addAction(android.R.drawable.ic_media_play, "Start Japa",
                 CounterQuickActions.activityPending(context, "MANTRA", 7104))
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent).build()
+            .apply { if (stopIntent != null) addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent) }
+            .build()
     }
     fun stopPending(context: Context, service: Class<out Service>, id: Int): PendingIntent =
         PendingIntent.getService(context, id, Intent(context, service).setAction(ACTION_STOP),
@@ -123,6 +124,7 @@ class StepTrackingService : Service(), SensorEventListener {
     private var lastReliableLocation: Location? = null
     private lateinit var stepCounterDelta: StepCounterDeltaTracker
     private var transitionPendingIntent: PendingIntent? = null
+    @Volatile private var serviceActive = false
 
     override fun onCreate() {
         super.onCreate()
@@ -147,10 +149,11 @@ class StepTrackingService : Service(), SensorEventListener {
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED)) {
             stopSelf(); return START_NOT_STICKY
         }
+        if (serviceActive) return START_STICKY
+        serviceActive = true
         state.edit().putLong("step_category", categoryId).putBoolean("steps_enabled", true).putBoolean("steps_running", true).apply()
         val notification = TrackingNotifications.show(this, TrackingNotifications.STEP_ID, "CounterApp · Steps",
-            "Walking detection is active",
-            TrackingNotifications.stopPending(this, StepTrackingService::class.java, TrackingNotifications.STEP_ID))
+            "Automatic daily step tracking is active", null)
         if (Build.VERSION.SDK_INT >= 34) {
             ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
         } else {
@@ -165,6 +168,7 @@ class StepTrackingService : Service(), SensorEventListener {
         val stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
         if (stepDetector == null && stepCounter == null) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
+            serviceActive = false
             stopSelf(); return START_NOT_STICKY
         }
         stepCounterDelta = StepCounterDeltaTracker(state.getInt("last_hardware_step_total", -1))
@@ -189,6 +193,7 @@ class StepTrackingService : Service(), SensorEventListener {
                 Log.e("CounterAppSteps", "Neither hardware step sensor could be registered")
                 dao.finishWalkingSession(walkSessionId, System.currentTimeMillis())
                 state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
+                serviceActive = false
                 sendState(false)
                 stopSelf()
                 return@launch
@@ -269,6 +274,7 @@ class StepTrackingService : Service(), SensorEventListener {
         sensorManager.unregisterListener(this)
         gpsListener?.let { runCatching { locationManager.removeUpdates(it) } }
         gpsListener = null
+        serviceActive = false
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("steps_running", false).apply()
         sendState(false)
         scope.cancel()
@@ -550,7 +556,8 @@ class ChantRecognitionService : Service() {
 
 class TrackingBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent?.action != Intent.ACTION_BOOT_COMPLETED &&
+            intent?.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val state = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE)
         if (!state.getBoolean("steps_enabled", false)) return
         val categoryId = state.getLong("step_category", -1L)
