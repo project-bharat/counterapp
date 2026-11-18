@@ -160,12 +160,10 @@ class StepTrackingService : Service(), SensorEventListener {
             ServiceCompat.startForeground(this, TrackingNotifications.STEP_ID, notification, 0)
         }
 
-        // Prefer Android's dedicated hardware step detector for prompt, per-step events.
-        // Use the cumulative hardware counter only on devices without a detector.
-        val stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-        // Keep the cumulative hardware counter available as a real fallback even
-        // when a detector exists but the device refuses detector registration.
+        // Prefer Android's cumulative hardware counter for reliable all-day totals.
+        // Use the per-step detector only when the counter is unavailable or registration fails.
         val stepCounter = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        val stepDetector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
         if (stepDetector == null && stepCounter == null) {
             state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
             serviceActive = false
@@ -179,17 +177,17 @@ class StepTrackingService : Service(), SensorEventListener {
             dao.finishOpenWalkingSessions(categoryId, sessionStart)
             walkSessionId = dao.insertWalkingSession(WalkingSession(categoryId = categoryId, date = today, startedAt = sessionStart))
 
-            // Use the per-step detector first. If registration fails, fall back to
-            // the cumulative counter instead of leaving a non-functional tracker.
-            val detectorRegistered = stepDetector?.let {
+            // Register the cumulative counter first. Its readings continue to
+            // advance while the app is backgrounded and avoid relying on activity transitions.
+            val counterRegistered = stepCounter?.let {
                 runCatching { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL, 0) }.getOrDefault(false)
             } ?: false
-            val counterRegistered = if (!detectorRegistered) {
-                stepCounter?.let {
+            val detectorRegistered = if (!counterRegistered) {
+                stepDetector?.let {
                     runCatching { sensorManager.registerListener(this@StepTrackingService, it, SensorManager.SENSOR_DELAY_NORMAL, 0) }.getOrDefault(false)
                 } ?: false
             } else false
-            if (!detectorRegistered && !counterRegistered) {
+            if (!counterRegistered && !detectorRegistered) {
                 Log.e("CounterAppSteps", "Neither hardware step sensor could be registered")
                 dao.finishWalkingSession(walkSessionId, System.currentTimeMillis())
                 state.edit().putBoolean("steps_enabled", false).putBoolean("steps_running", false).apply()
@@ -198,7 +196,7 @@ class StepTrackingService : Service(), SensorEventListener {
                 stopSelf()
                 return@launch
             }
-            state.edit().putString("step_sensor_source", if (detectorRegistered) "TYPE_STEP_DETECTOR" else "TYPE_STEP_COUNTER").apply()
+            state.edit().putString("step_sensor_source", if (counterRegistered) "TYPE_STEP_COUNTER" else "TYPE_STEP_DETECTOR").apply()
 
             // GPS is optional and is used only for distance; step counting never depends on it.
             if (ContextCompat.checkSelfPermission(this@StepTrackingService, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
