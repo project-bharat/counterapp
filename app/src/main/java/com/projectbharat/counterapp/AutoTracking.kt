@@ -384,7 +384,7 @@ private val chantPresets = listOf(
 )
 
 @Composable
-fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onMantraChange: (String) -> Unit, onManualCount: (String) -> Unit) {
+fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onMantraChange: (String) -> Unit, onManualCount: (String) -> Unit, onCountFeedback: (Int) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम") }
@@ -399,6 +399,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var addMantraDialog by remember { mutableStateOf(false) }
     var newMantraMr by remember { mutableStateOf("") }
     var newMantraEn by remember { mutableStateOf("") }
+    var soundFeedback by remember(categoryId) { mutableStateOf(prefs.getBoolean("count_sound_enabled", true)) }
+    var vibrationFeedback by remember(categoryId) { mutableStateOf(prefs.getBoolean("count_vibration_enabled", true)) }
     var customMantras by remember(categoryId) {
         mutableStateOf(prefs.getStringSet("custom_mantras_$categoryId", emptySet()).orEmpty().map { saved ->
             val parts = saved.split("\u001F", limit = 2)
@@ -445,7 +447,12 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                 intent.getStringExtra("message")?.let { status = it }
                 intent.getStringExtra("transcript")?.let { transcript = it }
                 if (intent.hasExtra("matched")) matched = intent.getBooleanExtra("matched", false)
-                if (intent.hasExtra("delta")) { matched = true; matchedCount = intent.getIntExtra("delta", 0) }
+                if (intent.hasExtra("delta")) {
+                    val delta = intent.getIntExtra("delta", 0)
+                    matched = true
+                    matchedCount = delta
+                    if (delta > 0) onCountFeedback(delta)
+                }
             }
         }
         registerTrackingReceiver(context, receiver)
@@ -515,7 +522,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         .shadow(12.dp, CircleShape)
                         .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
                         .border(3.dp, circleAccent, CircleShape)
-                        .clickable(interactionSource = manualInteraction, indication = null, onClick = { onManualCount(target) }),
+                        .clickable(interactionSource = manualInteraction, indication = null, onClick = { onCountFeedback(1); onManualCount(target) }),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -558,6 +565,22 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(if (english) "+ Add" else "+ जोडा", maxLines = 1) }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(if (english) "Sound" else "आवाज", color = ink, style = MaterialTheme.typography.labelMedium)
+                        Switch(checked = soundFeedback, onCheckedChange = { enabled ->
+                            soundFeedback = enabled
+                            prefs.edit().putBoolean("count_sound_enabled", enabled).apply()
+                        })
+                    }
+                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(if (english) "Vibration" else "कंपन", color = ink, style = MaterialTheme.typography.labelMedium)
+                        Switch(checked = vibrationFeedback, onCheckedChange = { enabled ->
+                            vibrationFeedback = enabled
+                            prefs.edit().putBoolean("count_vibration_enabled", enabled).apply()
+                        })
+                    }
                 }
                 if (automatic) {
                     val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true))
