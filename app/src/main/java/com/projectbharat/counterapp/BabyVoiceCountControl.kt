@@ -67,6 +67,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 @Composable
 fun BabyVoiceCountControl(
+    autoStart: Boolean = false,
+    onAutoStartConsumed: () -> Unit = {},
     activeSessionId: Long,
     english: Boolean,
     onCount: (Int) -> Unit,
@@ -81,6 +83,12 @@ fun BabyVoiceCountControl(
     val runGeneration = remember(activeSessionId) { AtomicLong(0L) }
     val engineMutex = remember(activeSessionId) { Mutex() }
     var listening by remember(activeSessionId) { mutableStateOf(false) }
+    LaunchedEffect(activeSessionId, autoStart) {
+        if (autoStart) {
+            listening = true
+            onAutoStartConsumed()
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
