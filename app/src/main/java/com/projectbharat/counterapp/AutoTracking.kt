@@ -103,6 +103,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.projectbharat.counterapp.data.DayTotal
+import com.projectbharat.counterapp.data.CounterLog
 import com.projectbharat.counterapp.data.WalkingSession
 import kotlinx.coroutines.delay
 import java.time.LocalDate
@@ -689,6 +690,126 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
         )
     }
 }
+
+
+@Composable
+fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBack: () -> Unit) {
+    var month by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
+    val totalsByDate = remember(logs) { logs.groupBy { it.date }.mapValues { (_, records) -> records.sumOf { it.count } } }
+    val activeDates = remember(totalsByDate) { totalsByDate.filterValues { it > 0 }.keys.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet() }
+    val total = logs.sumOf { it.count }
+    val today = LocalDate.now()
+    val todayCount = totalsByDate[today.toString()] ?: 0
+    val average = if (activeDates.isNotEmpty()) total / activeDates.size else 0
+    val best = totalsByDate.maxByOrNull { it.value }
+    val currentStreak = run {
+        var cursor = if (today in activeDates) today else today.minusDays(1)
+        var streak = 0
+        while (cursor in activeDates) { streak++; cursor = cursor.minusDays(1) }
+        streak
+    }
+    val longestStreak = run {
+        var run = 0
+        var bestRun = 0
+        var previous: LocalDate? = null
+        activeDates.sorted().forEach { date ->
+            run = if (previous?.plusDays(1) == date) run + 1 else 1
+            bestRun = maxOf(bestRun, run)
+            previous = date
+        }
+        bestRun
+    }
+    val weekStart = today.minusDays(6)
+    val week = (0..6).map { date ->
+        val day = weekStart.plusDays(it.toLong())
+        DayTotal(day.toString(), totalsByDate[day.toString()] ?: 0)
+    }
+    val monthDays = month.lengthOfMonth()
+    val offset = month.atDay(1).dayOfWeek.value % 7
+    val monthCells = (0 until 42).map { cell -> if (cell - offset + 1 in 1..monthDays) cell - offset + 1 else null }
+    val mantraBreakdown = logs.groupBy { it.note.removePrefix("MANTRA:") }.mapValues { (_, rows) -> rows.sumOf { it.count } }.entries.sortedByDescending { it.value }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Icon(Icons.Default.ArrowDropDown, null); Text(if (english) "Back to Japa" else "जपाकडे परत") }
+            Spacer(Modifier.weight(1f))
+            Text(if (english) "MY JAPA REPORT" else "माझा जप अहवाल", color = ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        }
+        Text(today.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy")), color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StepMetricCard(if (english) "TOTAL JAPA" else "एकूण जप", NumberFormat.getIntegerInstance().format(total), if (english) "${total / 108} malas" else "${total / 108} माळा", ink, Modifier.weight(1f))
+            StepMetricCard(if (english) "TODAY" else "आज", NumberFormat.getIntegerInstance().format(todayCount), if (english) "Japa count" else "आजचा जप", ink, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StepMetricCard(if (english) "CURRENT STREAK" else "सध्याची सलगता", "$currentStreak", if (english) "days" else "दिवस", ink, Modifier.weight(1f))
+            StepMetricCard(if (english) "LONGEST STREAK" else "सर्वाधिक सलगता", "$longestStreak", if (english) "days" else "दिवस", ink, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StepMetricCard(if (english) "ACTIVE DAYS" else "सक्रिय दिवस", "${activeDates.size}", if (english) "All time" else "एकूण", ink, Modifier.weight(1f))
+            StepMetricCard(if (english) "AVERAGE / DAY" else "दररोज सरासरी", NumberFormat.getIntegerInstance().format(average), if (english) "Per active day" else "सक्रिय दिवस", ink, Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StepMetricCard(if (english) "BEST DAY" else "सर्वोत्तम दिवस", NumberFormat.getIntegerInstance().format(best?.value ?: 0), best?.key ?: "—", ink, Modifier.weight(1f))
+            StepMetricCard(if (english) "TOTAL MALAS" else "पूर्ण माळा", NumberFormat.getIntegerInstance().format(total / 108), if (english) "108 japa each" else "प्रत्येक माळ १०८", ink, Modifier.weight(1f))
+        }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (english) month.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")) else month.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")), color = ink, fontWeight = FontWeight.Bold)
+                    Row {
+                        TextButton(onClick = { month = month.minusMonths(1) }) { Text("‹") }
+                        TextButton(onClick = { month = month.plusMonths(1).coerceAtMost(today.withDayOfMonth(1)) }) { Text("›") }
+                    }
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    (if (english) listOf("Sun","Mon","Tue","Wed","Thu","Fri","Sat") else listOf("रवि","सोम","मंगळ","बुध","गुरु","शुक्र","शनि")).forEach { label ->
+                        Text(label, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = ink.copy(alpha=.6f))
+                    }
+                }
+                monthCells.chunked(7).forEach { weekRow ->
+                    Row(Modifier.fillMaxWidth()) {
+                        weekRow.forEach { day ->
+                            Box(Modifier.weight(1f).height(38.dp).padding(2.dp), contentAlignment = Alignment.Center) {
+                                if (day != null) {
+                                    val date = month.atDay(day)
+                                    val value = totalsByDate[date.toString()] ?: 0
+                                    Surface(shape = CircleShape, color = when { value >= 108 -> Color(0xFFE7D8F6); value > 0 -> Color(0xFFDDEEE4); else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.35f) }) {
+                                        Text(day.toString(), modifier = Modifier.padding(7.dp), color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = if (value > 0) FontWeight.Bold else FontWeight.Normal)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Text(if (english) "Highlighted days have japa recorded. Purple = one or more malas." else "जप केलेले दिवस ठळक; जांभळा रंग म्हणजे एक किंवा अधिक माळा.", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp)) {
+                Text(if (english) "WEEKLY JAPA · 7 DAYS" else "साप्ताहिक जप · ७ दिवस", color = ink, fontWeight = FontWeight.SemiBold)
+                Text(NumberFormat.getIntegerInstance().format(week.sumOf { it.total }) + (if (english) " japa" else " जप"), color = ink.copy(alpha=.65f), style = MaterialTheme.typography.bodySmall)
+                WeeklyChart(week, Modifier.fillMaxWidth().height(160.dp))
+                Text("${weekStart.format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))} – ${today.format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy"))}", color = ink.copy(alpha=.6f), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (english) "JAPA BY MANTRA" else "मंत्रानुसार जप", color = ink, fontWeight = FontWeight.SemiBold)
+                if (mantraBreakdown.isEmpty()) Text(if (english) "No japa records yet" else "अजून जप नोंद नाही", color = ink.copy(alpha=.6f))
+                mantraBreakdown.forEach { (mantra, value) ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(mantra, color = ink, maxLines = 2)
+                            Text("${value / 108} malas", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                        }
+                        Text(NumberFormat.getIntegerInstance().format(value), color = Color(0xFF7855A6), fontWeight = FontWeight.Bold)
+                    }
+                    LinearProgressIndicator(progress = { if (total > 0) value.toFloat() / total else 0f }, modifier = Modifier.fillMaxWidth().height(5.dp), color = Color(0xFF8B69B5), trackColor = MaterialTheme.colorScheme.surfaceVariant)
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink: Color, onDetected: (Long, Float) -> Unit) {
