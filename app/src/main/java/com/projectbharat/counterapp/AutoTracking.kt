@@ -406,12 +406,17 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
             prefs.edit().putString("target_$categoryId", target.trim()).putString("language_$categoryId", language).apply()
             try {
                 ChantRecognitionService.start(context, categoryId, target.trim(), language)
+                automatic = true
                 running = true
                 status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
             } catch (error: Exception) {
                 running = false
                 automatic = false
-                status = error.message ?: if (english) "Could not start" else "सुरू झाले नाही"
+                status = when {
+                    error is SecurityException -> if (english) "Microphone permission required" else "मायक्रोफोन परवानगी आवश्यक"
+                    error.message?.contains("busy", true) == true -> if (english) "Microphone busy — another app or call is using it" else "मायक्रोफोन व्यस्त — दुसरे अॅप किंवा कॉल वापरत आहे"
+                    else -> error.message ?: if (english) "Could not start" else "सुरू झाले नाही"
+                }
             }
         }
     }
@@ -420,17 +425,24 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
     }
     val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
+            automatic = false
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             else startService()
-        } else { automatic = false; status = if (english) "Microphone permission denied" else "मायक्रोफोन परवानगी नाकारली" }
+        } else { automatic = false; running = false; status = if (english) "Microphone permission denied" else "मायक्रोफोन परवानगी नाकारली" }
     }
     DisposableEffect(context, categoryId) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, intent: Intent?) {
                 if (intent?.getStringExtra(EXTRA_TRACKING_KIND) != "chant") return
                 if (intent.hasExtra("active")) running = intent.getBooleanExtra("active", false)
-                intent.getStringExtra("message")?.let { status = it }
+                intent.getStringExtra("message")?.let { status = it
+                    if (it.contains("Microphone busy", true) || it.contains("Microphone unavailable", true) ||
+                        it.contains("microphone permission", true) || it.contains("मायक्रोफोन व्यस्त") ||
+                        it.contains("मायक्रोफोन उपलब्ध नाही") || it.contains("परवानगी आवश्यक")) {
+                        automatic = false
+                    }
+                }
                 intent.getStringExtra("transcript")?.let { transcript = it }
                 if (intent.hasExtra("matched")) matched = intent.getBooleanExtra("matched", false)
                 if (intent.hasExtra("delta")) {
@@ -468,7 +480,8 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
                 Switch(checked = automatic, onCheckedChange = { enabled ->
                     if (!enabled) stopRecognition()
                     else {
-                        automatic = true; matched = false; matchedCount = 0; transcript = ""
+                        automatic = false; matched = false; matchedCount = 0; transcript = ""
+                        status = if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…"
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
