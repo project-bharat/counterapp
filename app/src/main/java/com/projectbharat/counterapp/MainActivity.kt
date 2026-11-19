@@ -617,7 +617,7 @@ fun CounterApp(repo: CounterRepository) {
                         english = english, ink = ink, month = historyMonth, sessions = monthSessions,
                         onPrevious = { historyMonth = historyMonth.minusMonths(1) },
                         onNext = { if (historyMonth.isBefore(LocalDate.now().withDayOfMonth(1))) historyMonth = historyMonth.plusMonths(1) },
-                        onExportPdf = { exportMonthlyPdf(context, selected.titleMr, selected.titleEn, historyMonth, monthSessions, english) }
+                        onExportPdf = { exportMonthlyPdf(context, selected.titleMr, selected.titleEn, historyMonth, monthSessions, english) },
                         onEditSession = { session -> scope.launch { vm.updateBabySessionRecord(session) } }
                     )
                 } else if (monthlyHistory && selected != null) {
