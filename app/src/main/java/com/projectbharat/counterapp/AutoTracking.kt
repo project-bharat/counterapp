@@ -320,22 +320,6 @@ fun AutoStepCounterScreen(
                 }
             }
         }
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text(if (english) "LIVE WALK TRACKING" else "लाईव्ह चालण्याची मोजणी", color = ink, fontWeight = FontWeight.SemiBold)
-                if (!available) {
-                    Text(if (english) "Step counting is not supported by this device." else "या डिव्हाइसवर पावले मोजण्याची सुविधा उपलब्ध नाही.", color = Color(0xFFB45353))
-                } else if (!permissionGranted) {
-                    OutlinedButton(
-                        onClick = { activityPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (english) "Grant physical activity permission" else "शारीरिक हालचालींची परवानगी द्या")
-                    }
-                }
-                if (message.isNotBlank()) Text(message, color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
-            }
-        }
     }
     if (showGoalDialog) {
         AlertDialog(
