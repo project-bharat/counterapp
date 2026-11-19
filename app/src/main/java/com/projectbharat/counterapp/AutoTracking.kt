@@ -587,7 +587,15 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             } else {
                                 Box(Modifier.fillMaxWidth().clipToBounds().padding(top = 6.dp)) {
                                     AnimatedContent(
-                                        targetState = transcript.ifBlank { status.ifBlank { if (running) (if (english) "Listening…" else "ऐकत आहे…") else (if (english) "Starting…" else "सुरू होत आहे…") } },
+                                        targetState = transcript.ifBlank {
+                                            if (listeningOffline) (if (english) "Listening offline" else status.ifBlank { "ऑफलाइन ऐकत आहे" })
+                                            else if (english) when {
+                                                status.contains("मॉडेल तयार", true) -> "Offline model ready"
+                                                status.contains("माइक पुन्हा", true) -> "Reconnecting microphone…"
+                                                status.contains("ओळख यंत्रणा", true) -> "Preparing recognizer…"
+                                                else -> status.ifBlank { if (running) "Listening…" else "Starting…" }
+                                            } else status.ifBlank { if (running) "ऐकत आहे…" else "सुरू होत आहे…" }
+                                        },
                                         transitionSpec = { (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut()) },
                                         label = "recognizedPhraseTicker"
                                     ) { visibleText ->
