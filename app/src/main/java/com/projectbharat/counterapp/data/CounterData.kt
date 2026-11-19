@@ -185,6 +185,9 @@ interface CounterDao {
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note LIKE 'MANTRA:%' ORDER BY note")
     fun mantraLogsForDay(categoryId: Long, date: String): Flow<List<CounterLog>>
 
+    @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND note LIKE 'MANTRA:%' ORDER BY date, note")
+    fun allMantraLogs(categoryId: Long): Flow<List<CounterLog>>
+
     @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note=:note")
     fun mantraTodayCount(categoryId: Long, date: String, note: String): Flow<Int>
 
