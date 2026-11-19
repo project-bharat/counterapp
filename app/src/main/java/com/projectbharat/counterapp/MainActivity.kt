@@ -298,6 +298,7 @@ fun CounterApp(repo: CounterRepository) {
 
     var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
+    var japaReportScreen by remember { mutableStateOf(false) }
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
     var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
@@ -448,6 +449,9 @@ fun CounterApp(repo: CounterRepository) {
     val historyLogsFlow = remember(selected?.id, selected?.kind, historyDate) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraLogsForDay(it.id, historyDate) else vm.logsForDay(it.id, historyDate) } ?: flowOf(emptyList())
     }
+    val allMantraLogsFlow = remember(selected?.id, selected?.kind) {
+        selected?.takeIf { it.kind == "MANTRA" }?.let { vm.allMantraLogs(it.id) } ?: flowOf(emptyList())
+    }
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
     val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
@@ -459,6 +463,7 @@ fun CounterApp(repo: CounterRepository) {
     val average by averageFlow.collectAsStateWithLifecycle(null)
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
+    val allMantraLogs by allMantraLogsFlow.collectAsStateWithLifecycle(emptyList())
     val latestSession by latestFlow.collectAsStateWithLifecycle(null)
     LaunchedEffect(latestSession?.id, clock) { latestSession?.let { val limit = CounterRepository.TWO_HOURS_MS; if (it.endedAt == null && clock >= it.startedAt + limit) vm.completeSession(it.id) } }
     val monthSessions by monthFlow.collectAsStateWithLifecycle(emptyList())
@@ -629,6 +634,11 @@ fun CounterApp(repo: CounterRepository) {
                         onUpdate = { log -> scope.launch { vm.updateLog(log) } },
                         onDelete = { log -> scope.launch { vm.deleteLog(log.id) } }
                     )
+                } else if (japaReportScreen && selected?.kind == "MANTRA") {
+                    JapaReportScreen(
+                        logs = allMantraLogs, english = english, ink = ink,
+                        onBack = { japaReportScreen = false }
+                    )
                 } else if (weekly) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -716,11 +726,12 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 }
                 }
-                if (selected != null && selected.kind != "BABY" && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
-                    if (selected.kind != "MANTRA") {
-                        TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
-                            Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
-                        }
+                if (selected != null && selected.kind != "BABY" && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory && !japaReportScreen) {
+                    TextButton(onClick = {
+                        if (selected.kind == "MANTRA") japaReportScreen = true
+                        else { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }
+                    }) {
+                        Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (selected.kind == "MANTRA") (if (english) "My Japa Report" else "माझा जप अहवाल") else (if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण"))
                     }
                 }
             }
