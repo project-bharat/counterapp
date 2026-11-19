@@ -248,7 +248,18 @@ fun CounterApp(repo: CounterRepository) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var voiceModelSummary by remember { mutableStateOf(if (english) "Checking…" else "तपासत आहे…") }
+    var voiceModelSummary by remember { mutableStateOf("Checking…") }
+    var selectedId by remember { mutableLongStateOf(1L) }
+    var english by remember(context) {
+        mutableStateOf(
+            context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
+                .getBoolean("english_language", false)
+        )
+    }
+    LaunchedEffect(english) {
+        context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean("english_language", english).apply()
+    }
     LaunchedEffect(context, english) {
         while (true) {
             voiceModelSummary = withContext(Dispatchers.IO) {
@@ -269,17 +280,7 @@ fun CounterApp(repo: CounterRepository) {
             delay(1800)
         }
     }
-    var selectedId by remember { mutableLongStateOf(1L) }
-    var english by remember(context) {
-        mutableStateOf(
-            context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
-                .getBoolean("english_language", false)
-        )
-    }
-    LaunchedEffect(english) {
-        context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
-            .edit().putBoolean("english_language", english).apply()
-    }
+
     var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
     var historyMonth by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
