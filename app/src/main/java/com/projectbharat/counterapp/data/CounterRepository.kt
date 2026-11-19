@@ -146,6 +146,8 @@ class CounterRepository(private val dao: CounterDao) {
         dao.undoLatestBabyMovementAtomically(sessionId)
     }
 
+    suspend fun updateBabySessionRecord(session: BabySession) = dao.editBabySessionAndLog(session)
+
     suspend fun finishBabySession(sessionId: Long, strength: String?) {
         val now = System.currentTimeMillis()
         val session = dao.babySession(sessionId) ?: return
