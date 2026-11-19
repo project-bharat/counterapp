@@ -424,6 +424,9 @@ fun CounterApp(repo: CounterRepository) {
     val countFlow = remember(selected?.id, selected?.kind, mantraTarget) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraToday(it.id, mantraTarget) else vm.count(it.id) } ?: flowOf(0)
     }
+    val mantraTotalFlow = remember(selected?.id, selected?.kind, mantraTarget) {
+        selected?.takeIf { it.kind == "MANTRA" }?.let { vm.mantraAllTime(it.id, mantraTarget) } ?: flowOf(0)
+    }
     val weekFlow = remember(selected?.id, selected?.kind, mantraTarget) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraWeek(it.id, mantraTarget) else vm.week(it.id) } ?: flowOf(emptyList())
     }
@@ -694,7 +697,7 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
-                        categoryId = selected.id, count = count, english = english, ink = ink,
+                        categoryId = selected.id, count = count, totalCount = mantraTotal, english = english, ink = ink,
                         onMantraChange = { mantra -> mantraTarget = mantra },
                         onManualCount = { mantra ->
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
