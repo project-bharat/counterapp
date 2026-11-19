@@ -1199,6 +1199,7 @@ private fun MonthlyHistoryScreen(
     onExportPdf: () -> Unit,
     onEditSession: (BabySession) -> Unit
 ) {
+    val context = LocalContext.current
     val totals = sessions.groupBy { it.date }.mapValues { entry -> entry.value.sumOf { it.movementCount } }
     val daysInMonth = month.lengthOfMonth()
     Column(Modifier.fillMaxSize()) {
