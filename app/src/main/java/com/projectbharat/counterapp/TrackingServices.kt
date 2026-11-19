@@ -338,9 +338,9 @@ class ChantRecognitionService : Service() {
         if (categoryId <= 0 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY
         }
-        val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "CounterApp · Japa",
-            "Microphone active for “" + mantra + "”",
-            TrackingNotifications.stopPending(this, ChantRecognitionService::class.java, TrackingNotifications.CHANT_ID))
+        val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "Japa · " + mantra,
+            "Voice count active · " + (if (language == "en") "Listening" else "ऐकत आहे"),
+            null)
         if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).apply()
@@ -444,6 +444,7 @@ class ChantRecognitionService : Service() {
         } catch (error: Exception) {
             Log.e("CounterAppVosk", "Offline chant recognition stopped", error)
             if (!stopRequested) {
+                getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
                 sendState(false, error.message ?: "Speech engine error")
                 stopSelf()
             }
@@ -459,15 +460,26 @@ class ChantRecognitionService : Service() {
     private fun sendRecognitionUpdate(transcript: String, matches: Int) {
         val matched = matches > 0 || countPhrase(transcript, mantra) > 0
         sendState(true, if (matched) "Mantra matched" else "Listening offline", transcript, matched)
-        if (matches <= 0) return
         scope.launch {
-            CounterDatabase.get(this@ChantRecognitionService).dao().incrementMantraDaily(
-                categoryId, LocalDate.now().toString(), mantra, matches
-            )
-            sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
-                .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
-                .putExtra("transcript", transcript).putExtra("matched", true))
+            val dao = CounterDatabase.get(this@ChantRecognitionService).dao()
+            if (matches > 0) {
+                dao.incrementMantraDaily(categoryId, LocalDate.now().toString(), mantra, matches)
+                val log = dao.findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
+                updateJapaNotification(log?.count ?: 0, transcript.ifBlank { "Mantra matched" })
+                sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
+                    .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
+                    .putExtra("transcript", transcript).putExtra("matched", true))
+            } else {
+                val log = dao.findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
+                updateJapaNotification(log?.count ?: 0, transcript.ifBlank { "Listening offline" })
+            }
         }
+    }
+
+    private fun updateJapaNotification(total: Int, liveText: String) {
+        val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID,
+            "Japa · $total", liveText.take(120), null)
+        getSystemService(NotificationManager::class.java).notify(TrackingNotifications.CHANT_ID, notification)
     }
 
     private fun countPhrase(transcript: String, phrase: String): Int {
@@ -561,6 +573,7 @@ class ChantRecognitionService : Service() {
         try { audioRecord?.stop() } catch (_: Exception) { }
         worker?.interrupt()
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+        getSystemService(NotificationManager::class.java).cancel(TrackingNotifications.CHANT_ID)
         sendState(false, "Stopped")
     }
     private fun sendState(active: Boolean, message: String, transcript: String? = null, matched: Boolean? = null) {
