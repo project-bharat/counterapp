@@ -188,6 +188,9 @@ interface CounterDao {
     @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note=:note")
     fun mantraTodayCount(categoryId: Long, date: String, note: String): Flow<Int>
 
+    @Query("SELECT COALESCE(SUM(count),0) FROM counter_logs WHERE categoryId=:categoryId AND note=:note")
+    fun mantraAllTimeCount(categoryId: Long, note: String): Flow<Int>
+
     @Query("SELECT date, SUM(count) AS total FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate AND note=:note GROUP BY date ORDER BY date")
     fun mantraWeeklyTotals(categoryId: Long, fromDate: String, toDate: String, note: String): Flow<List<DayTotal>>
 
