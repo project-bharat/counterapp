@@ -21,6 +21,7 @@ class CounterRepository(private val dao: CounterDao) {
     fun logsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.logsForDay(categoryId, date.toString())
     fun mantraLogsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.mantraLogsForDay(categoryId, date.toString())
     fun mantraToday(categoryId: Long, mantra: String): Flow<Int> = dao.mantraTodayCount(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
+    fun mantraAllTime(categoryId: Long, mantra: String): Flow<Int> = dao.mantraAllTimeCount(categoryId, "MANTRA:" + mantra)
     fun mantraWeek(categoryId: Long, mantra: String): Flow<List<DayTotal>> {
         val today = LocalDate.now()
         return dao.mantraWeeklyTotals(categoryId, today.minusDays(6).toString(), today.toString(), "MANTRA:" + mantra)
