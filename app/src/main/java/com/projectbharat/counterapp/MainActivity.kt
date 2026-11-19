@@ -248,6 +248,27 @@ fun CounterApp(repo: CounterRepository) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    var voiceModelSummary by remember { mutableStateOf(if (english) "Checking…" else "तपासत आहे…") }
+    LaunchedEffect(context, english) {
+        while (true) {
+            voiceModelSummary = withContext(Dispatchers.IO) {
+                val mgr = OfflineSpeechModelManager(context.applicationContext)
+                val ready = listOf(mgr.isInstalled(false), mgr.isInstalled(true),
+                    VoskOfflineModelInstaller.isInstalled(context, "hi"),
+                    VoskOfflineModelInstaller.isInstalled(context, "en")).count { it }
+                val works = runCatching { androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("sherpa_mr").get() +
+                    androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("sherpa_en").get() +
+                    androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("vosk_hi").get() +
+                    androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("vosk_en").get() }.getOrDefault(emptyList())
+                val active = works.firstOrNull { it.state == androidx.work.WorkInfo.State.RUNNING }
+                if (active != null) {
+                    val pct = active.progress.getInt("progress", 0)
+                    if (english) "Downloading $pct%" else "डाउनलोड $pct%"
+                } else if (english) "$ready/4 ready" else "$ready/4 तयार"
+            }
+            delay(1800)
+        }
+    }
     var selectedId by remember { mutableLongStateOf(1L) }
     var english by remember(context) {
         mutableStateOf(
@@ -485,7 +506,7 @@ fun CounterApp(repo: CounterRepository) {
                         NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text(if (english) "Offline voice models" else "ऑफलाइन आवाज मॉडेल") }, selected = voiceModelsDialog, onClick = { voiceModelsDialog = true; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text((if (english) "Offline voice models" else "ऑफलाइन आवाज मॉडेल") + " · " + voiceModelSummary) }, selected = voiceModelsDialog, onClick = { voiceModelsDialog = true; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(
@@ -675,14 +696,6 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 }
                 if (selected != null && selected.kind != "BABY" && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
-                    if (selected.kind != "MANTRA" && historyLogs.isNotEmpty()) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(if (english) "RECENT" else "अलीकडील", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            historyLogs.take(2).forEach { item ->
-                                Text(sessionTime(item.timestamp) + " · +" + item.count, color = ink.copy(alpha = .75f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                            }
-                        }
-                    }
                     if (selected.kind != "MANTRA") {
                         TextButton(onClick = { historyDate = LocalDate.now(); historyMonth = LocalDate.now().withDayOfMonth(1); monthlyHistory = true }) {
                             Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण")
