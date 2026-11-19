@@ -347,6 +347,10 @@ private fun StepMetricCard(label: String, value: String, note: String, ink: Colo
 private data class ChantPreset(val title: String, val devanagari: String, val latin: String)
 
 private val chantPresets = listOf(
+    ChantPreset("Ram", "राम", "Ram"),
+    ChantPreset("Sri Rama Ram Jai Jai Ram", "श्रीराम राम जय जय राम श्रीराम जय राम जय जय राम", "Sri Rama Ram Jai Jai Ram Sri Rama Jai Ram Jai Jai Ram"),
+    ChantPreset("Jai Jai Pandurang Hari", "जय जय पांडुरंग हरी", "Jai Jai Pandurang Hari"),
+    ChantPreset("Jai Shri Ram", "जय श्रीराम", "Jai Shri Ram"),
     ChantPreset("Om Namah Shivaya", "ॐ नमः शिवाय", "Om Namah Shivaya"),
     ChantPreset("Maha Mrityunjaya Mantra", "ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्। उर्वारुकमिव बन्धनान्मृत्योर्मुक्षीय मामृतात्॥", "Om Tryambakam Yajamahe Sugandhim Pushtivardhanam Urvarukamiva Bandhanan Mrityor Mukshiya Maamritat"),
     ChantPreset("Om Namo Bhagavate Vasudevaya", "ॐ नमो भगवते वासुदेवाय", "Om Namo Bhagavate Vasudevaya"),
@@ -551,7 +555,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     ) { Text(if (english) "+ Add" else "+ जोडा", maxLines = 1) }
                 }
                 if (automatic) {
-                    val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true))
+                    val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true) || status.contains("ऐकत आहे", true) || status.contains("मंत्र जुळला", true))
                     val micPulse = rememberInfiniteTransition(label = "offlineMicPulse")
                     val micScale by micPulse.animateFloat(
                         initialValue = 1f, targetValue = 1.18f,
@@ -578,7 +582,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                             if (status.contains("Preparing", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true) || status.contains("Extracting", true) || status.contains("Loading", true) || status.contains("लोड होत", true)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Text(status.ifBlank { if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…" }, color = ink, style = MaterialTheme.typography.bodySmall)
+                                    Text(if (english) when { status.contains("मॉडेल तयार", true) -> "Offline model ready…"; status.contains("ऐकत आहे", true) -> "Listening offline"; status.contains("माइक पुन्हा", true) -> "Reconnecting microphone…"; status.contains("ओळख यंत्रणा", true) -> "Preparing recognizer…"; else -> status.ifBlank { "Preparing offline model…" } } else status.ifBlank { "ऑफलाइन मॉडेल तयार होत आहे…" }, color = ink, style = MaterialTheme.typography.bodySmall)
                                 }
                             } else {
                                 Box(Modifier.fillMaxWidth().clipToBounds().padding(top = 6.dp)) {
