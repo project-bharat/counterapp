@@ -353,7 +353,7 @@ class ChantRecognitionService : Service() {
                 .findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
             updateJapaNotification(log?.count ?: 0, "Voice count active · Listening")
         }
-        sendState(true, "Starting voice recognition")
+        sendState(true, if (language == "en") "Starting voice recognition" else "आवाज ओळख सुरू होत आहे…")
         worker = Thread {
             try {
                 if (previousWorker?.isAlive == true) previousWorker.join()
@@ -378,7 +378,11 @@ class ChantRecognitionService : Service() {
             val modelDir = File(filesDir, modelName)
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
-            sendState(true, if (VoskModelCache.isCached(modelDir)) "Starting recognizer…" else "Loading offline speech model…")
+            sendState(true, if (language == "en") {
+                if (VoskModelCache.isCached(modelDir)) "Starting recognizer…" else "Loading offline speech model…"
+            } else {
+                if (VoskModelCache.isCached(modelDir)) "ओळख यंत्रणा सुरू होत आहे…" else "ऑफलाइन आवाज मॉडेल लोड होत आहे…"
+            }
             model = VoskModelCache.get(modelDir)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
@@ -423,7 +427,7 @@ class ChantRecognitionService : Service() {
             if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
             record.startRecording()
             recording = true
-            sendState(true, "Offline model ready · listening offline")
+            sendState(true, if (language == "en") "Offline model ready · listening offline" else "ऑफलाइन मॉडेल तयार · ऐकत आहे")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             var lastPartial = ""
             while (recording && !Thread.currentThread().isInterrupted) {
