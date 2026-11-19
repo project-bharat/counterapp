@@ -83,6 +83,7 @@ fun BabyVoiceCountControl(
     val runGeneration = remember(activeSessionId) { AtomicLong(0L) }
     val engineMutex = remember(activeSessionId) { Mutex() }
     var listening by remember(activeSessionId) { mutableStateOf(false) }
+    var permissionRequestPending by remember(activeSessionId) { mutableStateOf(false) }
     LaunchedEffect(activeSessionId, autoStart) {
         if (autoStart) {
             listening = true
@@ -91,17 +92,21 @@ fun BabyVoiceCountControl(
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionRequestPending = false
         if (granted) {
             stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
             listening = true
         } else {
-            stateCallback.value(false, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "", null)
+            listening = false
+            stateCallback.value(false, if (english) "Microphone permission denied" else "मायक्रोफोन परवानगी नाकारली", "", null)
         }
     }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) listening = false
+            // Android's runtime permission sheet can emit ON_STOP. Do not cancel the
+            // pending start while that system dialog is visible.
+            if (event == Lifecycle.Event.ON_STOP && !permissionRequestPending) listening = false
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -122,6 +127,7 @@ fun BabyVoiceCountControl(
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             listening = false
+            permissionRequestPending = true
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             return@LaunchedEffect
         }
@@ -190,6 +196,7 @@ fun BabyVoiceCountControl(
                     listening = true
                 } else {
                     stateCallback.value(true, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "", 0)
+                    permissionRequestPending = true
                     permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
             }
