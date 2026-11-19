@@ -248,7 +248,6 @@ fun CounterApp(repo: CounterRepository) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var voiceModelSummary by remember { mutableStateOf("Checking…") }
     var selectedId by remember { mutableLongStateOf(1L) }
     var english by remember(context) {
         mutableStateOf(
@@ -256,6 +255,7 @@ fun CounterApp(repo: CounterRepository) {
                 .getBoolean("english_language", false)
         )
     }
+    var voiceModelSummary by remember { mutableStateOf("Checking…") }
     LaunchedEffect(english) {
         context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("english_language", english).apply()
