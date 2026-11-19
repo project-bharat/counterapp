@@ -379,8 +379,20 @@ class ChantRecognitionService : Service() {
         val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "Japa · " + mantra,
             "Voice count active · " + (if (language == "en") "Listening" else "ऐकत आहे"),
             null)
-        if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
+        try {
+            if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
+        } catch (error: SecurityException) {
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+            sendState(false, if (language == "en") "Microphone permission required" else "मायक्रोफोन परवानगी आवश्यक")
+            stopSelf()
+            return START_NOT_STICKY
+        } catch (error: Exception) {
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+            sendState(false, error.message ?: "Could not start microphone service")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).apply()
         scope.launch {
             val log = CounterDatabase.get(this@ChantRecognitionService).dao()
@@ -462,7 +474,18 @@ class ChantRecognitionService : Service() {
             if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); throw IllegalStateException("Microphone unavailable") }
             audioRecord = record
             if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
-            record.startRecording()
+            try {
+                record.startRecording()
+            } catch (error: Exception) {
+                record.release()
+                audioRecord = null
+                throw IllegalStateException("Microphone busy — another app or call is using it", error)
+            }
+            if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                record.release()
+                audioRecord = null
+                throw IllegalStateException("Microphone unavailable")
+            }
             recording = true
             sendState(true, if (language == "en") "Offline model ready · listening offline" else "ऑफलाइन मॉडेल तयार · ऐकत आहे")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
@@ -495,7 +518,18 @@ class ChantRecognitionService : Service() {
             Log.e("CounterAppVosk", "Offline chant recognition stopped", error)
             if (!stopRequested) {
                 getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
-                sendState(false, error.message ?: "Speech engine error")
+                val detail = error.message.orEmpty()
+                val friendly = when {
+                    detail.contains("busy", true) || detail.contains("startRecording", true) ->
+                        if (language == "en") "Microphone busy — another app or call is using it" else "मायक्रोफोन व्यस्त — दुसरे अॅप किंवा कॉल वापरत आहे"
+                    detail.contains("Microphone unavailable", true) || detail.contains("audio input", true) ->
+                        if (language == "en") "Microphone unavailable" else "मायक्रोफोन उपलब्ध नाही"
+                    detail.contains("permission", true) || error is SecurityException ->
+                        if (language == "en") "Microphone permission required" else "मायक्रोफोन परवानगी आवश्यक"
+                    else -> detail.ifBlank { if (language == "en") "Voice recognition stopped" else "आवाज ओळख थांबली" }
+                }
+                sendState(false, friendly)
+                if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
                 stopSelf()
             }
         } finally {
