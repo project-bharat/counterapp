@@ -313,6 +313,40 @@ private object VoskModelCache {
     }
 }
 
+/** Keep the grammar-specific recognizer warm across pause/resume toggles. */
+private object VoskRecognizerCache {
+    private var cachedKey: String? = null
+    private var cachedModelPath: String? = null
+    private var cachedRecognizer: Recognizer? = null
+
+    @Synchronized
+    fun isCached(key: String): Boolean = cachedKey == key && cachedRecognizer != null
+
+    @Synchronized
+    fun clearForModelChange(path: String) {
+        if (cachedModelPath != null && cachedModelPath != path) {
+            cachedRecognizer?.close()
+            cachedRecognizer = null
+            cachedKey = null
+            cachedModelPath = null
+        }
+    }
+
+    @Synchronized
+    fun get(model: Model, modelPath: String, key: String, grammar: String): Recognizer {
+        if (cachedKey == key && cachedRecognizer != null) {
+            cachedRecognizer!!.reset()
+            return cachedRecognizer!!
+        }
+        cachedRecognizer?.close()
+        val next = Recognizer(model, 16000.0f, grammar)
+        cachedRecognizer = next
+        cachedKey = key
+        cachedModelPath = modelPath
+        return next
+    }
+}
+
 class ChantRecognitionService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var recording = false
@@ -378,11 +412,14 @@ class ChantRecognitionService : Service() {
             val modelDir = File(filesDir, modelName)
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
+            val recognizerKey = modelDir.absolutePath + "|" + language + "|" + mantra.trim()
+            val warmRecognizer = VoskRecognizerCache.isCached(recognizerKey)
             sendState(true, if (language == "en") {
-                if (VoskModelCache.isCached(modelDir)) "Starting recognizer…" else "Loading offline speech model…"
+                if (warmRecognizer) "Reconnecting microphone…" else if (VoskModelCache.isCached(modelDir)) "Preparing speech recognizer…" else "Loading offline speech model…"
             } else {
-                if (VoskModelCache.isCached(modelDir)) "ओळख यंत्रणा सुरू होत आहे…" else "ऑफलाइन आवाज मॉडेल लोड होत आहे…"
+                if (warmRecognizer) "माइक पुन्हा जोडत आहे…" else if (VoskModelCache.isCached(modelDir)) "ओळख यंत्रणा तयार होत आहे…" else "ऑफलाइन आवाज मॉडेल लोड होत आहे…"
             })
+            VoskRecognizerCache.clearForModelChange(modelDir.absolutePath)
             model = VoskModelCache.get(modelDir)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
@@ -417,7 +454,7 @@ class ChantRecognitionService : Service() {
             grammarPhrases.forEach { grammarJson.put(it) }
             grammarJson.put("[unk]")
             val grammar = grammarJson.toString()
-            recognizer = Recognizer(model, 16000.0f, grammar)
+            recognizer = VoskRecognizerCache.get(model!!, modelDir.absolutePath, recognizerKey, grammar)
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
             val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
@@ -465,8 +502,8 @@ class ChantRecognitionService : Service() {
             recording = false
             try { audioRecord?.stop() } catch (_: Exception) { }
             audioRecord?.release(); audioRecord = null
-            recognizer?.close(); recognizer = null
-            // VoskModelCache retains the acoustic model for the next Japa session.
+            recognizer = null
+            // Both model and grammar recognizer remain cached for a fast next start.
         }
     }
 
