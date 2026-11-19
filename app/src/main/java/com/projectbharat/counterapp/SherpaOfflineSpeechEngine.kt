@@ -109,9 +109,14 @@ class SherpaOfflineSpeechEngine(
                 AudioFormat.ENCODING_PCM_16BIT,
                 maxOf(minBuffer, FRAME_SAMPLES * 4)
             )
-            check(audio.state == AudioRecord.STATE_INITIALIZED) { "Could not initialize microphone" }
+            check(audio.state == AudioRecord.STATE_INITIALIZED) { "Microphone unavailable" }
             recorder = audio
-            audio.startRecording()
+            try {
+                audio.startRecording()
+            } catch (error: Exception) {
+                throw IllegalStateException("Microphone busy — another app or call is using it", error)
+            }
+            check(audio.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone unavailable" }
             postStatus(if (english) "Listening offline — say a number from one to ten" else "ऑफलाइन ऐकत आहे — एक ते दहा म्हणा")
 
             val pcm = ShortArray(FRAME_SAMPLES)
@@ -175,7 +180,16 @@ class SherpaOfflineSpeechEngine(
                 }
             }
         } catch (error: Throwable) {
-            failureMessage = "Offline voice error: " + (error.message ?: "could not start")
+            val detail = error.message.orEmpty()
+            failureMessage = when {
+                detail.contains("busy", true) || detail.contains("startRecording", true) ->
+                    if (english) "Microphone busy — another app or call is using it" else "मायक्रोफोन व्यस्त — दुसरे अॅप किंवा कॉल वापरत आहे"
+                detail.contains("Microphone unavailable", true) || detail.contains("audio format", true) ->
+                    if (english) "Microphone unavailable" else "मायक्रोफोन उपलब्ध नाही"
+                error is SecurityException || detail.contains("permission", true) ->
+                    if (english) "Microphone permission required" else "मायक्रोफोन परवानगी आवश्यक"
+                else -> "Offline voice error: " + (detail.ifBlank { "could not start" })
+            }
         } finally {
             val endedUnexpectedly = running.getAndSet(false)
             try { audio?.stop() } catch (_: Exception) {}
