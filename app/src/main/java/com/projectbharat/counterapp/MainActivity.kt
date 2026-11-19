@@ -450,6 +450,7 @@ fun CounterApp(repo: CounterRepository) {
     val latestFlow = remember(selected?.id) { selected?.let { vm.latestSession(it.id) } ?: flowOf(null) }
     val monthFlow = remember(selected?.id, historyMonth) { selected?.let { vm.monthSessions(it.id, historyMonth) } ?: flowOf(emptyList()) }
     val count by countFlow.collectAsStateWithLifecycle(0)
+    val mantraTotal by mantraTotalFlow.collectAsStateWithLifecycle(0)
     LaunchedEffect(count, selected?.id) { CounterHomeWidget.refresh(context) }
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
     val walkDays by walkTotalsFlow.collectAsStateWithLifecycle(emptyList())
