@@ -268,15 +268,27 @@ fun CounterApp(repo: CounterRepository) {
                 val ready = listOf(mgr.isInstalled(false), mgr.isInstalled(true),
                     VoskOfflineModelInstaller.isInstalled(context, "hi"),
                     VoskOfflineModelInstaller.isInstalled(context, "en")).count { it }
-                val works = runCatching { androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("sherpa_mr").get() +
-                    androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("sherpa_en").get() +
-                    androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("vosk_hi").get() +
-                    androidx.work.WorkManager.getInstance(context).getWorkInfosByTag("vosk_en").get() }.getOrDefault(emptyList())
-                val active = works.firstOrNull { it.state == androidx.work.WorkInfo.State.RUNNING }
-                if (active != null) {
-                    val pct = active.progress.getInt("progress", 0)
-                    if (english) "Downloading $pct%" else "डाउनलोड $pct%"
-                } else if (english) "$ready/4 ready" else "$ready/4 तयार"
+                val workManager = androidx.work.WorkManager.getInstance(context)
+                val modelTags = listOf("sherpa_mr", "sherpa_en", "vosk_hi", "vosk_en")
+                val worksByTag = modelTags.map { tag ->
+                    tag to runCatching { workManager.getWorkInfosByTag(tag).get().firstOrNull() }.getOrNull()
+                }
+                val installedFlags = listOf(mgr.isInstalled(false), mgr.isInstalled(true),
+                    VoskOfflineModelInstaller.isInstalled(context, "hi"), VoskOfflineModelInstaller.isInstalled(context, "en"))
+                val combinedProgress = worksByTag.indices.sumOf { index ->
+                    val info = worksByTag[index].second
+                    when {
+                        installedFlags[index] -> 100
+                        info?.state == androidx.work.WorkInfo.State.SUCCEEDED -> 100
+                        info?.state == androidx.work.WorkInfo.State.RUNNING -> info.progress.getInt("progress", 0).coerceIn(0, 100)
+                        else -> 0
+                    }
+                } / 4
+                if (ready == 4) {
+                    if (english) "4/4 ready · 100%" else "4/4 तयार · 100%"
+                } else if (worksByTag.any { it.second?.state == androidx.work.WorkInfo.State.RUNNING } || combinedProgress > 0) {
+                    if (english) "All 4 models · $combinedProgress% downloaded" else "चारही मॉडेल · $combinedProgress% डाउनलोड"
+                } else if (english) "$ready/4 ready · $combinedProgress%" else "$ready/4 तयार · $combinedProgress%"
             }
             delay(1800)
         }
