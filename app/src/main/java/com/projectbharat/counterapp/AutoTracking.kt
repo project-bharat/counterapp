@@ -399,8 +399,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     var addMantraDialog by remember { mutableStateOf(false) }
     var newMantraMr by remember { mutableStateOf("") }
     var newMantraEn by remember { mutableStateOf("") }
-    var soundFeedback by remember(categoryId) { mutableStateOf(prefs.getBoolean("count_sound_enabled", true)) }
-    var vibrationFeedback by remember(categoryId) { mutableStateOf(prefs.getBoolean("count_vibration_enabled", true)) }
     var customMantras by remember(categoryId) {
         mutableStateOf(prefs.getStringSet("custom_mantras_$categoryId", emptySet()).orEmpty().map { saved ->
             val parts = saved.split("\u001F", limit = 2)
@@ -456,16 +454,19 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
             }
         }
         registerTrackingReceiver(context, receiver)
-        onDispose { context.unregisterReceiver(receiver); ChantRecognitionService.stop(context) }
+        onDispose { context.unregisterReceiver(receiver) }
     }
-    LaunchedEffect(categoryId) {
+    LaunchedEffect(categoryId, english, automatic) {
+        var lastRetryAt = 0L
         while (true) {
             val active = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)
-            if (running && !active) {
-                running = false
-                if (automatic) status = if (english) "Recognition interrupted · Resume" else "ओळख थांबली · पुन्हा सुरू करा"
+            running = active
+            if (automatic && !active && System.currentTimeMillis() - lastRetryAt >= 5000L) {
+                lastRetryAt = System.currentTimeMillis()
+                status = if (english) "Recognition reconnecting…" else "आवाज ओळख पुन्हा जोडत आहे…"
+                startService()
             }
-            delay(1200)
+            delay(1500)
         }
     }
 
@@ -566,22 +567,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         shape = RoundedCornerShape(14.dp)
                     ) { Text(if (english) "+ Add" else "+ जोडा", maxLines = 1) }
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(if (english) "Sound" else "आवाज", color = ink, style = MaterialTheme.typography.labelMedium)
-                        Switch(checked = soundFeedback, onCheckedChange = { enabled ->
-                            soundFeedback = enabled
-                            prefs.edit().putBoolean("count_sound_enabled", enabled).apply()
-                        })
-                    }
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(if (english) "Vibration" else "कंपन", color = ink, style = MaterialTheme.typography.labelMedium)
-                        Switch(checked = vibrationFeedback, onCheckedChange = { enabled ->
-                            vibrationFeedback = enabled
-                            prefs.edit().putBoolean("count_vibration_enabled", enabled).apply()
-                        })
-                    }
-                }
                 if (automatic) {
                     val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true))
                     val micPulse = rememberInfiniteTransition(label = "offlineMicPulse")
@@ -629,33 +614,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                                     (if (english) "Mantra matched" else "मंत्र जुळला") + if (matchedCount > 0) " · +$matchedCount" else "",
                                     color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
                             }
-                        }
-                    }
-                    Row(
-                        Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (automatic && !running && status.isNotBlank() && status != "Stopped" && status != "थांबवले") {
-                            Button(
-                                onClick = startService,
-                                modifier = Modifier.widthIn(min = 116.dp).height(48.dp).wrapContentWidth(),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text(if (english) "Resume" else "पुन्हा सुरू करा", maxLines = 1)
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = stopRecognition,
-                            modifier = Modifier.widthIn(min = 112.dp).height(48.dp).wrapContentWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Icon(Icons.Default.Stop, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (english) "Stop" else "थांबवा", maxLines = 1)
                         }
                     }
                 }
