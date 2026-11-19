@@ -384,7 +384,7 @@ private val chantPresets = listOf(
 )
 
 @Composable
-fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onMantraChange: (String) -> Unit, onManualCount: (String) -> Unit, onCountFeedback: (Int) -> Unit) {
+fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: Color, onMantraChange: (String) -> Unit, onManualCount: (String) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम") }
@@ -449,7 +449,6 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                     val delta = intent.getIntExtra("delta", 0)
                     matched = true
                     matchedCount = delta
-                    if (delta > 0) onCountFeedback(delta)
                 }
             }
         }
@@ -523,7 +522,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
                         .shadow(12.dp, CircleShape)
                         .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
                         .border(3.dp, circleAccent, CircleShape)
-                        .clickable(interactionSource = manualInteraction, indication = null, onClick = { onCountFeedback(1); onManualCount(target) }),
+                        .clickable(interactionSource = manualInteraction, indication = null, onClick = { onManualCount(target) }),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
