@@ -325,6 +325,7 @@ class ChantRecognitionService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
+        if (intent?.action == ACTION_PAUSE_CHANT) { pauseRecognition(); return START_NOT_STICKY }
         val previousWorker = worker
         if (previousWorker?.isAlive == true) {
             stopRequested = true
@@ -572,14 +573,21 @@ class ChantRecognitionService : Service() {
         }
     }
 
-    private fun stopRecognition() {
+    private fun pauseRecognition() {
+        // Keep the started service and process-level acoustic model cache warm.
+        // Stop only the microphone/recognizer so the next toggle can resume quickly.
         stopRequested = true
         recording = false
         try { audioRecord?.stop() } catch (_: Exception) { }
         worker?.interrupt()
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
         getSystemService(NotificationManager::class.java).cancel(TrackingNotifications.CHANT_ID)
+        if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
         sendState(false, "Stopped")
+    }
+
+    private fun stopRecognition() {
+        pauseRecognition()
     }
     private fun sendState(active: Boolean, message: String, transcript: String? = null, matched: Boolean? = null) {
         val intent = Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
@@ -602,13 +610,14 @@ class ChantRecognitionService : Service() {
     companion object {
         const val EXTRA_MANTRA = "mantra"
         const val EXTRA_LANGUAGE = "language"
+        private const val ACTION_PAUSE_CHANT = "com.projectbharat.counterapp.action.PAUSE_CHANT"
         fun start(context: Context, categoryId: Long, mantra: String, language: String) {
             val intent = Intent(context, ChantRecognitionService::class.java)
                 .putExtra(StepTrackingService.EXTRA_CATEGORY_ID, categoryId)
                 .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language)
             ContextCompat.startForegroundService(context, intent)
         }
-        fun stop(context: Context) { context.stopService(Intent(context, ChantRecognitionService::class.java)) }
+        fun stop(context: Context) { context.startService(Intent(context, ChantRecognitionService::class.java).setAction(ACTION_PAUSE_CHANT)) }
     }
 }
 
