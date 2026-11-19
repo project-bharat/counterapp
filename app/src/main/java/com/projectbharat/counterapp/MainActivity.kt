@@ -1226,7 +1226,7 @@ private fun MonthlyHistoryScreen(
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                IconButton(onClick = { editSession = true }) { Icon(Icons.Default.Edit, contentDescription = if (english) "Edit session" else "सत्र संपादित करा", tint = ink) }
+                                IconButton(onClick = { editCount = session.movementCount.toString(); editDuration = (((session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)) - session.startedAt).coerceAtLeast(0) / 60000).toString(); editDate = session.date; editTime = Instant.ofEpochMilli(session.startedAt).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")); editSession = true }) { Icon(Icons.Default.Edit, contentDescription = if (english) "Edit session" else "सत्र संपादित करा", tint = ink) }
                             }
                         }
                     }
