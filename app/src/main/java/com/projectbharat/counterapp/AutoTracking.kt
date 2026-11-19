@@ -389,7 +389,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, english: Boolean, ink: 
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम") }
     var language by remember(categoryId) { mutableStateOf(prefs.getString("language_$categoryId", if (english) "en" else "hi") ?: "hi") }
-    var automatic by remember { mutableStateOf(false) }
+    var automatic by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)) }
     var running by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var transcript by remember { mutableStateOf("") }
