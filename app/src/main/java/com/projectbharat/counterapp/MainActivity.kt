@@ -187,6 +187,7 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     fun count(id: Long) = repo.today(id)
     fun logsForDay(id: Long, date: LocalDate) = repo.logsForDay(id, date)
     fun mantraLogsForDay(id: Long, date: LocalDate) = repo.mantraLogsForDay(id, date)
+    fun allMantraLogs(id: Long) = repo.allMantraLogs(id)
     fun mantraToday(id: Long, mantra: String) = repo.mantraToday(id, mantra)
     fun mantraAllTime(id: Long, mantra: String) = repo.mantraAllTime(id, mantra)
     fun mantraWeek(id: Long, mantra: String) = repo.mantraWeek(id, mantra)
