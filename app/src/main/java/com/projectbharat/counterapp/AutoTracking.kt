@@ -344,31 +344,31 @@ private fun StepMetricCard(label: String, value: String, note: String, ink: Colo
     }
 }
 
-private data class ChantPreset(val title: String, val devanagari: String, val latin: String)
+private data class ChantPreset(val title: String, val devanagari: String, val latin: String, val deity: String = "Other")
 
 private val chantPresets = listOf(
-    ChantPreset("Ram", "राम", "Ram"),
-    ChantPreset("Sri Rama Ram Jai Jai Ram", "श्रीराम राम जय जय राम श्रीराम जय राम जय जय राम", "Sri Rama Ram Jai Jai Ram Sri Rama Jai Ram Jai Jai Ram"),
-    ChantPreset("Jai Jai Pandurang Hari", "जय जय पांडुरंग हरी", "Jai Jai Pandurang Hari"),
-    ChantPreset("Jai Shri Ram", "जय श्रीराम", "Jai Shri Ram"),
-    ChantPreset("Om Namah Shivaya", "ॐ नमः शिवाय", "Om Namah Shivaya"),
-    ChantPreset("Maha Mrityunjaya Mantra", "ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्। उर्वारुकमिव बन्धनान्मृत्योर्मुक्षीय मामृतात्॥", "Om Tryambakam Yajamahe Sugandhim Pushtivardhanam Urvarukamiva Bandhanan Mrityor Mukshiya Maamritat"),
-    ChantPreset("Om Namo Bhagavate Vasudevaya", "ॐ नमो भगवते वासुदेवाय", "Om Namo Bhagavate Vasudevaya"),
-    ChantPreset("Hare Krishna Mahamantra", "हरे कृष्ण हरे कृष्ण, कृष्ण कृष्ण हरे हरे। हरे राम हरे राम, राम राम हरे हरे॥", "Hare Krishna Hare Krishna Krishna Krishna Hare Hare Hare Rama Hare Rama Rama Rama Hare Hare"),
-    ChantPreset("Om Gam Ganapataye Namaha", "ॐ गं गणपतये नमः", "Om Gam Ganapataye Namaha"),
-    ChantPreset("Gayatri Mantra", "ॐ भूर्भुवः स्वः तत्सवितुर्वरेण्यं भर्गो देवस्य धीमहि धियो यो नः प्रचोदयात्॥", "Om Bhur Bhuvah Svah Tat Savitur Varenyam Bhargo Devasya Dhimahi Dhiyo Yo Nah Prachodayat"),
-    ChantPreset("Shri Ram Jai Ram", "श्री राम जय राम जय जय राम", "Shri Ram Jai Ram Jai Jai Ram"),
-    ChantPreset("Om Hanumate Namah", "ॐ हनुमते नमः", "Om Hanumate Namah"),
-    ChantPreset("Guru Mantra", "गुरुर्ब्रह्मा गुरुर्विष्णुः गुरुर्देवो महेश्वरः। गुरुः साक्षात् परब्रह्म तस्मै श्रीगुरवे नमः॥", "Gurur Brahma Gurur Vishnuh Gurur Devo Maheshwarah Guruh Sakshat Parabrahma Tasmai Shri Gurave Namah"),
-    ChantPreset("Om (Pranava)", "ॐ", "Om"),
-    ChantPreset("Ram Krishna Hari", "राम कृष्ण हरी ॥", "Ram Krishna Hari"),
-    ChantPreset("Om Namo Narayanaya", "ॐ नमो नारायणाय ॥", "Om Namo Narayanaya"),
-    ChantPreset("Digambara Digambara", "दिगंबरा दिगंबरा श्रीपाद वल्लभ दिगंबरा ॥", "Digambara Digambara Shripada Vallabha Digambara"),
-    ChantPreset("Om Aim Saraswatyai Namah", "ॐ ऐं सरस्वत्यै नमः ॥", "Om Aim Saraswatyai Namah"),
-    ChantPreset("Om Mahalakshmyai Namah", "ॐ महालक्ष्म्यै नमः ॥", "Om Mahalakshmyai Namah"),
-    ChantPreset("Vakratunda Mahakaya", "वक्रतुण्ड महाकाय सूर्यकोटि समप्रभ । निर्विघ्नं कुरु मे देव सर्वकार्येषु सर्वदा ॥", "Vakratunda Mahakaya Suryakoti Samaprabha Nirvighnam Kuru Me Deva Sarvakaryeshu Sarvada"),
-    ChantPreset("Pandurang Hari", "पांडुरंग हरी", "Pandurang Hari"),
-    ChantPreset("Pandurang", "पांडुरंग", "Pandurang")
+    ChantPreset("Ram", "राम", "Ram", "Ram"),
+    ChantPreset("Sri Rama Ram Jai Jai Ram", "श्रीराम राम जय जय राम श्रीराम जय राम जय जय राम", "Sri Rama Ram Jai Jai Ram Sri Rama Jai Ram Jai Jai Ram", "Ram"),
+    ChantPreset("Jai Jai Pandurang Hari", "जय जय पांडुरंग हरी", "Jai Jai Pandurang Hari", "Vishnu"),
+    ChantPreset("Jai Shri Ram", "जय श्रीराम", "Jai Shri Ram", "Ram"),
+    ChantPreset("Om Namah Shivaya", "ॐ नमः शिवाय", "Om Namah Shivaya", "Shiva"),
+    ChantPreset("Maha Mrityunjaya Mantra", "ॐ त्र्यम्बकं यजामहे सुगन्धिं पुष्टिवर्धनम्। उर्वारुकमिव बन्धनान्मृत्योर्मुक्षीय मामृतात्॥", "Om Tryambakam Yajamahe Sugandhim Pushtivardhanam Urvarukamiva Bandhanan Mrityor Mukshiya Maamritat", "Shiva"),
+    ChantPreset("Om Namo Bhagavate Vasudevaya", "ॐ नमो भगवते वासुदेवाय", "Om Namo Bhagavate Vasudevaya", "Krishna"),
+    ChantPreset("Hare Krishna Mahamantra", "हरे कृष्ण हरे कृष्ण, कृष्ण कृष्ण हरे हरे। हरे राम हरे राम, राम राम हरे हरे॥", "Hare Krishna Hare Krishna Krishna Krishna Hare Hare Hare Rama Hare Rama Rama Rama Hare Hare", "Krishna"),
+    ChantPreset("Om Gam Ganapataye Namaha", "ॐ गं गणपतये नमः", "Om Gam Ganapataye Namaha", "Ganesh"),
+    ChantPreset("Gayatri Mantra", "ॐ भूर्भुवः स्वः तत्सवितुर्वरेण्यं भर्गो देवस्य धीमहि धियो यो नः प्रचोदयात्॥", "Om Bhur Bhuvah Svah Tat Savitur Varenyam Bhargo Devasya Dhimahi Dhiyo Yo Nah Prachodayat", "Devi"),
+    ChantPreset("Shri Ram Jai Ram", "श्री राम जय राम जय जय राम", "Shri Ram Jai Ram Jai Jai Ram", "Ram"),
+    ChantPreset("Om Hanumate Namah", "ॐ हनुमते नमः", "Om Hanumate Namah", "Hanuman"),
+    ChantPreset("Guru Mantra", "गुरुर्ब्रह्मा गुरुर्विष्णुः गुरुर्देवो महेश्वरः। गुरुः साक्षात् परब्रह्म तस्मै श्रीगुरवे नमः॥", "Gurur Brahma Gurur Vishnuh Gurur Devo Maheshwarah Guruh Sakshat Parabrahma Tasmai Shri Gurave Namah", "Guru"),
+    ChantPreset("Om (Pranava)", "ॐ", "Om", "Other"),
+    ChantPreset("Ram Krishna Hari", "राम कृष्ण हरी ॥", "Ram Krishna Hari", "Vishnu"),
+    ChantPreset("Om Namo Narayanaya", "ॐ नमो नारायणाय ॥", "Om Namo Narayanaya", "Vishnu"),
+    ChantPreset("Digambara Digambara", "दिगंबरा दिगंबरा श्रीपाद वल्लभ दिगंबरा ॥", "Digambara Digambara Shripada Vallabha Digambara", "Dattatreya"),
+    ChantPreset("Om Aim Saraswatyai Namah", "ॐ ऐं सरस्वत्यै नमः ॥", "Om Aim Saraswatyai Namah", "Devi"),
+    ChantPreset("Om Mahalakshmyai Namah", "ॐ महालक्ष्म्यै नमः ॥", "Om Mahalakshmyai Namah", "Devi"),
+    ChantPreset("Vakratunda Mahakaya", "वक्रतुण्ड महाकाय सूर्यकोटि समप्रभ । निर्विघ्नं कुरु मे देव सर्वकार्येषु सर्वदा ॥", "Vakratunda Mahakaya Suryakoti Samaprabha Nirvighnam Kuru Me Deva Sarvakaryeshu Sarvada", "Ganesh"),
+    ChantPreset("Pandurang Hari", "पांडुरंग हरी", "Pandurang Hari", "Vishnu"),
+    ChantPreset("Pandurang", "पांडुरंग", "Pandurang", "Vishnu")
 )
 
 @Composable
@@ -384,6 +384,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
     var matched by remember { mutableStateOf(false) }
     var matchedCount by remember { mutableIntStateOf(0) }
     var presetMenu by remember { mutableStateOf(false) }
+    var selectedDeity by remember(categoryId) { mutableStateOf("All") }
     var addMantraDialog by remember { mutableStateOf(false) }
     var newMantraMr by remember { mutableStateOf("") }
     var newMantraEn by remember { mutableStateOf("") }
@@ -546,7 +547,12 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
                 }
                 }
                 Spacer(Modifier.height(14.dp))
-                Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("All", "Ram", "Krishna", "Shiva", "Ganesh", "Hanuman", "Devi", "Vishnu", "Dattatreya", "Guru", "Other").forEach { deity ->
+                        FilterChip(selected = selectedDeity == deity, onClick = { selectedDeity = deity }, label = { Text(if (english) deity else when(deity) { "All" -> "सर्व"; "Ram" -> "राम"; "Krishna" -> "कृष्ण"; "Shiva" -> "शिव"; "Ganesh" -> "गणेश"; "Hanuman" -> "हनुमान"; "Devi" -> "देवी"; "Vishnu" -> "विष्णू"; "Dattatreya" -> "दत्तात्रेय"; "Guru" -> "गुरु"; else -> "इतर" }) })
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.weight(1f)) {
                         OutlinedButton(
                             onClick = { presetMenu = true },
@@ -557,7 +563,9 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
                             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
                         }
                         DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                            (chantPresets + customMantras).distinctBy { it.devanagari }.forEach { item ->
+                            val visiblePresets = (chantPresets + customMantras).distinctBy { it.devanagari }
+                                .filter { selectedDeity == "All" || it.deity == selectedDeity }
+                            visiblePresets.forEach { item ->
                                 val mantra = if (language == "hi") item.devanagari else item.latin
                                 DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
                                     target = mantra
