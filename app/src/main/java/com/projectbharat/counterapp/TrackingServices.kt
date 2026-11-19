@@ -297,6 +297,9 @@ private object VoskModelCache {
     private var cachedModel: Model? = null
 
     @Synchronized
+    fun isCached(directory: File): Boolean = cachedPath == directory.absolutePath && cachedModel != null
+
+    @Synchronized
     fun get(directory: File): Model {
         val path = directory.absolutePath
         if (cachedPath == path && cachedModel != null) return cachedModel!!
@@ -350,7 +353,7 @@ class ChantRecognitionService : Service() {
                 .findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
             updateJapaNotification(log?.count ?: 0, "Voice count active · Listening")
         }
-        sendState(true, "Preparing offline speech model")
+        sendState(true, "Starting voice recognition")
         worker = Thread {
             try {
                 if (previousWorker?.isAlive == true) previousWorker.join()
@@ -375,7 +378,7 @@ class ChantRecognitionService : Service() {
             val modelDir = File(filesDir, modelName)
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
-            sendState(true, "Loading offline speech model…")
+            sendState(true, if (VoskModelCache.isCached(modelDir)) "Starting recognizer…" else "Loading offline speech model…")
             model = VoskModelCache.get(modelDir)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
