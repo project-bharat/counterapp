@@ -382,7 +382,7 @@ class ChantRecognitionService : Service() {
                 if (VoskModelCache.isCached(modelDir)) "Starting recognizer…" else "Loading offline speech model…"
             } else {
                 if (VoskModelCache.isCached(modelDir)) "ओळख यंत्रणा सुरू होत आहे…" else "ऑफलाइन आवाज मॉडेल लोड होत आहे…"
-            }
+            })
             model = VoskModelCache.get(modelDir)
             val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
             val grammarPhrases = linkedSetOf(mantra, cleanMantra)
