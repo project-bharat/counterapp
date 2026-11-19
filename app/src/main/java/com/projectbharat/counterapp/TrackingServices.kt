@@ -344,6 +344,11 @@ class ChantRecognitionService : Service() {
         if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).apply()
+        scope.launch {
+            val log = CounterDatabase.get(this@ChantRecognitionService).dao()
+                .findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
+            updateJapaNotification(log?.count ?: 0, "Voice count active · Listening")
+        }
         sendState(true, "Preparing offline speech model")
         worker = Thread {
             try {
