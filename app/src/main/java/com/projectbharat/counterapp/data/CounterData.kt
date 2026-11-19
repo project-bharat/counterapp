@@ -283,6 +283,19 @@ interface CounterDao {
     @Query("UPDATE baby_sessions SET endedAt=:endedAt, strength=:strength WHERE id=:sessionId")
     suspend fun finishBabySession(sessionId: Long, endedAt: Long, strength: String?)
 
+    @Query("UPDATE baby_sessions SET date=:date, startedAt=:startedAt, endedAt=:endedAt, movementCount=:movementCount, timeToTenMs=:timeToTenMs WHERE id=:id")
+    suspend fun updateBabySessionFields(id: Long, date: String, startedAt: Long, endedAt: Long?, movementCount: Int, timeToTenMs: Long?)
+
+    @Query("DELETE FROM counter_logs WHERE sessionId=:sessionId")
+    suspend fun deleteBabySessionLogs(sessionId: Long)
+
+    @Transaction
+    suspend fun editBabySessionAndLog(session: BabySession) {
+        updateBabySessionFields(session.id, session.date, session.startedAt, session.endedAt, session.movementCount, session.timeToTenMs)
+        deleteBabySessionLogs(session.id)
+        if (session.movementCount > 0) addLog(CounterLog(date=session.date, timestamp=session.startedAt, categoryId=session.categoryId, count=session.movementCount, strength=session.strength, sessionId=session.id))
+    }
+
     @Query("UPDATE baby_sessions SET endedAt=NULL, strength=NULL WHERE id=:sessionId AND endedAt IS NOT NULL")
     suspend fun resumeBabySession(sessionId: Long)
 
