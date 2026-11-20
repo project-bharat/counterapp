@@ -51,13 +51,12 @@ object CounterQuickActions {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
     fun publishShortcuts(context: Context, categories: List<com.projectbharat.counterapp.data.CounterCategory>) {
-        val kinds = listOf("BABY", "MANTRA", "STEPS")
+        val kinds = listOf("BABY", "MANTRA")
         val shortcuts = kinds.mapNotNull { kind ->
             val category = categories.firstOrNull { it.kind == kind } ?: return@mapNotNull null
             val (short, long) = when (kind) {
                 "BABY" -> "Baby" to "Start baby movement session"
                 "MANTRA" -> "Japa" to "Start Japa counter"
-                else -> "Walk" to "Start walking session"
             }
             ShortcutInfoCompat.Builder(context, "counter_${kind.lowercase()}")
                 .setShortLabel(short).setLongLabel(long)
@@ -172,7 +171,6 @@ class QuickActionReceiver : BroadcastReceiver() {
                 val categories = dao.categories().first()
                 val baby = categories.firstOrNull { it.kind == "BABY" }
                 val mantra = categories.firstOrNull { it.kind == "MANTRA" }
-                val steps = categories.firstOrNull { it.kind == "STEPS" }
                 when (action) {
                     CounterQuickActions.ACTION_BABY_ADD, CounterQuickActions.ACTION_BABY_UNDO -> {
                         val sessionId = intent?.getLongExtra(CounterQuickActions.EXTRA_BABY_SESSION_ID, -1L) ?: -1L
@@ -196,14 +194,6 @@ class QuickActionReceiver : BroadcastReceiver() {
                             CounterRepository(dao).startBabySession(it.id)
                             openCounter(app, "BABY")
                         }
-                    }
-                    CounterQuickActions.ACTION_START_WALK -> {
-                        val ready = hasPermission(app, Manifest.permission.ACTIVITY_RECOGNITION) &&
-                            hasPermission(app, Manifest.permission.ACCESS_FINE_LOCATION)
-                        if (ready && steps != null) {
-                            StepTrackingService.start(app, steps.id)
-                            openCounter(app, "STEPS")
-                        } else openCounter(app, "STEPS")
                     }
                     CounterQuickActions.ACTION_START_JAPA -> {
                         val ready = hasPermission(app, Manifest.permission.RECORD_AUDIO)
@@ -256,19 +246,15 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                 val todayLabel = date.format(DateTimeFormatter.ofPattern("EEE, dd MMM"))
                 val baby = categories.firstOrNull { it.kind == "BABY" }
                 val mantra = categories.firstOrNull { it.kind == "MANTRA" }
-                val steps = categories.firstOrNull { it.kind == "STEPS" }
                 val babyCount = baby?.let { dao.countNow(it.id, today) } ?: 0
                 val mantraCount = mantra?.let { dao.countNow(it.id, today) } ?: 0
-                val stepCount = steps?.let { dao.countNow(it.id, today) } ?: 0
                 ids.forEach { id ->
                     val views = RemoteViews(context.packageName, R.layout.counter_widget)
                     views.setTextViewText(R.id.widget_date, todayLabel)
                     views.setTextViewText(R.id.widget_baby_action, "👶  BABY\n$babyCount moves\n＋ Session")
                     views.setTextViewText(R.id.widget_japa_action, "📿  JAPA\n$mantraCount chants\n＋ Start")
-                    views.setTextViewText(R.id.widget_steps_action, "👣  WALK\n$stepCount steps\n＋ Start")
                     views.setOnClickPendingIntent(R.id.widget_baby_action, CounterQuickActions.activityPending(context, "BABY", 8101))
                     views.setOnClickPendingIntent(R.id.widget_japa_action, CounterQuickActions.activityPending(context, "MANTRA", 8102))
-                    views.setOnClickPendingIntent(R.id.widget_steps_action, CounterQuickActions.activityPending(context, "STEPS", 8103))
                     manager.updateAppWidget(id, views)
                 }
             } finally {
