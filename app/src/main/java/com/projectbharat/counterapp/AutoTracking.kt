@@ -527,7 +527,7 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
             StepMetricCard(if (english) "AVERAGE / DAY" else "दररोज सरासरी", NumberFormat.getIntegerInstance().format(average), if (english) "Per active day" else "सक्रिय दिवस", ink, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepMetricCard(if (english) "BEST DAY" else "सर्वोत्तम दिवस", NumberFormat.getIntegerInstance().format(best?.value ?: 0), best?.key ?: "—", ink, Modifier.weight(1f))
+            StepMetricCard(if (english) "BEST DAY" else "सर्वोत्तम दिवस", NumberFormat.getIntegerInstance().format(best?.value ?: 0), best?.key?.let { runCatching { LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy")) }.getOrDefault(it) } ?: "—", ink, Modifier.weight(1f))
             StepMetricCard(if (english) "TOTAL MALAS" else "पूर्ण माळा", NumberFormat.getIntegerInstance().format(total / 108), if (english) "108 japa each" else "प्रत्येक माळ १०८", ink, Modifier.weight(1f))
         }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -552,7 +552,7 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
                                     val date = month.atDay(day)
                                     val value = totalsByDate[date.toString()] ?: 0
                                     Surface(shape = CircleShape, color = when { value >= 108 -> Color(0xFFDDEEE4); date < today && value < 108 -> Color(0xFFF5D9D9); value > 0 -> Color(0xFFE7D8F6); else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.35f) }) {
-                                        Text(day.toString(), modifier = Modifier.padding(7.dp), color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = if (value > 0) FontWeight.Bold else FontWeight.Normal)
+                                        Text(if (value >= 108) "$day ✓" else if (date < today) "$day ×" else day.toString(), modifier = Modifier.padding(6.dp), color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = if (value > 0) FontWeight.Bold else FontWeight.Normal)
                                     }
                                 }
                             }
