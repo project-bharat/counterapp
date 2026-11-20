@@ -329,6 +329,7 @@ fun CounterApp(repo: CounterRepository) {
         showPermissionIntro = false
         QuickActionsNotification.show(context)
     }
+    val firstRunPermissions = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
     val jsonExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
             backupMessage = null
@@ -466,7 +467,7 @@ fun CounterApp(repo: CounterRepository) {
                         Text(if (english) "DAILY COUNTER" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(14.dp))
                         categories.forEach { cat ->
-                            val glyph = when (cat.kind) { "BABY" -> Icons.Default.PregnantWoman; "MANTRA" -> Icons.Default.SelfImprovement; "STEPS" -> Icons.Default.DirectionsWalk; else -> Icons.Default.Add }
+                            val glyph = when (cat.kind) { "BABY" -> Icons.Default.PregnantWoman; "MANTRA" -> Icons.Default.SelfImprovement; else -> Icons.Default.Add }
                             NavigationDrawerItem(
                                 icon = { Icon(glyph, null) },
                                 label = { Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप / मंत्र" } else if (english) cat.titleEn else cat.titleMr) },
@@ -1166,7 +1167,7 @@ private fun MonthlyHistoryScreen(
         Text(if (english) "Daily movement pattern" else "दैनिक हालचालींचा आलेख", color = ink, style = MaterialTheme.typography.titleSmall)
         MonthlyChart((1..daysInMonth).map { day -> totals[month.withDayOfMonth(day).toString()] ?: 0 }, Modifier.fillMaxWidth().height(190.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Button(onClick = onExportPdf, enabled = sessions.isNotEmpty()) { Text(if (english) "Share doctor PDF" else "डॉक्टरांसाठी PDF शेअर करा") }
+            Button(onClick = onExportPdf, enabled = sessions.isNotEmpty()) { Text(if (english) "Share PDF" else "PDF शेअर करा") }
         }
         Text(if (english) "Individual sessions" else "स्वतंत्र सत्रांची नोंद", color = ink, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 6.dp))
         if (sessions.isEmpty()) {
@@ -1177,21 +1178,18 @@ private fun MonthlyHistoryScreen(
                     var editSession by remember(session.id) { mutableStateOf(false) }
                     var editCount by remember(session.id) { mutableStateOf(session.movementCount.toString()) }
                     val endValue = session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)
-                    var editDuration by remember(session.id) { mutableStateOf(((endValue-session.startedAt).coerceAtLeast(0)/60000).toString()) }
                     var editDate by remember(session.id) { mutableStateOf(session.date) }
                     var editTime by remember(session.id) { mutableStateOf(Instant.ofEpochMilli(session.startedAt).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))) }
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("${session.date}  •  ${periodLabel(session.dayPeriod, english)}  •  ${sessionTime(session.startedAt)}", color = ink, fontWeight = FontWeight.Medium)
-                                val end = session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)
-                                val duration = ((end - session.startedAt).coerceAtLeast(0) / 60000)
-                                Text((if (english) "Duration: " else "कालावधी: ") + "${duration} min" + (session.strength?.let { "  •  " + strengthLabel(it, english) } ?: ""), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+                                session.strength?.let { Text(strengthLabel(it, english), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall) }
                                 session.timeToTenMs?.let { Text((if (english) "Time to 10: " else "१० हालचालींसाठी वेळ: ") + "%.1f".format(it / 60000.0) + (if (english) " min" else " मिनिटे"), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall) }
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(session.movementCount.toString(), color = Gold, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                IconButton(onClick = { editCount = session.movementCount.toString(); editDuration = (((session.endedAt ?: (session.startedAt + CounterRepository.TWO_HOURS_MS)) - session.startedAt).coerceAtLeast(0) / 60000).toString(); editDate = session.date; editTime = Instant.ofEpochMilli(session.startedAt).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")); editSession = true }) { Icon(Icons.Default.Edit, contentDescription = if (english) "Edit session" else "सत्र संपादित करा", tint = ink) }
+                                IconButton(onClick = { editCount = session.movementCount.toString(); editDate = session.date; editTime = Instant.ofEpochMilli(session.startedAt).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")); editSession = true }) { Icon(Icons.Default.Edit, contentDescription = if (english) "Edit session" else "सत्र संपादित करा", tint = ink) }
                             }
                         }
                     }
@@ -1202,7 +1200,6 @@ private fun MonthlyHistoryScreen(
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(editCount, { editCount = it.filter(Char::isDigit).take(4) }, label = { Text(if (english) "Movement count" else "हालचालींची संख्या") }, singleLine = true)
-                                    OutlinedTextField(editDuration, { editDuration = it.filter(Char::isDigit).take(4) }, label = { Text(if (english) "Duration (minutes)" else "कालावधी (मिनिटे)") }, singleLine = true)
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         OutlinedButton(onClick = {
                                             val parts = editDate.split("-")
@@ -1221,13 +1218,12 @@ private fun MonthlyHistoryScreen(
                             confirmButton = {
                                 TextButton(onClick = {
                                     val count = editCount.toIntOrNull()?.coerceIn(0, 9999)
-                                    val duration = editDuration.toIntOrNull()?.coerceIn(1, 720)
                                     runCatching {
                                         val date = LocalDate.parse(editDate)
                                         val time = java.time.LocalTime.parse(editTime)
-                                        if (count != null && duration != null) {
+                                        if (count != null) {
                                             val start = date.atTime(time).atZone(zone).toInstant().toEpochMilli()
-                                            val end = start + duration * 60000L
+                                            val end = start + CounterRepository.TWO_HOURS_MS
                                             val period = when (time.hour) { in 5..11 -> "MORNING"; in 12..16 -> "AFTERNOON"; in 17..20 -> "EVENING"; else -> "NIGHT" }
                                             onEditSession(session.copy(date=editDate, startedAt=start, endedAt=end, movementCount=count, dayPeriod=period, timeToTenMs=if(count>=10) session.timeToTenMs else null))
                                             editSession = false
