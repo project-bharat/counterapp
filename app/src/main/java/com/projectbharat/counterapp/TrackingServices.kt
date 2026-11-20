@@ -50,8 +50,8 @@ private object TrackingNotifications {
     fun show(context: Context, id: Int, title: String, text: String, stopIntent: PendingIntent?): Notification {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Active tracking", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Visible while automatic tracking is active"
+            NotificationChannel(CHANNEL_ID, "Japa voice counting", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Visible while Japa voice counting is active"
                 setShowBadge(false)
             }
         )
@@ -59,10 +59,6 @@ private object TrackingNotifications {
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(title).setContentText(text).setOngoing(true)
             .setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .addAction(android.R.drawable.ic_menu_my_calendar, "Start session",
-                CounterQuickActions.activityPending(context, "BABY", 7103))
-            .addAction(android.R.drawable.ic_media_play, "Start Japa",
-                CounterQuickActions.activityPending(context, "MANTRA", 7104))
             .apply { if (stopIntent != null) addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent) }
             .build()
     }
