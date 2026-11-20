@@ -1319,12 +1319,14 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         cv = currentPage!!.canvas
         val canvas = cv!!
         canvas.drawColor(android.graphics.Color.WHITE)
-        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 571f, 119f), 16f, 16f, paint(navy, 12f, true))
-        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 32f, 119f), 4f, 4f, paint(gold, 10f))
-        canvas.drawText(if (english) "BABY MOVEMENT REPORT" else "बाळाच्या हालचालींचा अहवाल", 48f, 58f, titlePaint)
-        canvas.drawText(if (english) titleEn + " · " + monthLabel else titleMr + " · " + monthLabel, 48f, 81f, subPaint)
-        canvas.drawText(if (first) (if (english) "Monthly summary" else "मासिक सारांश") else (if (english) "Session details · continued" else "सत्र तपशील · पुढे"), 48f, 101f, subPaint)
-        var tableTop = 156f
+        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 571f, 88f), 14f, 14f, paint(navy, 12f, true))
+        canvas.drawRoundRect(android.graphics.RectF(24f, 22f, 31f, 88f), 4f, 4f, paint(gold, 10f))
+        canvas.drawText(if (english) "BABY MOVEMENT REPORT" else "बाळाच्या हालचालींचा अहवाल", 45f, 52f, titlePaint)
+        val headerSub = if (first) (if (english) "Monthly summary" else "मासिक सारांश") else (if (english) "Session details · continued" else "सत्र तपशील · पुढे")
+        val rightSubPaint = paint(android.graphics.Color.rgb(224, 234, 245), 9f).apply { textAlign = Paint.Align.RIGHT }
+        canvas.drawText(if (english) titleEn + " · " + monthLabel else titleMr + " · " + monthLabel, 550f, 52f, rightSubPaint)
+        canvas.drawText(headerSub, 550f, 72f, rightSubPaint)
+        var tableTop = 120f
         if (first) {
             val metrics = listOf(
                 Triple(if (english) "SESSIONS" else "सत्रे", sessions.size.toString(), blue),
@@ -1333,27 +1335,27 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
             )
             metrics.forEachIndexed { i, metric ->
                 val left = 36f + i * 177f
-                canvas.drawRoundRect(android.graphics.RectF(left, 135f, left + 164f, 203f), 11f, 11f, paint(pale, 10f))
-                canvas.drawRoundRect(android.graphics.RectF(left, 135f, left + 5f, 203f), 3f, 3f, paint(metric.third, 10f))
-                canvas.drawText(metric.first, left + 15f, 156f, labelPaint)
-                canvas.drawText(metric.second, left + 15f, 185f, numberPaint)
+                canvas.drawRoundRect(android.graphics.RectF(left, 100f, left + 164f, 165f), 11f, 11f, paint(pale, 10f))
+                canvas.drawRoundRect(android.graphics.RectF(left, 100f, left + 5f, 165f), 3f, 3f, paint(metric.third, 10f))
+                canvas.drawText(metric.first, left + 15f, 121f, labelPaint)
+                canvas.drawText(metric.second, left + 15f, 150f, numberPaint)
             }
-            canvas.drawText(if (english) "DAILY MOVEMENT PATTERN" else "दैनिक हालचालींचा आलेख", 36f, 226f, paint(navy, 10f, true))
-            canvas.drawRoundRect(android.graphics.RectF(36f, 238f, 559f, 333f), 8f, 8f, paint(pale, 9f))
+            canvas.drawText(if (english) "DAILY MOVEMENT PATTERN" else "दैनिक हालचालींचा आलेख", 36f, 190f, paint(navy, 10f, true))
+            canvas.drawRoundRect(android.graphics.RectF(36f, 202f, 559f, 356f), 8f, 8f, paint(pale, 9f))
             val slot = 505f / daily.size.coerceAtLeast(1)
             daily.forEachIndexed { i, value ->
-                val barHeight = if (value == 0) 1.5f else (value.toFloat() / maxDaily * 70f).coerceAtLeast(3f)
+                val barHeight = if (value == 0) 1.5f else (value.toFloat() / maxDaily * 118f).coerceAtLeast(3f)
                 val left = 45f + i * slot + slot * .2f
-                canvas.drawRoundRect(android.graphics.RectF(left, 319f - barHeight, left + slot * .58f, 319f), 2f, 2f,
+                canvas.drawRoundRect(android.graphics.RectF(left, 338f - barHeight, left + slot * .58f, 338f), 2f, 2f,
                     paint(if (value > 0) blue else android.graphics.Color.rgb(205, 216, 228), 8f))
             }
-            canvas.drawText("1", 45f, 328f, smallPaint)
-            canvas.drawText(month.lengthOfMonth().toString(), 538f, 328f, smallPaint)
-            tableTop = 346f
+            canvas.drawText("1", 45f, 348f, smallPaint)
+            canvas.drawText(month.lengthOfMonth().toString(), 538f, 348f, smallPaint)
+            tableTop = 390f
         } else {
-            canvas.drawText(if (english) "Session records" else "सत्र नोंदी", 36f, 143f, paint(navy, 11f, true))
+            canvas.drawText(if (english) "Session records" else "सत्र नोंदी", 36f, 115f, paint(navy, 11f, true))
         }
-        canvas.drawText(if (english) "SESSION DETAILS" else "सत्रांचा तपशील", 36f, tableTop - 9f, paint(navy, 10f, true))
+        canvas.drawText(if (english) "SESSION DETAILS" else "सत्रांचा तपशील", 36f, tableTop - 12f, paint(navy, 10f, true))
         y = tableHeader(canvas, tableTop)
     }
     fun finishPage() {
@@ -1400,5 +1402,5 @@ private fun exportMonthlyPdf(context: android.content.Context, titleMr: String, 
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(share, if (english) "Share doctor report" else "अहवाल शेअर करा"))
+    context.startActivity(Intent.createChooser(share, if (english) "Share PDF" else "PDF शेअर करा"))
 }
