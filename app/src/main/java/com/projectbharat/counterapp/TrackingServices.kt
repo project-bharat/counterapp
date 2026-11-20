@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -141,6 +142,7 @@ class ChantRecognitionService : Service() {
         if (previousWorker?.isAlive == true) {
             stopRequested = true
             recording = false
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_audio_active", false).apply()
             try { audioRecord?.stop() } catch (_: Exception) { }
             previousWorker.interrupt()
         }
@@ -157,7 +159,7 @@ class ChantRecognitionService : Service() {
             if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
         } catch (error: SecurityException) {
-            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).putBoolean("chant_audio_active", false).apply()
             sendState(false, if (language == "en") "Microphone permission required" else "मायक्रोफोन परवानगी आवश्यक")
             stopSelf()
             return START_NOT_STICKY
@@ -167,13 +169,13 @@ class ChantRecognitionService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).apply()
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).putBoolean("chant_audio_active", false).apply()
         scope.launch {
             val log = CounterDatabase.get(this@ChantRecognitionService).dao()
                 .findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
             updateJapaNotification(log?.count ?: 0, "Voice count active · Listening")
         }
-        sendState(true, if (language == "en") "Starting voice recognition" else "आवाज ओळख सुरू होत आहे…")
+        sendState(false, if (language == "en") "Preparing recognizer…" else "ओळख यंत्रणा तयार होत आहे…")
         worker = Thread {
             try {
                 if (previousWorker?.isAlive == true) previousWorker.join()
@@ -243,6 +245,10 @@ class ChantRecognitionService : Service() {
             recognizer = VoskRecognizerCache.get(model!!, modelDir.absolutePath, recognizerKey, grammar)
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
+            val audioManager = getSystemService(AudioManager::class.java)
+            if (audioManager?.mode == AudioManager.MODE_IN_CALL || (Build.VERSION.SDK_INT >= 24 && runCatching { audioManager?.activeRecordingConfigurations?.any { it.clientUid != applicationInfo.uid } == true }.getOrDefault(false))) {
+                throw IllegalStateException("Microphone busy — another app or call is using it")
+            }
             val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 8192))
             if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); throw IllegalStateException("Microphone unavailable") }
@@ -261,6 +267,7 @@ class ChantRecognitionService : Service() {
                 throw IllegalStateException("Microphone unavailable")
             }
             recording = true
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_audio_active", true).apply()
             sendState(true, if (language == "en") "Offline model ready · listening offline" else "ऑफलाइन मॉडेल तयार · ऐकत आहे")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             var lastPartial = ""
@@ -291,7 +298,7 @@ class ChantRecognitionService : Service() {
         } catch (error: Exception) {
             Log.e("CounterAppVosk", "Offline chant recognition stopped", error)
             if (!stopRequested) {
-                getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+                getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).putBoolean("chant_audio_active", false).apply()
                 val detail = error.message.orEmpty()
                 val friendly = when {
                     detail.contains("busy", true) || detail.contains("startRecording", true) ->
