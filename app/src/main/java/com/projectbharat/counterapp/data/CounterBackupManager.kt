@@ -15,9 +15,9 @@ object CounterBackupManager {
         val categories = dao.allCategories().filter { it.kind == "MANTRA" }
         val japaIds = categories.map { it.id }.toSet()
         val logs = dao.allLogs().filter { it.categoryId in japaIds }
-        val sessions = dao.allBabySessions()
-        val detections = dao.allBabyDetections()
-        val walkingSessions = dao.allWalkingSessions()
+        val sessions = emptyList<BabySession>()
+        val detections = emptyList<BabyDetection>()
+        val walkingSessions = emptyList<WalkingSession>()
         val root = JSONObject().put("formatVersion", FORMAT_VERSION)
             .put("app", "Daily Counter")
             .put("exportedAt", System.currentTimeMillis())
@@ -110,8 +110,8 @@ object CounterBackupManager {
 
     suspend fun exportCsv(context: Context, uri: Uri) {
         val dao = CounterDatabase.get(context).dao()
-        val categories = dao.allCategories().associateBy { it.id }
-        val logs = dao.allLogs().sortedBy { it.timestamp }
+        val categories = dao.allCategories().filter { it.kind == "MANTRA" }.associateBy { it.id }
+        val logs = dao.allLogs().filter { it.categoryId in categories.keys && (it.note == null || it.note.startsWith("MANTRA:")) }.sortedBy { it.timestamp }
         val output = context.contentResolver.openOutputStream(uri, "wt") ?: error("Unable to create CSV file")
         output.bufferedWriter(Charsets.UTF_8).use { writer ->
             writer.write('\uFEFF'.code)
