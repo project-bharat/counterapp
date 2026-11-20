@@ -155,7 +155,7 @@ class ChantRecognitionService : Service() {
             stopSelf(); return START_NOT_STICKY
         }
         val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "Japa · " + mantra,
-            "Voice count active · " + (if (language == "en") "Listening" else "ऐकत आहे"),
+            "Voice count active · " + (if (language == "en") "Preparing offline model" else "ऑफलाइन मॉडेल तयार करत आहे"),
             null)
         try {
             if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
@@ -317,6 +317,7 @@ class ChantRecognitionService : Service() {
             }
         } finally {
             recording = false
+            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_audio_active", false).apply()
             try { audioRecord?.stop() } catch (_: Exception) { }
             audioRecord?.release(); audioRecord = null
             recognizer = null
@@ -441,7 +442,7 @@ class ChantRecognitionService : Service() {
         recording = false
         try { audioRecord?.stop() } catch (_: Exception) { }
         worker?.interrupt()
-        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+        getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", false).putBoolean("chant_audio_active", false).apply()
         getSystemService(NotificationManager::class.java).cancel(TrackingNotifications.CHANT_ID)
         if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_REMOVE) else stopForeground(true)
         sendState(false, "Stopped")
