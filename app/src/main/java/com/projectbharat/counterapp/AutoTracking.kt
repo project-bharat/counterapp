@@ -30,6 +30,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.AnimatedContent
@@ -720,13 +722,13 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
         bestRun
     }
     val weekStart = today.minusDays(6)
-    val week = (0..6).map { date ->
-        val day = weekStart.plusDays(it.toLong())
+    val week = (0..6).map { index ->
+        val day = weekStart.plusDays(index.toLong())
         DayTotal(day.toString(), totalsByDate[day.toString()] ?: 0)
     }
     val monthDays = month.lengthOfMonth()
     val offset = month.atDay(1).dayOfWeek.value % 7
-    val monthCells = (0 until 42).map { cell -> if (cell - offset + 1 in 1..monthDays) cell - offset + 1 else null }
+    val monthCells: List<Int?> = (0 until 42).map { cell -> (cell - offset + 1).takeIf { it in 1..monthDays } }
     val mantraBreakdown = logs.groupBy { it.note.removePrefix("MANTRA:") }.mapValues { (_, rows) -> rows.sumOf { it.count } }.entries.sortedByDescending { it.value }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
