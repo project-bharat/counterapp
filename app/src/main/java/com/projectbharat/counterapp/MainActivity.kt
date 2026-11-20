@@ -312,7 +312,6 @@ fun CounterApp(repo: CounterRepository) {
     var finishDialog by remember { mutableStateOf(false) }
     var finalStrength by remember { mutableStateOf("MEDIUM") }
     var historyDate by remember { mutableStateOf(LocalDate.now()) }
-    var stepGraphRange by remember { mutableStateOf("7D") }
     var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val activity = context as? MainActivity
@@ -325,22 +324,8 @@ fun CounterApp(repo: CounterRepository) {
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
     }
-    var stepPermissionGranted by remember {
-        mutableStateOf(Build.VERSION.SDK_INT < 29 ||
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
-    }
-    val firstRunPermissions = remember {
-        buildList {
-            if (Build.VERSION.SDK_INT >= 29) add(Manifest.permission.ACTIVITY_RECOGNITION)
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }.toTypedArray()
-    }
     val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
-        stepPermissionGranted = Build.VERSION.SDK_INT < 29 ||
-            (results[Manifest.permission.ACTIVITY_RECOGNITION] == true ||
-                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
         showPermissionIntro = false
         QuickActionsNotification.show(context)
     }
@@ -370,26 +355,12 @@ fun CounterApp(repo: CounterRepository) {
         CounterQuickActions.publishShortcuts(context, categories)
         CounterHomeWidget.refresh(context)
     }
-    // Start the daily step sensor automatically once Android's activity permission is granted.
-    // This runs while the Activity is visible, which is required to start a health foreground service.
-    LaunchedEffect(categories, stepPermissionGranted) {
-        val stepCategory = categories.firstOrNull { it.kind == "STEPS" }
-        if (stepPermissionGranted && stepCategory != null) {
-            runCatching { StepTrackingService.start(context, stepCategory.id) }
-                .onFailure { android.util.Log.w("CounterAppSteps", "Automatic step tracking could not start", it) }
-        }
-    }
     LaunchedEffect(categories, shortcutKind, shortcutQuickStart, shortcutBabyVoice) {
         shortcutKind?.let { kind ->
             categories.firstOrNull { it.kind == kind }?.let { category ->
                 selectedId = category.id
                 if (shortcutQuickStart) when (kind) {
                     "BABY" -> scope.launch { vm.startSession(category.id) }
-                    "STEPS" -> {
-                        val activityGranted = Build.VERSION.SDK_INT < 29 ||
-                            ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
-                        if (activityGranted) StepTrackingService.start(context, category.id)
-                    }
                     "MANTRA" -> {
                         val micGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                         if (micGranted) {
@@ -406,15 +377,6 @@ fun CounterApp(repo: CounterRepository) {
         if (shortcutKind != null) activity?.consumeLaunchCounterKind()
     }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            clock = System.currentTimeMillis()
-            val granted = Build.VERSION.SDK_INT < 29 ||
-                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED
-            if (granted != stepPermissionGranted) stepPermissionGranted = granted
-        }
-    }
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
 
     LaunchedEffect(selected?.id, selected?.kind) {
@@ -432,18 +394,6 @@ fun CounterApp(repo: CounterRepository) {
     val weekFlow = remember(selected?.id, selected?.kind, mantraTarget) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraWeek(it.id, mantraTarget) else vm.week(it.id) } ?: flowOf(emptyList())
     }
-    val walkToday = Instant.ofEpochMilli(clock).atZone(ZoneId.systemDefault()).toLocalDate()
-    val walkRangeStart = when (stepGraphRange) {
-        "30D" -> walkToday.minusDays(29)
-        "MONTH" -> walkToday.withDayOfMonth(1)
-        else -> walkToday.minusDays(6)
-    }
-    val walkTotalsFlow = remember(selected?.id, stepGraphRange, walkToday) {
-        selected?.takeIf { it.kind == "STEPS" }?.let { vm.stepTotals(it.id, walkRangeStart, walkToday) } ?: flowOf(emptyList())
-    }
-    val walkSessionsFlow = remember(selected?.id, stepGraphRange, walkToday) {
-        selected?.takeIf { it.kind == "STEPS" }?.let { vm.walkingSessions(it.id, walkRangeStart, walkToday) } ?: flowOf(emptyList())
-    }
     val averageFlow = remember(selected?.id) { selected?.let { if (it.kind == "BABY") vm.averageBabyTimeToTen(it.id) else vm.average(it.id) } ?: flowOf(null) }
     val sessionFlow = remember(selected?.id, historyDate) { selected?.let { vm.sessions(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }
     val historyLogsFlow = remember(selected?.id, selected?.kind, historyDate) {
@@ -458,8 +408,6 @@ fun CounterApp(repo: CounterRepository) {
     val mantraTotal by mantraTotalFlow.collectAsStateWithLifecycle(0)
     LaunchedEffect(count, selected?.id) { CounterHomeWidget.refresh(context) }
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
-    val walkDays by walkTotalsFlow.collectAsStateWithLifecycle(emptyList())
-    val walkSessions by walkSessionsFlow.collectAsStateWithLifecycle(emptyList())
     val average by averageFlow.collectAsStateWithLifecycle(null)
     val sessions by sessionFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
@@ -693,19 +641,6 @@ fun CounterApp(repo: CounterRepository) {
                         onAutoMovement = { sessionId, timestamp, magnitude -> scope.launch { vm.recordDetection(sessionId, timestamp, magnitude) } },
                         onConfirmDetections = { ids -> scope.launch { ids.forEach { vm.confirmDetection(it) } } },
                         onDismissDetections = { ids -> scope.launch { ids.forEach { vm.dismissDetection(it) } } }
-                    )
-                } else if (selected?.kind == "STEPS") {
-                    AutoStepCounterScreen(
-                        categoryId = selected.id,
-                        count = count,
-                        goal = selected.goal,
-                        days = walkDays,
-                        sessions = walkSessions,
-                        range = stepGraphRange,
-                        onRangeChange = { stepGraphRange = it },
-                        onGoalChange = { newGoal -> scope.launch { vm.updateCategory(selected.copy(goal = newGoal)) } },
-                        english = english,
-                        ink = ink
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
@@ -1079,7 +1014,7 @@ private fun BabyMovementScreen(
 @Composable
 private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,categoryTitle:String,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
     val mantra = kind == "MANTRA"
-    val steps = kind == "STEPS"
+    val steps = false
     val progress=if(goal>0) (count.toFloat()/goal).coerceIn(0f,1f) else 0f
     val tapScale = remember { Animatable(1f) }
     val tapScope = rememberCoroutineScope()
@@ -1087,16 +1022,16 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
         Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(26.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally) {
                 Box(Modifier.size(58.dp).background(if(mantra) Color(0xFFEDE4FA) else Color(0xFFDDF1E8),CircleShape),contentAlignment=Alignment.Center) {
-                    Icon(if(mantra) Icons.Default.SelfImprovement else Icons.Default.DirectionsWalk,null,tint=if(mantra) Color(0xFF7855A6) else Color(0xFF398A68),modifier=Modifier.size(30.dp))
+                    Icon(Icons.Default.SelfImprovement,null,tint=Color(0xFF7855A6),modifier=Modifier.size(30.dp))
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(if(english) "TODAY" else "आज",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelMedium,fontWeight=FontWeight.Bold)
                 Text(count.toString(),color=ink,style=MaterialTheme.typography.displayLarge,fontWeight=FontWeight.ExtraBold)
-                Text(if(mantra) { if(english) "CHANTS" else "जप" } else if(steps) { if(english) "STEPS" else "पावले" } else categoryTitle,color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+                Text(if(mantra) { if(english) "CHANTS" else "जप" } else categoryTitle,color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
                 if(mantra) {
                     Text((count/108).toString()+" "+(if(english) "mala" else "माळ")+" · "+(count%108)+"/108",color=Gold,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=9.dp))
                     Row(Modifier.padding(top=8.dp),horizontalArrangement=Arrangement.Center) { repeat(12) { index -> Box(Modifier.padding(3.dp).size(11.dp).background(if(index<count%108*12/108) Gold else Color(0xFFE8E1D7),CircleShape)) } }
-                } else if (steps && goal > 0) {
+                } else if (false && steps && goal > 0) {
                     Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
                         Text(if(english) "DAILY GOAL" else "दैनिक लक्ष्य",color=ink.copy(alpha=.6f),style=MaterialTheme.typography.labelSmall)
                         Text(count.toString()+" / "+goal,color=ink,fontWeight=FontWeight.Bold)
@@ -1109,7 +1044,7 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
         val tapInteraction = remember { MutableInteractionSource() }
         Box(Modifier.size(214.dp).graphicsLayer(scaleX = tapScale.value, scaleY = tapScale.value).background(Brush.linearGradient(if(mantra) listOf(Color(0xFFE9DDF8),Color(0xFFD8C4F0)) else listOf(Color(0xFFDDF1E8),Color(0xFFBDE2D0))),CircleShape).clickable(interactionSource = tapInteraction, indication = null) { tapScope.launch { tapScale.animateTo(.90f, tween(75)); tapScale.animateTo(1.08f, tween(110)); tapScale.animateTo(1f, tween(180)) }; onTap() },contentAlignment=Alignment.Center) {
             Column(horizontalAlignment=Alignment.CenterHorizontally) {
-                Icon(if(mantra) Icons.Default.SelfImprovement else Icons.Default.DirectionsWalk,null,tint=ink,modifier=Modifier.size(36.dp))
+                Icon(Icons.Default.SelfImprovement,null,tint=ink,modifier=Modifier.size(36.dp))
                 Text("+1",color=ink,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.ExtraBold)
                 Text(if(english) "TAP TO ADD" else "मोजणी वाढवा",color=ink,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
             }
