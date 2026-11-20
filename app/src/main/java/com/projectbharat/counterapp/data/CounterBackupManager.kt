@@ -9,103 +9,43 @@ import java.io.InputStreamReader
 
 object CounterBackupManager {
     private const val FORMAT_VERSION = 1
-
     suspend fun exportJson(context: Context, uri: Uri) {
         val dao = CounterDatabase.get(context).dao()
         val categories = dao.allCategories().filter { it.kind == "MANTRA" }
-        val japaIds = categories.map { it.id }.toSet()
-        val logs = dao.allLogs().filter { it.categoryId in japaIds }
-        val sessions = emptyList<BabySession>()
-        val detections = emptyList<BabyDetection>()
-        val walkingSessions = emptyList<WalkingSession>()
-        val root = JSONObject().put("formatVersion", FORMAT_VERSION)
-            .put("app", "Daily Counter")
-            .put("exportedAt", System.currentTimeMillis())
-        root.put("categories", JSONArray().apply {
-            categories.forEach { c ->
-                put(JSONObject().put("id", c.id).put("titleMr", c.titleMr).put("titleEn", c.titleEn)
-                    .put("kind", c.kind).put("goal", c.goal).put("enabled", c.enabled))
-            }
-        })
-        root.put("logs", JSONArray().apply {
-            logs.forEach { l ->
-                put(JSONObject().put("id", l.id).put("date", l.date).put("timestamp", l.timestamp)
-                    .put("categoryId", l.categoryId).put("count", l.count)
-                    .putNullable("sessionDurationMs", l.sessionDurationMs).putNullable("strength", l.strength)
-                    .putNullable("note", l.note).putNullable("sessionId", l.sessionId))
-            }
-        })
-        root.put("babyDetections", JSONArray().apply {
-            detections.forEach { d -> put(JSONObject().put("id", d.id).put("sessionId", d.sessionId).put("timestamp", d.timestamp).put("magnitude", d.magnitude.toDouble()).put("status", d.status)) }
-        })
-        root.put("walkingSessions", JSONArray().apply {
-            walkingSessions.forEach { s -> put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
-                .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt).put("steps", s.steps)
-                .put("distanceMeters", s.distanceMeters).put("gpsReliable", s.gpsReliable)) }
-        })
-        root.put("babySessions", JSONArray().apply {
-            sessions.forEach { s ->
-                put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
-                    .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt)
-                    .put("dayPeriod", s.dayPeriod).put("movementCount", s.movementCount)
-                    .putNullable("timeToTenMs", s.timeToTenMs).putNullable("strength", s.strength)
-                    .putNullable("note", s.note).put("trackingMode", s.trackingMode).put("firstHourCount", s.firstHourCount))
-            }
-        })
-        context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(root.toString(2)) }
-            ?: error("Unable to create backup file")
+        val categoryIds = categories.map { it.id }.toSet()
+        val logs = dao.allLogs().filter { it.categoryId in categoryIds && (it.note == null || it.note.startsWith("MANTRA:")) }
+        val root = JSONObject().put("formatVersion", FORMAT_VERSION).put("app", "Japa Counter").put("exportedAt", System.currentTimeMillis())
+        root.put("categories", JSONArray().apply { categories.forEach { c ->
+            put(JSONObject().put("id", c.id).put("titleMr", c.titleMr).put("titleEn", c.titleEn).put("kind", c.kind).put("goal", c.goal).put("enabled", c.enabled))
+        } })
+        root.put("logs", JSONArray().apply { logs.forEach { l ->
+            put(JSONObject().put("id", l.id).put("date", l.date).put("timestamp", l.timestamp).put("categoryId", l.categoryId)
+                .put("count", l.count).putNullable("sessionDurationMs", l.sessionDurationMs).putNullable("strength", l.strength).putNullable("note", l.note))
+        } })
+        // Empty legacy arrays maintain compatibility with older version-1 backup readers.
+        root.put("babySessions", JSONArray()).put("babyDetections", JSONArray()).put("walkingSessions", JSONArray())
+        context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(root.toString(2)) } ?: error("Unable to create backup file")
     }
 
     suspend fun restoreJson(context: Context, uri: Uri) {
-        val text = context.contentResolver.openInputStream(uri)?.use { input ->
-            BufferedReader(InputStreamReader(input, Charsets.UTF_8)).readText()
-        } ?: error("Unable to read backup file")
+        val text = context.contentResolver.openInputStream(uri)?.use { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() } ?: error("Unable to read backup file")
         val root = JSONObject(text)
         require(root.optInt("formatVersion", -1) == FORMAT_VERSION) { "Unsupported backup format" }
         val categoryArray = root.getJSONArray("categories")
         val logArray = root.getJSONArray("logs")
-        val sessionArray = root.optJSONArray("babySessions") ?: JSONArray()
-        val detectionArray = root.optJSONArray("babyDetections") ?: JSONArray()
-        val walkingArray = root.optJSONArray("walkingSessions") ?: JSONArray()
-        require(categoryArray.length() > 0) { "Backup contains no categories" }
-
         val importedCategories = (0 until categoryArray.length()).map { i ->
             val o = categoryArray.getJSONObject(i)
-            CounterCategory(o.getLong("id"), o.getString("titleMr"), o.getString("titleEn"),
-                o.optString("kind", "GENERAL"), o.optInt("goal", 0), o.optBoolean("enabled", true))
-        }
+            CounterCategory(o.getLong("id"), o.getString("titleMr"), o.getString("titleEn"), o.optString("kind", "GENERAL"), o.optInt("goal", 0), o.optBoolean("enabled", true))
+        }.filter { it.kind == "MANTRA" }
+        require(importedCategories.isNotEmpty()) { "Backup contains no Japa counter" }
+        val ids = importedCategories.map { it.id }.toSet()
         val importedLogs = (0 until logArray.length()).map { i ->
             val o = logArray.getJSONObject(i)
-            CounterLog(o.getLong("id"), o.getString("date"), o.getLong("timestamp"),
-                o.getLong("categoryId"), o.optInt("count", 1), o.longOrNull("sessionDurationMs"),
-                o.stringOrNull("strength"), o.stringOrNull("note"), o.longOrNull("sessionId"))
-        }
-        val importedSessions = (0 until sessionArray.length()).map { i ->
-            val o = sessionArray.getJSONObject(i)
-            BabySession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"),
-                o.getLong("startedAt"), o.longOrNull("endedAt"), o.getString("dayPeriod"),
-                o.optInt("movementCount", 0), o.longOrNull("timeToTenMs"),
-                o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TWO_HOURS"), o.optInt("firstHourCount", 0))
-        }
-
-        val importedDetections = (0 until detectionArray.length()).map { i ->
-            val o = detectionArray.getJSONObject(i)
-            BabyDetection(o.getLong("id"), o.getLong("sessionId"), o.getLong("timestamp"), o.getDouble("magnitude").toFloat(), o.optString("status", "PENDING"))
-        }
-        val importedWalkingSessions = (0 until walkingArray.length()).map { i ->
-            val o = walkingArray.getJSONObject(i)
-            WalkingSession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"), o.getLong("startedAt"),
-                o.longOrNull("endedAt"), o.optInt("steps", 0), o.optDouble("distanceMeters", 0.0), o.optBoolean("gpsReliable", false))
-        }
-        require(importedDetections.all { d -> importedSessions.any { it.id == d.sessionId } && d.status in setOf("PENDING", "CONFIRMED", "DISMISSED") }) { "Invalid legacy detection records" }
-        require(importedWalkingSessions.all { it.steps >= 0 && it.distanceMeters >= 0.0 && importedCategories.any { c -> c.id == it.categoryId } }) { "Invalid legacy walking records" }
-        // Restore Japa records only. Legacy backup sections are accepted for compatibility but retired.
-        val categories = importedCategories.filter { it.kind == "MANTRA" }
-        require(categories.isNotEmpty()) { "Backup contains no Japa counter" }
-        val ids = categories.map { it.id }.toSet()
-        val logs = importedLogs.filter { it.categoryId in ids && (it.note == null || it.note.startsWith("MANTRA:")) }
-        BackupSnapshotValidator.validate(categories, logs, emptyList())
-        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, emptyList(), emptyList(), emptyList())
+            CounterLog(o.getLong("id"), o.getString("date"), o.getLong("timestamp"), o.getLong("categoryId"),
+                o.optInt("count", 1), o.longOrNull("sessionDurationMs"), o.stringOrNull("strength"), o.stringOrNull("note"))
+        }.filter { it.categoryId in ids && (it.note == null || it.note.startsWith("MANTRA:")) }
+        BackupSnapshotValidator.validate(importedCategories, importedLogs)
+        CounterDatabase.get(context).dao().restoreSnapshot(importedCategories, importedLogs)
     }
 
     suspend fun exportCsv(context: Context, uri: Uri) {
@@ -115,21 +55,17 @@ object CounterBackupManager {
         val output = context.contentResolver.openOutputStream(uri, "wt") ?: error("Unable to create CSV file")
         output.bufferedWriter(Charsets.UTF_8).use { writer ->
             writer.write('\uFEFF'.code)
-            writer.write("date,timestamp,category_id,category_marathi,category_english,count,strength,note,session_id")
+            writer.write("date,timestamp,category_id,category_marathi,category_english,count,strength,note")
             writer.newLine()
             logs.forEach { log ->
                 val category = categories[log.categoryId]
-                val values = listOf(log.date, log.timestamp.toString(), log.categoryId.toString(),
-                    category?.titleMr.orEmpty(), category?.titleEn.orEmpty(), log.count.toString(),
-                    log.strength.orEmpty(), log.note.orEmpty(), log.sessionId?.toString().orEmpty())
-                writer.write(values.joinToString(",") { csv(it) })
-                writer.newLine()
+                val values = listOf(log.date, log.timestamp.toString(), log.categoryId.toString(), category?.titleMr.orEmpty(), category?.titleEn.orEmpty(), log.count.toString(), log.strength.orEmpty(), log.note.orEmpty())
+                writer.write(values.joinToString(",") { csv(it) }); writer.newLine()
             }
         }
     }
-
     private fun csv(value: String): String = "\"" + value.replace("\"", "\"\"") + "\""
     private fun JSONObject.putNullable(key: String, value: Any?): JSONObject = put(key, value ?: JSONObject.NULL)
-    private fun JSONObject.longOrNull(key: String): Long? = if (isNull(key) || !has(key)) null else getLong(key)
-    private fun JSONObject.stringOrNull(key: String): String? = if (isNull(key) || !has(key)) null else getString(key)
+    private fun JSONObject.longOrNull(key: String): Long? = if (!has(key) || isNull(key)) null else getLong(key)
+    private fun JSONObject.stringOrNull(key: String): String? = if (!has(key) || isNull(key)) null else getString(key)
 }
