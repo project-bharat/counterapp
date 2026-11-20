@@ -1015,8 +1015,6 @@ private fun BabyMovementScreen(
 @Composable
 private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,categoryTitle:String,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
     val mantra = kind == "MANTRA"
-    val steps = false
-    val progress=if(goal>0) (count.toFloat()/goal).coerceIn(0f,1f) else 0f
     val tapScale = remember { Animatable(1f) }
     val tapScope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally) {
@@ -1032,12 +1030,6 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
                 if(mantra) {
                     Text((count/108).toString()+" "+(if(english) "mala" else "माळ")+" · "+(count%108)+"/108",color=Gold,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=9.dp))
                     Row(Modifier.padding(top=8.dp),horizontalArrangement=Arrangement.Center) { repeat(12) { index -> Box(Modifier.padding(3.dp).size(11.dp).background(if(index<count%108*12/108) Gold else Color(0xFFE8E1D7),CircleShape)) } }
-                } else if (false && steps && goal > 0) {
-                    Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.SpaceBetween) {
-                        Text(if(english) "DAILY GOAL" else "दैनिक लक्ष्य",color=ink.copy(alpha=.6f),style=MaterialTheme.typography.labelSmall)
-                        Text(count.toString()+" / "+goal,color=ink,fontWeight=FontWeight.Bold)
-                    }
-                    LinearProgressIndicator(progress={progress},modifier=Modifier.fillMaxWidth().padding(top=8.dp).height(8.dp).clip(CircleShape),color=Color(0xFF55A886),trackColor=Color(0xFFDDEBE3))
                 }
             }
         }
