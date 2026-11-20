@@ -145,7 +145,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
             try {
                 ChantRecognitionService.start(context, categoryId, target.trim(), language)
                 automatic = true
-                running = true
+                running = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_audio_active", false)
                 status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
             } catch (error: Exception) {
                 running = false
@@ -196,9 +196,10 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
     LaunchedEffect(categoryId, english, automatic) {
         var lastRetryAt = 0L
         while (true) {
-            val active = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)
+            val active = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_audio_active", false)
             running = active
-            if (automatic && !active && System.currentTimeMillis() - lastRetryAt >= 5000L) {
+            val recoverable = status.contains("reconnecting", true) || status.contains("stopped", true) || status.contains("error", true)
+            if (automatic && !active && recoverable && System.currentTimeMillis() - lastRetryAt >= 15000L) {
                 lastRetryAt = System.currentTimeMillis()
                 status = if (english) "Recognition reconnecting…" else "आवाज ओळख पुन्हा जोडत आहे…"
                 startService()
@@ -220,6 +221,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
                     else {
                         automatic = false; matched = false; matchedCount = 0; transcript = ""
                         status = if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…"
+                        running = false
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
                         else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
@@ -350,7 +352,7 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
                                     Text(if (english) "LIVE RECOGNITION" else "थेट आवाज ओळख", modifier = Modifier.weight(1f), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 }
                             }
-                            if (status.contains("Preparing", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true) || status.contains("Extracting", true) || status.contains("Loading", true) || status.contains("लोड होत", true)) {
+                            if (status.contains("Starting", true) || status.contains("Preparing", true) || status.contains("Reconnecting", true) || status.contains("Checking", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true) || status.contains("Extracting", true) || status.contains("Loading", true) || status.contains("लोड होत", true)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                                     Text(if (english) when { status.contains("मॉडेल तयार", true) -> "Offline model ready…"; status.contains("ऐकत आहे", true) -> "Listening offline"; status.contains("माइक पुन्हा", true) -> "Reconnecting microphone…"; status.contains("ओळख यंत्रणा", true) -> "Preparing recognizer…"; else -> status.ifBlank { "Preparing offline model…" } } else status.ifBlank { "ऑफलाइन मॉडेल तयार होत आहे…" }, color = ink, style = MaterialTheme.typography.bodySmall)
