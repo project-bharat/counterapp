@@ -472,7 +472,7 @@ class ChantRecognitionService : Service() {
         private const val ACTION_PAUSE_CHANT = "com.projectbharat.counterapp.action.PAUSE_CHANT"
         fun start(context: Context, categoryId: Long, mantra: String, language: String) {
             val intent = Intent(context, ChantRecognitionService::class.java)
-                .putExtra(StepTrackingService.EXTRA_CATEGORY_ID, categoryId)
+                .putExtra("category_id", categoryId)
                 .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language)
             ContextCompat.startForegroundService(context, intent)
         }
