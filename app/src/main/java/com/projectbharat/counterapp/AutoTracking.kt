@@ -506,7 +506,7 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
     val monthDays = month.lengthOfMonth()
     val offset = (month.atDay(1).dayOfWeek.value + 6) % 7
     val monthCells: List<Int?> = (0 until 42).map { cell -> (cell - offset + 1).takeIf { it in 1..monthDays } }
-    val mantraBreakdown = logs.groupBy { it.note.removePrefix("MANTRA:") }.mapValues { (_, rows) -> rows.sumOf { it.count } }.entries.sortedByDescending { it.value }
+    val mantraBreakdown = logs.groupBy { it.note.orEmpty().removePrefix("MANTRA:") }.mapValues { (_, rows) -> rows.sumOf { it.count } }.entries.sortedByDescending { it.value }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Icon(Icons.Default.ArrowDropDown, null); Text(if (english) "Back to Japa" else "जपाकडे परत") }
