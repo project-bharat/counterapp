@@ -70,7 +70,7 @@ private fun microphoneBusy(context: android.content.Context): Boolean {
     val audio = context.getSystemService(AudioManager::class.java) ?: return false
     if (audio.mode == AudioManager.MODE_IN_CALL) return true
     if (android.os.Build.VERSION.SDK_INT >= 24) {
-        return runCatching { audio.activeRecordingConfigurations.any { it.clientUid != context.applicationInfo.uid } }.getOrDefault(false)
+        return runCatching { audio.activeRecordingConfigurations.isNotEmpty() }.getOrDefault(false)
     }
     return false
 }
