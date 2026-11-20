@@ -68,7 +68,7 @@ data class WalkingSession(
 
 @Dao
 interface CounterDao {
-    @Query("SELECT * FROM categories WHERE enabled = 1 AND kind != 'STEPS' ORDER BY id")
+    @Query("SELECT * FROM categories WHERE enabled = 1 AND kind NOT IN ('STEPS', 'BABY') ORDER BY id")
     fun categories(): Flow<List<CounterCategory>>
 
     @Insert
