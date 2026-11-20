@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        // Foreground step and Japa services continue when the UI is backgrounded.
+        // Japa voice recognition continues when the UI is backgrounded.
         super.onStop()
     }
 
@@ -670,7 +670,7 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
         }
         Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF3DF)) {
             Text(
-                if (english) "Baby movement reminders are optional routine prompts, not medical advice. Follow your maternity professional's guidance. If movements become reduced or change from your baby's usual pattern, contact your maternity unit promptly; do not wait for a reminder."
+                if (english) "Japa reminders are gentle routine prompts. Choose a time that fits your daily practice."
                 else "बाळाच्या हालचालींची स्मरणपत्रे ही केवळ ऐच्छिक आठवण आहे, वैद्यकीय सल्ला नाही. डॉक्टरांच्या सूचनांचे पालन करा. हालचाली कमी झाल्या किंवा नेहमीच्या पद्धतीत बदल जाणवला तर स्मरणपत्राची वाट न पाहता त्वरित प्रसूती-सेवा केंद्राशी संपर्क साधा.",
                 color = Color(0xFF76531F), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(13.dp)
             )
