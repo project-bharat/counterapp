@@ -247,7 +247,7 @@ class ChantRecognitionService : Service() {
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
             val audioManager = getSystemService(AudioManager::class.java)
-            if (audioManager?.mode == AudioManager.MODE_IN_CALL || (Build.VERSION.SDK_INT >= 24 && runCatching { audioManager?.activeRecordingConfigurations?.any { it.clientUid != applicationInfo.uid } == true }.getOrDefault(false))) {
+            if (audioManager?.mode == AudioManager.MODE_IN_CALL || (Build.VERSION.SDK_INT >= 24 && runCatching { audioManager?.activeRecordingConfigurations?.isNotEmpty() == true }.getOrDefault(false))) {
                 throw IllegalStateException("Microphone busy — another app or call is using it")
             }
             val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
