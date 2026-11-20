@@ -26,8 +26,6 @@ class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : Co
     override suspend fun doWork(): Result {
         val key = inputData.getString(KEY_MODEL) ?: return Result.failure()
         val title = when (key) {
-            "sherpa_en" -> "English baby-movement voice model"
-            "sherpa_mr" -> "Marathi baby-movement voice model"
             "vosk_en" -> "English Japa voice model"
             "vosk_hi" -> "Hindi/Marathi Japa voice model"
             else -> return Result.failure()
@@ -36,15 +34,6 @@ class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : Co
             val taskContext = currentCoroutineContext()
             setForeground(foregroundInfo(title, "Preparing download…", 0))
             when (key) {
-                "sherpa_en", "sherpa_mr" -> {
-                    val english = key == "sherpa_en"
-                    val manager = OfflineSpeechModelManager(applicationContext)
-                    manager.download(english) { done, total ->
-                        val percent = if (total > 0L) ((done * 100L) / total).toInt().coerceIn(0, 100) else 0
-                        val message = if (total > 0L) "Downloading · $percent%" else "Downloading model…"
-                        publishProgress(title, message, percent)
-                    }
-                }
                 "vosk_en", "vosk_hi" -> withContext(Dispatchers.IO) {
                     val language = if (key == "vosk_hi") "hi" else "en"
                     VoskOfflineModelInstaller.install(applicationContext, language) { message ->
@@ -102,7 +91,7 @@ class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : Co
 
 /** Queues each voice model once, one after another, so large model downloads do not compete. */
 object SpeechModelDownloadScheduler {
-    private val modelKeys = listOf("sherpa_mr", "sherpa_en", "vosk_hi", "vosk_en")
+    private val modelKeys = listOf("vosk_hi", "vosk_en")
 
     fun enqueueAll(context: Context, wifiOnly: Boolean) {
         val constraints = Constraints.Builder()
