@@ -30,7 +30,7 @@ fun BackupSettingsScreen(
                     Icon(Icons.Default.Backup, contentDescription = null, tint = ink)
                     Text(if (english) "Full app backup" else "पूर्ण अॅप बॅकअप", color = ink, fontWeight = FontWeight.SemiBold)
                 }
-                Text(if (english) "JSON includes counters, records and baby sessions. Restore replaces current data." else "JSON मध्ये मोजण्या, नोंदी आणि बाळाची सत्रे असतात. पुनर्संचयित केल्यास सध्याचा डेटा बदलतो.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
+                Text(if (english) "JSON contains Japa counters and history only. Restore replaces current data." else "JSON मध्ये जप आणि इतिहास असतो. पुनर्संचयित केल्यास सध्याचा डेटा बदलतो.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Button(onClick = onExportBackup) {
                         Icon(Icons.Default.FileDownload, null); Spacer(Modifier.width(6.dp)); Text(if (english) "Export JSON" else "JSON निर्यात")
