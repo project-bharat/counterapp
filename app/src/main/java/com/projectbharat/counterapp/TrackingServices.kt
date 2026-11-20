@@ -138,7 +138,6 @@ class ChantRecognitionService : Service() {
     private var partialCounted = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) { stopRecognition(); stopSelf(); return START_NOT_STICKY }
         if (intent?.action == ACTION_PAUSE_CHANT) { pauseRecognition(); return START_NOT_STICKY }
         val previousWorker = worker
         if (previousWorker?.isAlive == true) {
