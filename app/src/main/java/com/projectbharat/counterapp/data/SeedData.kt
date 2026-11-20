@@ -10,10 +10,9 @@ object SeedData {
     fun initialize(context: Context) {
         val dao = CounterDatabase.get(context).dao()
         CoroutineScope(Dispatchers.IO).launch {
-            if (dao.categories().first().isEmpty()) {
-                dao.addCategory(CounterCategory(titleMr = "बाळाची हालचाल", titleEn = "Baby Movements", kind = "BABY"))
+            if (dao.allCategories().isEmpty()) {
+                // Japa-only fresh install: legacy Baby/Steps categories are no longer seeded.
                 dao.addCategory(CounterCategory(titleMr = "जप", titleEn = "Chants", kind = "MANTRA"))
-                dao.addCategory(CounterCategory(titleMr = "पावले", titleEn = "Walking Steps", kind = "STEPS", goal = 6000))
             }
         }
     }
