@@ -92,7 +92,7 @@ interface CounterDao {
     @Query("UPDATE categories SET enabled = 0 WHERE id = :id")
     suspend fun disableCategory(id: Long)
 
-    @Query("SELECT * FROM categories WHERE enabled = 0 ORDER BY id")
+    @Query("SELECT * FROM categories WHERE enabled = 0 AND kind NOT IN ('BABY', 'STEPS') ORDER BY id")
     fun archivedCategories(): Flow<List<CounterCategory>>
 
     @Query("UPDATE categories SET enabled = 1 WHERE id = :id")
