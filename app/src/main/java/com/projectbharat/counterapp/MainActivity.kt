@@ -119,7 +119,6 @@ class MainActivity : ComponentActivity() {
     var launchCounterQuickStart by mutableStateOf(false)
         private set
     fun consumeLaunchCounterKind() { launchCounterKind = null; launchCounterQuickStart = false }
-        private set
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
