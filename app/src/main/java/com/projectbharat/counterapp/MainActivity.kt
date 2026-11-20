@@ -237,36 +237,27 @@ fun CounterApp(repo: CounterRepository) {
     LaunchedEffect(context, english) {
         while (true) {
             voiceModelSummary = withContext(Dispatchers.IO) {
-                val mgr = OfflineSpeechModelManager(context.applicationContext)
-                val ready = listOf(mgr.isInstalled(false), mgr.isInstalled(true),
-                    VoskOfflineModelInstaller.isInstalled(context, "hi"),
-                    VoskOfflineModelInstaller.isInstalled(context, "en")).count { it }
-                val workManager = androidx.work.WorkManager.getInstance(context)
-                val modelTags = listOf("sherpa_mr", "sherpa_en", "vosk_hi", "vosk_en")
-                val worksByTag = modelTags.map { tag ->
-                    tag to runCatching { workManager.getWorkInfosByTag(tag).get().firstOrNull() }.getOrNull()
-                }
-                val installedFlags = listOf(mgr.isInstalled(false), mgr.isInstalled(true),
-                    VoskOfflineModelInstaller.isInstalled(context, "hi"), VoskOfflineModelInstaller.isInstalled(context, "en"))
-                val combinedProgress = worksByTag.indices.sumOf { index ->
-                    val info = worksByTag[index].second
+                val ready = listOf(VoskOfflineModelInstaller.isInstalled(context, "hi"), VoskOfflineModelInstaller.isInstalled(context, "en")).count { it }
+                val wm = androidx.work.WorkManager.getInstance(context)
+                val tags = listOf("vosk_hi", "vosk_en")
+                val work = tags.map { tag -> runCatching { wm.getWorkInfosByTag(tag).get().firstOrNull() }.getOrNull() }
+                val flags = listOf(VoskOfflineModelInstaller.isInstalled(context, "hi"), VoskOfflineModelInstaller.isInstalled(context, "en"))
+                val progress = work.indices.sumOf { index ->
                     when {
-                        installedFlags[index] -> 100
-                        info?.state == androidx.work.WorkInfo.State.SUCCEEDED -> 100
-                        info?.state == androidx.work.WorkInfo.State.RUNNING -> info.progress.getInt("progress", 0).coerceIn(0, 100)
+                        flags[index] -> 100
+                        work[index]?.state == androidx.work.WorkInfo.State.SUCCEEDED -> 100
+                        work[index]?.state == androidx.work.WorkInfo.State.RUNNING -> work[index]!!.progress.getInt("progress", 0).coerceIn(0, 100)
                         else -> 0
                     }
-                } / 4
-                if (ready == 4) {
-                    if (english) "4/4 ready · 100%" else "4/4 तयार · 100%"
-                } else if (worksByTag.any { it.second?.state == androidx.work.WorkInfo.State.RUNNING } || combinedProgress > 0) {
-                    if (english) "All 4 models · $combinedProgress% downloaded" else "चारही मॉडेल · $combinedProgress% डाउनलोड"
-                } else if (english) "$ready/4 ready · $combinedProgress%" else "$ready/4 तयार · $combinedProgress%"
+                } / 2
+                if (ready == 2) if (english) "2/2 ready · 100%" else "२/२ तयार · १००%"
+                else if (work.any { it?.state == androidx.work.WorkInfo.State.RUNNING } || progress > 0)
+                    if (english) "Japa models · $progress%" else "जप मॉडेल · $progress%"
+                else if (english) "$ready/2 ready · $progress%" else "$ready/२ तयार · $progress%"
             }
             delay(1800)
         }
     }
-
     var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
     var japaReportScreen by remember { mutableStateOf(false) }
