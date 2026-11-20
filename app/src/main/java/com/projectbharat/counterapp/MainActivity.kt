@@ -195,8 +195,6 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     suspend fun updateLog(log: CounterLog) = repo.updateLog(log)
     suspend fun deleteLog(id: Long) = repo.deleteLog(id)
     fun week(id: Long) = repo.week(id)
-    fun stepTotals(id: Long, from: LocalDate, to: LocalDate) = repo.stepTotals(id, from, to)
-    fun walkingSessions(id: Long, from: LocalDate, to: LocalDate) = repo.walkingSessions(id, from, to)
     fun average(id: Long) = repo.average(id)
     fun averageBabyTimeToTen(id: Long) = repo.averageBabyTimeToTen(id)
     fun sessions(id: Long, date: String) = repo.babySessionsForDay(id, date)
