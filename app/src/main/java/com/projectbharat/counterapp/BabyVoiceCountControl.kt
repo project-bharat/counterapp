@@ -1,6 +1,7 @@
 package com.projectbharat.counterapp
 
 import android.Manifest
+import android.media.AudioManager
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -65,6 +66,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import java.util.concurrent.atomic.AtomicLong
 
+private fun microphoneBusy(context: android.content.Context): Boolean {
+    val audio = context.getSystemService(AudioManager::class.java) ?: return false
+    if (audio.mode == AudioManager.MODE_IN_CALL) return true
+    if (android.os.Build.VERSION.SDK_INT >= 24) {
+        return runCatching { audio.activeRecordingConfigurations.any { it.clientUid != context.applicationInfo.uid } }.getOrDefault(false)
+    }
+    return false
+}
+
 @Composable
 fun BabyVoiceCountControl(
     autoStart: Boolean = false,
@@ -94,8 +104,13 @@ fun BabyVoiceCountControl(
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionRequestPending = false
         if (granted) {
-            stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
-            listening = true
+            if (microphoneBusy(context)) {
+                stateCallback.value(false, if (english) "Microphone busy — a call or another app is using it" else "मायक्रोफोन व्यस्त — कॉल किंवा दुसरे अॅप वापरत आहे", "", null)
+                listening = false
+            } else {
+                stateCallback.value(false, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
+                listening = true
+            }
         } else {
             listening = false
             stateCallback.value(false, if (english) "Microphone permission denied" else "मायक्रोफोन परवानगी नाकारली", "", null)
@@ -137,19 +152,19 @@ fun BabyVoiceCountControl(
         engineMutex.lock()
         var engine: SherpaOfflineSpeechEngine? = null
         try {
-            stateCallback.value(true, if (english) "Checking offline model…" else "ऑफलाइन मॉडेल तपासत आहे…", "", 0)
+            stateCallback.value(false, if (english) "Checking offline model…" else "ऑफलाइन मॉडेल तपासत आहे…", "", 0)
             val files = withContext(Dispatchers.IO) {
                 manager.installedFiles(english) ?: manager.download(english) { done, total ->
                     val percent = if (total > 0) ((done * 100) / total).toInt().coerceIn(0, 100) else 0
                     mainHandler.post {
-                        if (runGeneration.get() == runId) stateCallback.value(true,
+                        if (runGeneration.get() == runId) stateCallback.value(false,
                             if (english) "Downloading offline model… $percent%" else "ऑफलाइन मॉडेल डाउनलोड होत आहे… $percent%",
                             "", null)
                     }
                 }
             }
             check(files.language == if (english) "en" else "mr") { "The downloaded speech model does not match the selected app language" }
-            stateCallback.value(true, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "", 0)
+            stateCallback.value(false, if (english) "Loading offline model…" else "ऑफलाइन मॉडेल लोड होत आहे…", "", 0)
             engine = SherpaOfflineSpeechEngine(
                 modelFiles = files,
                 english = english,
@@ -157,7 +172,7 @@ fun BabyVoiceCountControl(
                     if (runGeneration.get() == runId) stateCallback.value(true, if (english) "Listening offline…" else "ऑफलाइन ऐकत आहे…", phrase, detectedCount)
                 },
                 onCount = { amount -> if (runGeneration.get() == runId) callback.value(amount) },
-                onStatus = { status -> if (runGeneration.get() == runId) stateCallback.value(true, status, null, null) },
+                onStatus = { status -> if (runGeneration.get() == runId) stateCallback.value(status.contains("Listening", true) || status.contains("ऐकत आहे", true), status, null, null) },
                 onStopped = { error ->
                     if (runGeneration.get() == runId) {
                         stateCallback.value(false, error ?: if (english) "Voice count stopped" else "आवाज मोजणी थांबली", null, null)
@@ -170,7 +185,9 @@ fun BabyVoiceCountControl(
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
         } catch (error: Throwable) {
-            stateCallback.value(false, "Offline voice setup failed: " + (error.message ?: "try again"), null, null)
+            val detail=error.message.orEmpty()
+            val message=if(detail.contains("busy",true)) (if(english) "Microphone busy — a call or another app is using it" else "मायक्रोफोन व्यस्त — कॉल किंवा दुसरे अॅप वापरत आहे") else if(detail.contains("microphone unavailable",true)) (if(english) "Microphone unavailable" else "मायक्रोफोन उपलब्ध नाही") else "Offline voice setup failed: " + (detail.ifBlank { "try again" })
+            stateCallback.value(false, message, null, null)
             listening = false
         } finally {
             // LaunchedEffect is cancelled on language changes. Cleanup must outlive that
@@ -192,7 +209,9 @@ fun BabyVoiceCountControl(
                 stateCallback.value(false, if (english) "Voice count is off" else "आवाज मोजणी बंद", "", null)
             } else {
                 stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                if (microphoneBusy(context)) {
+                    stateCallback.value(false, if (english) "Microphone busy — a call or another app is using it" else "मायक्रोफोन व्यस्त — कॉल किंवा दुसरे अॅप वापरत आहे", "", null)
+                } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                     listening = true
                 } else {
                     stateCallback.value(true, if (english) "Microphone permission needed" else "मायक्रोफोन परवानगी आवश्यक", "", 0)
@@ -216,9 +235,11 @@ fun BabyVoiceCountControl(
 fun BabyVoiceRecognitionPanel(listening: Boolean, english: Boolean, status: String, transcript: String, detectedCount: Int) {
     val pulse = rememberInfiniteTransition(label = "babyVoicePulse")
     val scale by pulse.animateFloat(1f, 1.15f, infiniteRepeatable(tween(650), RepeatMode.Reverse), label = "babyVoiceMic")
-    val loading = status.contains("Loading", true) || status.contains("Downloading", true) ||
+    val loading = status.contains("Starting", true) || status.contains("Checking", true) || status.contains("Preparing", true) || status.contains("Loading", true) || status.contains("Downloading", true) ||
         status.contains("तपास", true) || status.contains("डाउनलोड", true) || status.contains("लोड होत", true)
     val shortStatus = when {
+        status.contains("busy", true) -> if (english) "Microphone busy" else "मायक्रोफोन व्यस्त"
+        status.contains("unavailable", true) -> if (english) "Microphone unavailable" else "मायक्रोफोन उपलब्ध नाही"
         status.contains("Listening offline", true) -> if (english) "Listening" else "ऐकत आहे"
         status.contains("ऑफलाइन ऐकत") -> "ऐकत आहे"
         else -> status
