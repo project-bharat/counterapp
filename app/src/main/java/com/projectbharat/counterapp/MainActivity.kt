@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
         private set
     var launchCounterQuickStart by mutableStateOf(false)
         private set
+    fun consumeLaunchCounterKind() { launchCounterKind = null; launchCounterQuickStart = false }
         private set
 
     override fun onNewIntent(intent: Intent) {
@@ -319,6 +320,10 @@ fun CounterApp(repo: CounterRepository) {
     LaunchedEffect(categories) {
         CounterQuickActions.publishShortcuts(context, categories)
         CounterHomeWidget.refresh(context)
+    }
+    LaunchedEffect(categories, shortcutKind, shortcutQuickStart) {
+        shortcutKind?.let { kind -> categories.firstOrNull { it.kind == kind }?.let { selectedId = it.id } }
+        if (shortcutKind != null) activity?.consumeLaunchCounterKind()
     }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
