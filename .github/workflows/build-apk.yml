@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - japa-only-cleanup
   workflow_dispatch:
 
 permissions:
