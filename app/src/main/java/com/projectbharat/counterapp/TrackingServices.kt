@@ -17,6 +17,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
 import com.projectbharat.counterapp.data.CounterDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -143,7 +144,7 @@ class ChantRecognitionService : Service() {
             try { audioRecord?.stop() } catch (_: Exception) { }
             previousWorker.interrupt()
         }
-        categoryId = intent?.getLongExtra(StepTrackingService.EXTRA_CATEGORY_ID, -1L) ?: -1L
+        categoryId = intent?.getLongExtra("category_id", -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
         language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
         if (categoryId <= 0 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
