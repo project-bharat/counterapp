@@ -3,45 +3,15 @@ package com.projectbharat.counterapp.data
 import java.time.LocalDate
 
 object BackupSnapshotValidator {
-    fun validate(
-        categories: List<CounterCategory>,
-        logs: List<CounterLog>,
-        sessions: List<BabySession>
-    ) {
-        require(categories.isNotEmpty()) { "Backup contains no categories" }
-        val categoryIds = categories.map { it.id }
-        val categoryIdSet = categoryIds.toSet()
-        val sessionIds = sessions.map { it.id }
-        val sessionById = sessions.associateBy { it.id }
-
-        require(categoryIds.all { it > 0 } && categoryIdSet.size == categoryIds.size) {
-            "Backup contains invalid or duplicate counter IDs"
-        }
-        require(categories.all {
-            it.titleMr.isNotBlank() && it.titleEn.isNotBlank() && it.goal >= 0
-        }) { "Backup contains invalid counter details" }
-        require(sessionIds.all { it > 0 } && sessionIds.toSet().size == sessionIds.size) {
-            "Backup contains invalid or duplicate session IDs"
-        }
-        require(sessions.all {
-            it.categoryId in categoryIdSet &&
-                it.movementCount >= 0 &&
-                (it.endedAt == null || it.endedAt >= it.startedAt) &&
-                (it.timeToTenMs == null || it.timeToTenMs >= 0) &&
-                it.trackingMode in setOf("TWO_HOURS", "TEN_MOVEMENTS", "ONE_HOUR") &&
-                validDate(it.date)
-        }) { "Backup contains invalid baby movement sessions" }
+    fun validate(categories: List<CounterCategory>, logs: List<CounterLog>) {
+        require(categories.isNotEmpty()) { "Backup contains no Japa categories" }
+        val ids = categories.map { it.id }
+        require(ids.all { it > 0 } && ids.toSet().size == ids.size) { "Backup contains invalid or duplicate counter IDs" }
+        require(categories.all { it.kind == "MANTRA" && it.titleMr.isNotBlank() && it.titleEn.isNotBlank() && it.goal >= 0 }) { "Backup contains invalid Japa category details" }
         val logIds = logs.map { it.id }
-        require(logIds.all { it > 0 } && logIds.toSet().size == logIds.size) {
-            "Backup contains invalid or duplicate record IDs"
-        }
-        require(logs.all {
-            it.categoryId in categoryIdSet && it.count > 0 &&
-                it.timestamp >= 0 && validDate(it.date) &&
-                (it.sessionId == null || sessionById[it.sessionId]?.categoryId == it.categoryId)
-        }) { "Backup contains invalid counter records" }
+        require(logIds.all { it > 0 } && logIds.toSet().size == logIds.size) { "Backup contains invalid or duplicate record IDs" }
+        val validIds = ids.toSet()
+        require(logs.all { it.categoryId in validIds && it.count > 0 && it.timestamp >= 0 && validDate(it.date) && (it.note == null || it.note.startsWith("MANTRA:")) }) { "Backup contains invalid Japa records" }
     }
-
-    private fun validDate(value: String): Boolean =
-        runCatching { LocalDate.parse(value) }.isSuccess
+    private fun validDate(value: String): Boolean = runCatching { LocalDate.parse(value) }.isSuccess
 }
