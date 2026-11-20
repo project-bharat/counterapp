@@ -270,7 +270,6 @@ fun CounterApp(repo: CounterRepository) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     var resetDialog by remember { mutableStateOf(false) }
     var historyDate by remember { mutableStateOf(LocalDate.now()) }
-    var clock by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val scope = rememberCoroutineScope()
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
@@ -320,7 +319,17 @@ fun CounterApp(repo: CounterRepository) {
         CounterHomeWidget.refresh(context)
     }
     LaunchedEffect(categories, shortcutKind, shortcutQuickStart) {
-        shortcutKind?.let { kind -> categories.firstOrNull { it.kind == kind }?.let { selectedId = it.id } }
+        shortcutKind?.let { kind -> categories.firstOrNull { it.kind == kind }?.let { category ->
+            selectedId = category.id
+            if (shortcutQuickStart && kind == "MANTRA") {
+                val target = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_${category.id}", "राम") ?: "राम"
+                if (ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    val lang = if (target.any { it.code in 0x0900..0x097F }) "hi" else "en"
+                    ChantRecognitionService.start(context, category.id, target, lang)
+                    chantVoiceActive = true
+                } else voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        } } 
         if (shortcutKind != null) activity?.consumeLaunchCounterKind()
     }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
@@ -513,7 +522,7 @@ fun CounterApp(repo: CounterRepository) {
                     JapaCounterScreen(
                         categoryId = selected.id, count = count, totalCount = mantraTotal, mantra = mantraTarget,
                         english = english, ink = ink, voiceActive = chantVoiceActive,
-                        onMantraChange = { mantra -> mantraTarget = mantra },
+                        onMantraChange = { mantra -> mantraTarget = mantra; context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).edit().putString("target_${selected.id}", mantra).apply() },
                         onManualCount = { mantra ->
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
