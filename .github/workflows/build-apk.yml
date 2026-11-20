@@ -59,15 +59,23 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
-      - name: Verify APK exists
+      - name: Package APK and ZIP
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          mkdir -p artifacts
+          APK_NAME="Japa-Counter-Debug-APK-Build-${BUILD_NUMBER}.apk"
+          ZIP_NAME="Japa-Counter-Build-${BUILD_NUMBER}.zip"
+          cp app/build/outputs/apk/debug/app-debug.apk "artifacts/${APK_NAME}"
+          (cd artifacts && zip -9 "${ZIP_NAME}" "${APK_NAME}")
+          test -s "artifacts/${APK_NAME}"
+          test -s "artifacts/${ZIP_NAME}"
+          ls -lh artifacts/
 
-      - name: Upload APK artifact
+      - name: Upload single combined artifact
         uses: actions/upload-artifact@v4
         with:
-          name: counterapp-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Japa-Counter-Build-${{ github.run_number }}
+          path: artifacts/*
           if-no-files-found: error
           retention-days: 14
