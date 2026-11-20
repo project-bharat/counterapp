@@ -25,11 +25,7 @@ object DailyReminderScheduler {
     private const val CHANNEL = "daily_counter_reminders"
 
     fun defaults() = listOf(
-        DailyReminder(1, "बाळाची हालचाल · सकाळ", "Baby movements · Morning", 9, 0, false),
-        DailyReminder(2, "बाळाची हालचाल · दुपार", "Baby movements · Afternoon", 13, 0, false),
-        DailyReminder(3, "बाळाची हालचाल · संध्याकाळ", "Baby movements · Evening", 19, 0, false),
-        DailyReminder(4, "जप / मंत्र", "Chanting / Mantra", 7, 0, false),
-        DailyReminder(5, "चालणे", "Walking", 18, 0, false)
+        DailyReminder(4, "जप / मंत्र", "Japa / Mantra", 7, 0, false)
     )
 
     fun load(context: Context): List<DailyReminder> {
