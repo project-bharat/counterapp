@@ -4,14 +4,13 @@ import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.first
 
 object SeedData {
     fun initialize(context: Context) {
         val dao = CounterDatabase.get(context).dao()
         CoroutineScope(Dispatchers.IO).launch {
-            if (dao.allCategories().isEmpty()) {
-                // Japa-only fresh install: legacy Baby/Steps categories are no longer seeded.
+            if (dao.allCategories().none { it.kind == "MANTRA" }) {
+                // Ensure the Japa category exists; do not seed legacy Baby/Steps categories.
                 dao.addCategory(CounterCategory(titleMr = "जप", titleEn = "Chants", kind = "MANTRA"))
             }
         }
