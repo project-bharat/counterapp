@@ -30,7 +30,6 @@ import java.time.format.DateTimeFormatter
 
 object CounterQuickActions {
     const val ACTION_START_BABY = "com.projectbharat.counterapp.action.START_BABY"
-    const val ACTION_START_WALK = "com.projectbharat.counterapp.action.START_WALK"
     const val ACTION_START_JAPA = "com.projectbharat.counterapp.action.START_JAPA"
     const val ACTION_BABY_ADD = "com.projectbharat.counterapp.action.BABY_ADD"
     const val ACTION_BABY_UNDO = "com.projectbharat.counterapp.action.BABY_UNDO"
