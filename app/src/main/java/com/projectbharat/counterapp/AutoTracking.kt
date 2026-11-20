@@ -1,32 +1,9 @@
 package com.projectbharat.counterapp
 
-import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import java.text.NumberFormat
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -36,18 +13,6 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,35 +21,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
@@ -101,19 +53,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.projectbharat.counterapp.data.DayTotal
 import com.projectbharat.counterapp.data.CounterLog
-import com.projectbharat.counterapp.data.WalkingSession
-import kotlinx.coroutines.delay
 import java.time.LocalDate
-import kotlin.math.sqrt
 
 private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiver) {
     val filter = IntentFilter(TRACKING_STATE_CHANGED)
@@ -124,222 +70,6 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
     }
 }
 
-@Composable
-fun AutoStepCounterScreen(
-    categoryId: Long, count: Int, goal: Int, days: List<DayTotal>, sessions: List<WalkingSession>,
-    range: String, onRangeChange: (String) -> Unit, onGoalChange: (Int) -> Unit,
-    english: Boolean, ink: Color
-) {
-    val context = LocalContext.current
-    val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val available = remember { sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null || sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null }
-    var permissionGranted by remember {
-        mutableStateOf(Build.VERSION.SDK_INT < 29 || ContextCompat.checkSelfPermission(context, Manifest.permission.ACTIVITY_RECOGNITION) == PackageManager.PERMISSION_GRANTED)
-    }
-    var running by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", false)) }
-    var message by remember { mutableStateOf("") }
-    var selectedTab by remember(categoryId) { mutableIntStateOf(0) }
-    var showGoalDialog by remember { mutableStateOf(false) }
-    var goalText by remember(goal) { mutableStateOf(goal.toString()) }
-
-    val startService = {
-        try {
-            StepTrackingService.start(context, categoryId)
-            running = true
-            message = if (english) "Tracking active" else "मोजणी सुरू"
-        } catch (error: Exception) {
-            message = error.message ?: if (english) "Could not start tracking" else "मोजणी सुरू झाली नाही"
-        }
-    }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) startService() else message = if (english) "Notification permission is required" else "सूचना परवानगी आवश्यक आहे"
-    }
-    val activityPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        permissionGranted = granted
-        if (granted) {
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            else startService()
-        } else message = if (english) "Physical activity permission is required" else "हालचाल परवानगी आवश्यक आहे"
-    }
-    DisposableEffect(context) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, intent: Intent?) {
-                if (intent?.getStringExtra(EXTRA_TRACKING_KIND) == "steps" && intent.hasExtra("active"))
-                    running = intent.getBooleanExtra("active", false)
-            }
-        }
-        registerTrackingReceiver(context, receiver)
-        onDispose { context.unregisterReceiver(receiver) }
-    }
-    LaunchedEffect(Unit) {
-        while (true) {
-            running = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("steps_running", running)
-            delay(1500)
-        }
-    }
-    // Resume only when the user had previously enabled tracking; an explicit Stop disables this flag.
-    LaunchedEffect(categoryId, permissionGranted) {
-        val state = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE)
-        if (permissionGranted && available && state.getBoolean("steps_enabled", false) && !state.getBoolean("steps_running", false)) startService()
-    }
-
-    val safeGoal = goal.coerceAtLeast(1)
-    val progress = (count.toFloat() / safeGoal).coerceIn(0f, 1f)
-    val distanceKm = count * 0.00075
-    val calories = (count * 0.04).toInt()
-    val today = LocalDate.now()
-    val chartDates = when (range) {
-        "30D" -> (29 downTo 0).map { today.minusDays(it.toLong()) }
-        "MONTH" -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
-        else -> (6 downTo 0).map { today.minusDays(it.toLong()) }
-    }
-    val totalsByDate = days.associate { it.date to it.total }
-    val chartDays = chartDates.map { date -> DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
-    val weekDays = (6 downTo 0).map { today.minusDays(it.toLong()) }.map { date ->
-        DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0)
-    }
-    val groupedWalks = sessions.groupBy { it.date }.entries.take(8)
-
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(13.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.CenterVertically) {
-            listOf(0 to if (english) "Today" else "आज", 1 to if (english) "Stats" else "आकडेवारी", 2 to if (english) "Goals" else "लक्ष्य").forEach { (tab, label) ->
-                FilterChip(selected = selectedTab == tab, onClick = { selectedTab = tab }, label = { Text(label) })
-            }
-            Spacer(Modifier.weight(1f))
-            Surface(shape = CircleShape, color = if (running) Color(0xFFE1F3E9) else MaterialTheme.colorScheme.surfaceVariant) {
-                Text(if (running) (if (english) "AUTO ON" else "सुरू") else if (english) "PAUSED" else "थांबले",
-                    color = if (running) Color(0xFF16764E) else ink.copy(alpha = .7f),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
-        }
-        when (selectedTab) {
-            0 -> {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.fillMaxWidth().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(if (english) "TODAY'S WALK" else "आजचे चालणे", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            Text(today.dayOfWeek.name.take(3), color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        val ringTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(220.dp)) {
-                            Canvas(Modifier.fillMaxSize()) {
-                                val stroke = 13.dp.toPx()
-                                val arcSize = Size(size.width - stroke * 2, size.height - stroke * 2)
-                                val topLeft = Offset(stroke, stroke)
-                                drawArc(ringTrackColor, 135f, 270f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                                drawArc(Color(0xFFD5A757), 135f, 270f * progress, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(if (english) "WALK STEPS" else "चालण्याची पावले", color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall)
-                                Text(NumberFormat.getIntegerInstance().format(count), color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
-                                Text("${(progress * 100).toInt()}% " + if (english) "of goal" else "लक्ष्य पूर्ण", color = Color(0xFF9A7435), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Column {
-                                Text(if (english) "GOAL" else "लक्ष्य", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
-                                Text(NumberFormat.getIntegerInstance().format(goal), color = ink, fontWeight = FontWeight.SemiBold)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(if (english) "REMAINING" else "उर्वरित", color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
-                                Text(NumberFormat.getIntegerInstance().format((goal - count).coerceAtLeast(0)), color = ink, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        androidx.compose.material3.LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(6.dp), color = Color(0xFFD5A757), trackColor = MaterialTheme.colorScheme.surfaceVariant)
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    StepMetricCard(if (english) "DISTANCE" else "अंतर", String.format(java.util.Locale.getDefault(), "%.2f km", distanceKm), if (english) "Estimated" else "अंदाजे", ink, Modifier.weight(1f))
-                    StepMetricCard(if (english) "CALORIES" else "कॅलरी", "$calories kcal", if (english) "Estimated" else "अंदाजे", ink, Modifier.weight(1f))
-                }
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(15.dp)) {
-                        Text(if (english) "THIS WEEK" else "या आठवड्यात", color = ink, fontWeight = FontWeight.SemiBold)
-                        Text(if (english) "Daily walking steps" else "दररोजची चालण्याची पावले", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall)
-                        Spacer(Modifier.height(12.dp))
-                        WeeklyChart(weekDays, Modifier.fillMaxWidth().height(145.dp))
-                    }
-                }
-            }
-            1 -> {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                        Text(if (english) "YOUR ACTIVITY" else "तुमची चालण्याची नोंद", color = ink, fontWeight = FontWeight.SemiBold)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            listOf("7D" to if (english) "7 days" else "७ दिवस", "30D" to if (english) "30 days" else "३० दिवस", "MONTH" to if (english) "Month" else "महिना").forEach { (key, label) ->
-                                FilterChip(selected = range == key, onClick = { onRangeChange(key) }, label = { Text(label) })
-                            }
-                        }
-                        Text(if (english) when (range) { "30D" -> "LAST 30 DAYS"; "MONTH" -> "THIS MONTH"; else -> "LAST 7 DAYS" } else when (range) { "30D" -> "मागील ३० दिवस"; "MONTH" -> "हा महिना"; else -> "मागील ७ दिवस" },
-                            color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        WeeklyChart(chartDays, Modifier.fillMaxWidth().height(185.dp))
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StepMetricCard(if (english) "TOTAL STEPS" else "एकूण पावले", NumberFormat.getIntegerInstance().format(chartDays.sumOf { it.total }), if (english) "Selected period" else "निवडलेला कालावधी", ink, Modifier.weight(1f))
-                            StepMetricCard(if (english) "ACTIVE DAYS" else "सक्रिय दिवस", "${chartDays.count { it.total > 0 }} / ${chartDays.size}", if (english) "Days with steps" else "पावले असलेले दिवस", ink, Modifier.weight(1f))
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            val active = chartDays.filter { it.total > 0 }
-                            StepMetricCard(if (english) "AVERAGE" else "सरासरी", NumberFormat.getIntegerInstance().format(active.map { it.total }.average().takeIf { it.isFinite() }?.toInt() ?: 0), if (english) "Per active day" else "प्रति सक्रिय दिवस", ink, Modifier.weight(1f))
-                            StepMetricCard(if (english) "BEST DAY" else "सर्वोत्तम दिवस", NumberFormat.getIntegerInstance().format(chartDays.maxOfOrNull { it.total } ?: 0), if (english) "Highest count" else "सर्वाधिक पावले", ink, Modifier.weight(1f))
-                        }
-                    }
-                }
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (english) "WALKING SESSIONS" else "चालण्याची सत्रे", color = ink, fontWeight = FontWeight.SemiBold)
-                        if (groupedWalks.isEmpty()) Text(if (english) "No walking sessions in this period" else "या कालावधीत चालण्याची नोंद नाही", color = ink.copy(alpha = .58f))
-                        groupedWalks.forEach { (date, records) ->
-                            val totalSteps = records.sumOf { it.steps }
-                            val totalMinutes = records.sumOf { (((it.endedAt ?: System.currentTimeMillis()) - it.startedAt).coerceAtLeast(0L) / 60000L).toInt() }
-                            val gpsDistance = records.filter { it.gpsReliable }.sumOf { it.distanceMeters }
-                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(date, color = ink, fontWeight = FontWeight.SemiBold)
-                                    Text(if (english) "${records.size} sessions · $totalSteps steps · $totalMinutes min" else "${records.size} सत्रे · $totalSteps पावले · $totalMinutes मि.", color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelSmall)
-                                }
-                                Text(if (gpsDistance > 0.0) { if (gpsDistance >= 1000.0) "%.2f km".format(gpsDistance / 1000.0) else "${gpsDistance.toInt()} m" } else "—",
-                                    color = ink.copy(alpha = .62f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-            }
-            else -> {
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(if (english) "DAILY STEP TARGET" else "दैनिक पावलांचे लक्ष्य", color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        Text(NumberFormat.getIntegerInstance().format(goal), color = ink, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-                        Text(if (english) "steps per day" else "पावले प्रतिदिन", color = ink.copy(alpha = .65f))
-                        Button(onClick = { goalText = goal.toString(); showGoalDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF31413A), contentColor = Color(0xFFF3EEE3))) {
-                            Text(if (english) "Change goal" else "लक्ष्य बदला")
-                        }
-                    }
-                }
-                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Column(Modifier.padding(17.dp)) {
-                        Text(if (english) "Your walking data stays on this device" else "तुमची चालण्याची नोंद याच फोनमध्ये सुरक्षित राहते", color = ink, fontWeight = FontWeight.SemiBold)
-                        Text(if (english) "Android hardware step sensors provide the count. GPS is optional and is used only for reliable distance." else "पावले Android च्या हार्डवेअर स्टेप सेन्सरने मोजली जातात. GPS ऐच्छिक असून विश्वसनीय अंतरासाठीच वापरले जाते.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
-    }
-    if (showGoalDialog) {
-        AlertDialog(
-            onDismissRequest = { showGoalDialog = false },
-            title = { Text(if (english) "Daily step goal" else "दैनिक पावलांचे लक्ष्य") },
-            text = { OutlinedTextField(value = goalText, onValueChange = { goalText = it.filter(Char::isDigit).take(6) }, label = { Text(if (english) "Steps" else "पावले") }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { goalText.toIntOrNull()?.takeIf { it in 1000..100000 }?.let(onGoalChange); showGoalDialog = false }) { Text(if (english) "Save" else "जतन करा") } },
-            dismissButton = { TextButton(onClick = { showGoalDialog = false }) { Text(if (english) "Cancel" else "रद्द") } }
-        )
-    }
-}
-
-@Composable
 private fun StepMetricCard(label: String, value: String, note: String, ink: Color, modifier: Modifier = Modifier) {
     Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(13.dp)) {
