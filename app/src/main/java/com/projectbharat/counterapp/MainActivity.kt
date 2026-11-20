@@ -260,7 +260,6 @@ fun CounterApp(repo: CounterRepository) {
     }
     var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
-    var japaReportScreen by remember { mutableStateOf(false) }
     var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
     var categoryScreen by remember { mutableStateOf(false) }
@@ -277,8 +276,16 @@ fun CounterApp(repo: CounterRepository) {
     val shortcutKind = activity?.launchCounterKind
     val shortcutQuickStart = activity?.launchCounterQuickStart == true
     var mantraTarget by remember { mutableStateOf(context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_1", "राम") ?: "राम") }
+    var chantVoiceActive by remember { mutableStateOf(context.getSharedPreferences("tracking_state", android.content.Context.MODE_PRIVATE).getBoolean("chant_enabled", false)) }
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
+    }
+    val voicePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) categories.firstOrNull { it.id == selectedId }?.let { category ->
+            val lang = if (mantraTarget.any { it.code in 0x0900..0x097F }) "hi" else "en"
+            ChantRecognitionService.start(context, category.id, mantraTarget, lang)
+            chantVoiceActive = true
+        }
     }
     val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
@@ -323,6 +330,7 @@ fun CounterApp(repo: CounterRepository) {
         if (selected?.kind == "MANTRA") {
             mantraTarget = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
                 .getString("target_${selected.id}", "राम") ?: "राम"
+            chantVoiceActive = context.getSharedPreferences("tracking_state", android.content.Context.MODE_PRIVATE).getBoolean("chant_enabled", false)
         }
     }
     val countFlow = remember(selected?.id, selected?.kind, mantraTarget) {
@@ -482,12 +490,6 @@ fun CounterApp(repo: CounterRepository) {
                         onRestore = { item -> scope.launch { vm.restoreCategory(item.id) } })
                 } else if (remindersScreen) {
                     ReminderSettingsScreen(english = english, ink = ink)
-                } else
-                } else if (japaReportScreen && selected?.kind == "MANTRA") {
-                    JapaReportScreen(
-                        logs = allMantraLogs, english = english, ink = ink,
-                        onBack = { japaReportScreen = false }
-                    )
                 } else if (weekly) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -508,13 +510,27 @@ fun CounterApp(repo: CounterRepository) {
                         }) { Text(if (english) "Share summary" else "सारांश शेअर करा") }
                     }
                 } else if (selected?.kind == "MANTRA") {
-                    AutoChantCounterScreen(
-                        categoryId = selected.id, count = count, totalCount = mantraTotal, english = english, ink = ink,
+                    JapaCounterScreen(
+                        categoryId = selected.id, count = count, totalCount = mantraTotal, mantra = mantraTarget,
+                        english = english, ink = ink, voiceActive = chantVoiceActive,
                         onMantraChange = { mantra -> mantraTarget = mantra },
                         onManualCount = { mantra ->
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
                             scope.launch { vm.addMantra(selected.id, mantra) }
+                        },
+                        onUndo = { scope.launch { vm.undo(selected.id) } },
+                        onReset = { resetDialog = true },
+                        onVoiceToggle = { active ->
+                            if (active) {
+                                ChantRecognitionService.stop(context)
+                                chantVoiceActive = false
+                                context.getSharedPreferences("tracking_state", android.content.Context.MODE_PRIVATE).edit().putBoolean("chant_enabled", false).apply()
+                            } else if (ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                val language = if (mantraTarget.any { it.code in 0x0900..0x097F }) "hi" else "en"
+                                ChantRecognitionService.start(context, selected.id, mantraTarget, language)
+                                chantVoiceActive = true
+                            } else voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
                     )
                 } else if (selected != null) {
@@ -526,12 +542,11 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 }
                 }
-                if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory && !japaReportScreen) {
+                if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory) {
                     TextButton(onClick = {
-                        if (selected.kind == "MANTRA") japaReportScreen = true
-                        else { historyDate = LocalDate.now(); monthlyHistory = true }
+                        historyDate = LocalDate.now(); monthlyHistory = true
                     }) {
-                        Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (selected.kind == "MANTRA") (if (english) "My Japa Report" else "माझा जप अहवाल") else (if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण"))
+                        Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (english) "View history" else "इतिहास पाहा")
                     }
                 }
             }
