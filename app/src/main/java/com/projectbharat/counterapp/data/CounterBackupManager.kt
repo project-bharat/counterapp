@@ -12,8 +12,9 @@ object CounterBackupManager {
 
     suspend fun exportJson(context: Context, uri: Uri) {
         val dao = CounterDatabase.get(context).dao()
-        val categories = dao.allCategories()
-        val logs = dao.allLogs()
+        val categories = dao.allCategories().filter { it.kind == "MANTRA" }
+        val japaIds = categories.map { it.id }.toSet()
+        val logs = dao.allLogs().filter { it.categoryId in japaIds }
         val sessions = dao.allBabySessions()
         val detections = dao.allBabyDetections()
         val walkingSessions = dao.allWalkingSessions()
@@ -63,23 +64,23 @@ object CounterBackupManager {
         require(root.optInt("formatVersion", -1) == FORMAT_VERSION) { "Unsupported backup format" }
         val categoryArray = root.getJSONArray("categories")
         val logArray = root.getJSONArray("logs")
-        val sessionArray = root.getJSONArray("babySessions")
+        val sessionArray = root.optJSONArray("babySessions") ?: JSONArray()
         val detectionArray = root.optJSONArray("babyDetections") ?: JSONArray()
         val walkingArray = root.optJSONArray("walkingSessions") ?: JSONArray()
         require(categoryArray.length() > 0) { "Backup contains no categories" }
 
-        val categories = (0 until categoryArray.length()).map { i ->
+        val importedCategories = (0 until categoryArray.length()).map { i ->
             val o = categoryArray.getJSONObject(i)
             CounterCategory(o.getLong("id"), o.getString("titleMr"), o.getString("titleEn"),
                 o.optString("kind", "GENERAL"), o.optInt("goal", 0), o.optBoolean("enabled", true))
         }
-        val logs = (0 until logArray.length()).map { i ->
+        val importedLogs = (0 until logArray.length()).map { i ->
             val o = logArray.getJSONObject(i)
             CounterLog(o.getLong("id"), o.getString("date"), o.getLong("timestamp"),
                 o.getLong("categoryId"), o.optInt("count", 1), o.longOrNull("sessionDurationMs"),
                 o.stringOrNull("strength"), o.stringOrNull("note"), o.longOrNull("sessionId"))
         }
-        val sessions = (0 until sessionArray.length()).map { i ->
+        val importedSessions = (0 until sessionArray.length()).map { i ->
             val o = sessionArray.getJSONObject(i)
             BabySession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"),
                 o.getLong("startedAt"), o.longOrNull("endedAt"), o.getString("dayPeriod"),
@@ -87,19 +88,24 @@ object CounterBackupManager {
                 o.stringOrNull("strength"), o.stringOrNull("note"), o.optString("trackingMode", "TWO_HOURS"), o.optInt("firstHourCount", 0))
         }
 
-        val detections = (0 until detectionArray.length()).map { i ->
+        val importedDetections = (0 until detectionArray.length()).map { i ->
             val o = detectionArray.getJSONObject(i)
             BabyDetection(o.getLong("id"), o.getLong("sessionId"), o.getLong("timestamp"), o.getDouble("magnitude").toFloat(), o.optString("status", "PENDING"))
         }
-        val walkingSessions = (0 until walkingArray.length()).map { i ->
+        val importedWalkingSessions = (0 until walkingArray.length()).map { i ->
             val o = walkingArray.getJSONObject(i)
             WalkingSession(o.getLong("id"), o.getLong("categoryId"), o.getString("date"), o.getLong("startedAt"),
                 o.longOrNull("endedAt"), o.optInt("steps", 0), o.optDouble("distanceMeters", 0.0), o.optBoolean("gpsReliable", false))
         }
-        require(detections.all { d -> sessions.any { it.id == d.sessionId } && d.status in setOf("PENDING", "CONFIRMED", "DISMISSED") }) { "Invalid baby detection records" }
-        require(walkingSessions.all { it.steps >= 0 && it.distanceMeters >= 0.0 && categories.any { c -> c.id == it.categoryId } }) { "Invalid walking session records" }
-        BackupSnapshotValidator.validate(categories, logs, sessions)
-        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions, detections, walkingSessions)
+        require(importedDetections.all { d -> importedSessions.any { it.id == d.sessionId } && d.status in setOf("PENDING", "CONFIRMED", "DISMISSED") }) { "Invalid legacy detection records" }
+        require(importedWalkingSessions.all { it.steps >= 0 && it.distanceMeters >= 0.0 && importedCategories.any { c -> c.id == it.categoryId } }) { "Invalid legacy walking records" }
+        // Restore Japa records only. Legacy backup sections are accepted for compatibility but retired.
+        val categories = importedCategories.filter { it.kind == "MANTRA" }
+        require(categories.isNotEmpty()) { "Backup contains no Japa counter" }
+        val ids = categories.map { it.id }.toSet()
+        val logs = importedLogs.filter { it.categoryId in ids && (it.note == null || it.note.startsWith("MANTRA:")) }
+        BackupSnapshotValidator.validate(categories, logs, emptyList())
+        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, emptyList(), emptyList(), emptyList())
     }
 
     suspend fun exportCsv(context: Context, uri: Uri) {
