@@ -1,4 +1,4 @@
-# CounterApp
+# japaCounterApp
 
 Marathi-first native Android daily counter built with Kotlin, Jetpack Compose Material 3, Room, MVVM and StateFlow. Minimum Android 7.0 (API 24), tested build target Android 14 (API 34), with Android 15 foreground-service compatibility declarations.
 
