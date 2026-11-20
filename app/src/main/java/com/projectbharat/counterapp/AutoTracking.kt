@@ -560,7 +560,7 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
                         weekRow.forEach { day ->
                             Box(Modifier.weight(1f).height(38.dp).padding(2.dp), contentAlignment = Alignment.Center) {
                                 if (day != null) {
-                                    val date = month.atDay(day)
+                                    val date = month.withDayOfMonth(day)
                                     val value = totalsByDate[date.toString()] ?: 0
                                     Surface(shape = CircleShape, color = when { value >= 108 -> Color(0xFFDDEEE4); date < today && value < 108 -> Color(0xFFF5D9D9); value > 0 -> Color(0xFFE7D8F6); else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.35f) }) {
                                         Text(if (value >= 108) "$day ✓" else if (date < today) "$day ×" else day.toString(), modifier = Modifier.padding(6.dp), color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = if (value > 0) FontWeight.Bold else FontWeight.Normal)
