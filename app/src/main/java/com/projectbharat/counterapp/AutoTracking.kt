@@ -3,6 +3,16 @@ package com.projectbharat.counterapp
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Button
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.background
+import kotlinx.coroutines.delay
 import kotlin.math.sqrt
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -105,6 +115,7 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
     }
 }
 
+@Composable
 private fun StepMetricCard(label: String, value: String, note: String, ink: Color, modifier: Modifier = Modifier) {
     Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(13.dp)) {
@@ -499,12 +510,12 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
     val periodEnd = when(period) { "DAILY" -> anchor; "MONTHLY" -> periodStart.plusMonths(1).minusDays(1); else -> periodStart.plusDays(6) }
     val chartDays = when(period) {
         "DAILY" -> listOf(DayTotal(anchor.toString(), totalsByDate[anchor.toString()] ?: 0))
-        "MONTHLY" -> (1..periodStart.lengthOfMonth()).map { d -> val date=periodStart.atDay(d); DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
+        "MONTHLY" -> (1..periodStart.lengthOfMonth()).map { d -> val date=periodStart.withDayOfMonth(d); DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
         else -> (0..6).map { i -> val date=periodStart.plusDays(i.toLong()); DayTotal(date.toString(), totalsByDate[date.toString()] ?: 0) }
     }
     val periodSum = chartDays.sumOf { it.total }
     val monthDays = month.lengthOfMonth()
-    val offset = (month.atDay(1).dayOfWeek.value + 6) % 7
+    val offset = (month.dayOfWeek.value + 6) % 7
     val monthCells: List<Int?> = (0 until 42).map { cell -> (cell - offset + 1).takeIf { it in 1..monthDays } }
     val mantraBreakdown = logs.groupBy { it.note.orEmpty().removePrefix("MANTRA:") }.mapValues { (_, rows) -> rows.sumOf { it.count } }.entries.sortedByDescending { it.value }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
