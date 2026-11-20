@@ -138,7 +138,12 @@ fun BabyVoiceCountControl(
         // Publish the opening state before waiting for cleanup, model download, or
         // microphone acquisition. This makes the recognition panel appear immediately,
         // including during rapid start/stop and language changes.
-        stateCallback.value(true, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
+        stateCallback.value(false, if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…", "", 0)
+        if (microphoneBusy(context)) {
+            stateCallback.value(false, if (english) "Microphone busy — a call or another app is using it" else "मायक्रोफोन व्यस्त — कॉल किंवा दुसरे अॅप वापरत आहे", "", null)
+            listening = false
+            return@LaunchedEffect
+        }
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             listening = false
