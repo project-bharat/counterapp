@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - japa-ui-recovery-528
   workflow_dispatch:
 
 permissions:
