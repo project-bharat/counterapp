@@ -1,78 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="12dp"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="12dp"
     android:background="@drawable/counter_widget_background">
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:src="@drawable/widget_symbol_light"
-            android:contentDescription="Bilan symbol" />
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="BILAN · DAILY COUNTER"
-            android:textColor="#F3EEE3"
-            android:textStyle="bold"
-            android:textSize="13sp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <ImageView android:layout_width="28dp" android:layout_height="28dp"
+            android:src="@drawable/widget_symbol_light" android:contentDescription="Japa Counter" />
+        <TextView android:id="@+id/widget_title" android:layout_width="wrap_content"
+            android:layout_height="wrap_content" android:layout_marginStart="8dp"
+            android:text="JAPA COUNTER" android:textColor="#F3EEE3"
+            android:textStyle="bold" android:textSize="13sp" />
     </LinearLayout>
-    <TextView
-        android:id="@+id/widget_date"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:text="Today"
-        android:textColor="#E7E0D2"
-        android:textSize="10sp" />
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="10dp">
-        <TextView
-            android:id="@+id/widget_baby_action"
-            android:layout_width="0dp"
-            android:layout_height="76dp"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:background="@drawable/counter_widget_tile"
-            android:text="👶  BABY&#10;0 moves&#10;＋ Session"
-            android:textColor="#F3EEE3"
-            android:textSize="10sp"
-            android:textStyle="bold" />
-        <TextView
-            android:id="@+id/widget_japa_action"
-            android:layout_width="0dp"
-            android:layout_height="76dp"
-            android:layout_weight="1"
-            android:layout_marginStart="7dp"
-            android:gravity="center"
-            android:background="@drawable/counter_widget_tile"
-            android:text="📿  JAPA&#10;0 chants&#10;＋ Start"
-            android:textColor="#F3EEE3"
-            android:textSize="10sp"
-            android:textStyle="bold" />
-        <TextView
-            android:id="@+id/widget_steps_action"
-            android:layout_width="0dp"
-            android:layout_height="76dp"
-            android:layout_weight="1"
-            android:layout_marginStart="7dp"
-            android:gravity="center"
-            android:background="@drawable/counter_widget_tile"
-            android:text="👣  WALK&#10;0 steps&#10;＋ Start"
-            android:textColor="#F3EEE3"
-            android:textSize="10sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+    <TextView android:id="@+id/widget_date" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="2dp"
+        android:text="Today" android:textColor="#E7E0D2" android:textSize="10sp" />
+    <TextView android:id="@+id/widget_japa_action" android:layout_width="match_parent"
+        android:layout_height="76dp" android:layout_marginTop="10dp"
+        android:gravity="center" android:background="@drawable/counter_widget_tile"
+        android:text="JAPA\n0 chants\n＋ Open" android:textColor="#F3EEE3"
+        android:textSize="13sp" android:textStyle="bold" />
 </LinearLayout>
