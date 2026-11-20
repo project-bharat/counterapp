@@ -68,7 +68,7 @@ data class WalkingSession(
 
 @Dao
 interface CounterDao {
-    @Query("SELECT * FROM categories WHERE enabled = 1 AND kind != 'STEPS' ORDER BY id")
+    @Query("SELECT * FROM categories WHERE enabled = 1 AND kind NOT IN ('STEPS', 'BABY') ORDER BY id")
     fun categories(): Flow<List<CounterCategory>>
 
     @Insert
@@ -323,7 +323,7 @@ interface CounterDao {
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class, WalkingSession::class], version = 8, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class, WalkingSession::class], version = 9, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
@@ -378,9 +378,15 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("UPDATE categories SET enabled = 0 WHERE kind = 'STEPS'")
             }
         }
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Retire legacy non-Japa categories from the active category list.
+                db.execSQL("UPDATE categories SET enabled = 0 WHERE kind IN ('BABY', 'STEPS')")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { INSTANCE = it }
         }
     }
 }
