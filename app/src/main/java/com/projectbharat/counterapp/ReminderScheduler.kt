@@ -24,12 +24,10 @@ object DailyReminderScheduler {
     private const val PREFS = "daily_reminder_preferences"
     private const val CHANNEL = "daily_counter_reminders"
 
+    private val retiredReminderIds = listOf(1, 2, 3, 5)
+
     fun defaults() = listOf(
-        DailyReminder(1, "बाळाची हालचाल · सकाळ", "Baby movements · Morning", 9, 0, false),
-        DailyReminder(2, "बाळाची हालचाल · दुपार", "Baby movements · Afternoon", 13, 0, false),
-        DailyReminder(3, "बाळाची हालचाल · संध्याकाळ", "Baby movements · Evening", 19, 0, false),
-        DailyReminder(4, "जप / मंत्र", "Chanting / Mantra", 7, 0, false),
-        DailyReminder(5, "चालणे", "Walking", 18, 0, false)
+        DailyReminder(4, "जप / मंत्र", "Chanting / Mantra", 7, 0, false)
     )
 
     fun load(context: Context): List<DailyReminder> {
@@ -58,6 +56,11 @@ object DailyReminderScheduler {
     }
 
     fun rescheduleAll(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        retiredReminderIds.forEach { id ->
+            cancel(context, id)
+            manager.cancel(7000 + id)
+        }
         load(context).filter { it.enabled }.forEach { scheduleNext(context, it) }
     }
 
@@ -92,7 +95,7 @@ object DailyReminderScheduler {
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL, "Daily counter reminders", NotificationManager.IMPORTANCE_DEFAULT))
         }
-        val languageEnglish = context.getSharedPreferences("counter_settings", Context.MODE_PRIVATE).getBoolean("english", false)
+        val languageEnglish = context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE).getBoolean("english_language", false)
         val title = if (languageEnglish) item.titleEn else item.titleMr
         val body = if (languageEnglish) "A gentle reminder for your daily routine." else "तुमच्या दैनंदिन नोंदीसाठी एक छोटी आठवण."
         val notification = NotificationCompat.Builder(context, CHANNEL)

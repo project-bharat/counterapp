@@ -71,6 +71,13 @@ interface CounterDao {
     @Query("SELECT * FROM categories WHERE enabled = 1 AND kind NOT IN ('STEPS', 'BABY') ORDER BY id")
     fun categories(): Flow<List<CounterCategory>>
 
+    @Query("""
+        INSERT INTO categories (titleMr, titleEn, kind, goal, enabled)
+        SELECT 'जप', 'Chants', 'MANTRA', 0, 1
+        WHERE NOT EXISTS (SELECT 1 FROM categories WHERE kind = 'MANTRA')
+    """)
+    suspend fun ensureJapaCategory()
+
     @Insert
     suspend fun addCategory(category: CounterCategory): Long
 
@@ -92,7 +99,7 @@ interface CounterDao {
     @Query("UPDATE categories SET enabled = 0 WHERE id = :id")
     suspend fun disableCategory(id: Long)
 
-    @Query("SELECT * FROM categories WHERE enabled = 0 ORDER BY id")
+    @Query("SELECT * FROM categories WHERE enabled = 0 AND kind NOT IN ('STEPS', 'BABY') ORDER BY id")
     fun archivedCategories(): Flow<List<CounterCategory>>
 
     @Query("UPDATE categories SET enabled = 1 WHERE id = :id")
@@ -262,6 +269,7 @@ interface CounterDao {
         deleteAllWalkingSessions()
         deleteAllCategories()
         insertCategories(categories)
+        ensureJapaCategory()
         if (sessions.isNotEmpty()) insertBabySessions(sessions)
         if (detections.isNotEmpty()) insertBabyDetections(detections)
         if (walkingSessions.isNotEmpty()) insertWalkingSessions(walkingSessions)

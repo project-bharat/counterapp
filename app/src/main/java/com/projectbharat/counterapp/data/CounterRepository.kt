@@ -13,7 +13,7 @@ class CounterRepository(private val dao: CounterDao) {
         dao.updateCategory(category.copy(titleMr = category.titleMr.trim(), titleEn = category.titleEn.trim()))
     }
     suspend fun archiveCategory(id: Long) {
-        require(dao.allCategories().count { it.enabled } > 1) { "Keep at least one active counter" }
+        require(dao.allCategories().count { it.enabled && it.kind !in setOf("STEPS", "BABY") } > 1) { "Keep at least one active counter" }
         dao.disableCategory(id)
     }
     suspend fun restoreCategory(id: Long) = dao.enableCategory(id)

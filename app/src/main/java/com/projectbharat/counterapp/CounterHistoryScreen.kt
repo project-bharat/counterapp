@@ -85,7 +85,7 @@ fun CounterHistoryScreen(
                                 Text(if (mantraEntry != null) mantraEntry.removePrefix("MANTRA:") + " · " + log.count else time + "  ·  +" + log.count, color = ink, fontWeight = FontWeight.SemiBold)
                                 val details = listOfNotNull(log.strength?.takeIf { it.isNotBlank() }, log.note?.takeIf { it.isNotBlank() && !it.startsWith("MANTRA:") }).joinToString(" · ")
                                 if (details.isNotBlank()) Text(details, color = ink.copy(alpha = .62f), style = MaterialTheme.typography.bodySmall)
-                                if (log.sessionId != null) Text(if (english) "Baby movement session" else "बाळाच्या हालचालींचे सत्र", color = ink.copy(alpha = .48f), style = MaterialTheme.typography.labelSmall)
+                                if (log.sessionId != null) Text(if (english) "Session record" else "सत्राची नोंद", color = ink.copy(alpha = .48f), style = MaterialTheme.typography.labelSmall)
                             }
                             IconButton(onClick = { editing = log }) { Icon(Icons.Default.Edit, contentDescription = if (english) "Edit" else "बदला", tint = ink.copy(alpha = .7f)) }
                             IconButton(onClick = { deleting = log }) { Icon(Icons.Default.Delete, contentDescription = if (english) "Delete" else "हटवा", tint = Color(0xFFB34E55)) }

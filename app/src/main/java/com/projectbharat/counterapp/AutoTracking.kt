@@ -13,7 +13,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import kotlinx.coroutines.delay
-import kotlin.math.sqrt
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -34,15 +33,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.Lifecycle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
-import android.hardware.SensorManager
-import android.hardware.SensorEventListener
-import android.hardware.SensorEvent
-import android.hardware.Sensor
 import android.content.pm.PackageManager
 import android.Manifest
 import androidx.compose.foundation.Canvas
@@ -73,7 +65,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -93,7 +84,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,18 +102,6 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
         context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
     } else {
         context.registerReceiver(receiver, filter)
-    }
-}
-
-@Composable
-private fun StepMetricCard(label: String, value: String, note: String, ink: Color, modifier: Modifier = Modifier) {
-    Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(13.dp)) {
-            Text(label, color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text(value, color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Text(note, color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
-        }
     }
 }
 
@@ -651,199 +629,3 @@ private fun JapaActivityChart(days:List<DayTotal>, mode:String, modifier:Modifie
         days.forEachIndexed { i,d -> drawContext.canvas.nativeCanvas.drawText(if(days.size<=7) runCatching{LocalDate.parse(d.date).format(java.time.format.DateTimeFormatter.ofPattern("EEE"))}.getOrDefault("") else runCatching{LocalDate.parse(d.date).dayOfMonth.toString()}.getOrDefault(""),i*slot+slot/2,bottom+17.dp.toPx(),android.graphics.Paint().apply{color=ink.toArgb();textSize=10.dp.toPx();textAlign=android.graphics.Paint.Align.CENTER}) }
     }
 }
-
-
-@Composable
-fun ExperimentalBabyMotionControl(activeSessionId: Long?, english: Boolean, ink: Color, onDetected: (Long, Float) -> Unit) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val manager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val linear = remember { manager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) }
-    val gyro = remember { manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
-    var enabled by remember(activeSessionId) { mutableStateOf(false) }
-    var calibrated by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("") }
-
-    DisposableEffect(enabled, activeSessionId, linear, gyro, lifecycleOwner) {
-        if (enabled && activeSessionId != null && linear != null) {
-            val startedAt = System.currentTimeMillis()
-            val samples = ArrayList<Float>()
-            var baseline = 0f
-            var threshold = 0.55f
-            var gyroMagnitude = 0f
-            var lastDetection = 0L
-            var calibratedLocal = false
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent) {
-                    if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
-                        val v = event.values
-                        gyroMagnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-                        return
-                    }
-                    if (event.sensor.type != Sensor.TYPE_LINEAR_ACCELERATION) return
-                    val v = event.values
-                    val magnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-                    if (!calibratedLocal) {
-                        samples.add(magnitude)
-                        if (System.currentTimeMillis() - startedAt >= 8000L && samples.size >= 40) {
-                            val sorted = samples.sorted()
-                            baseline = sorted[sorted.size / 2]
-                            val deviations = sorted.map { kotlin.math.abs(it - baseline) }.sorted()
-                            val mad = deviations[deviations.size / 2]
-                            threshold = maxOf(0.55f, baseline + 5f * mad)
-                            calibratedLocal = true
-                            calibrated = true
-                            status = if (english) "Baseline set · experimental only" else "मूलभूत कंपन नोंदले · प्रायोगिक"
-                        }
-                        return
-                    }
-                    val spike = magnitude > maxOf(threshold, baseline + 0.65f)
-                    val quietRotation = gyro == null || gyroMagnitude < 1.2f
-                    val now = System.currentTimeMillis()
-                    if (spike && quietRotation && now - lastDetection > 2200L) {
-                        lastDetection = now
-                        onDetected(now, magnitude)
-                        status = if (english) "Moment saved for review" else "संकेत तपासणीसाठी जतन केला"
-                    } else if (!spike) {
-                        baseline = baseline * 0.995f + magnitude * 0.005f
-                    }
-                }
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-            }
-            var registered = false
-            val registerSensors = {
-                if (!registered) {
-                    manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
-                    gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
-                    registered = true
-                }
-            }
-            val lifecycleObserver = LifecycleEventObserver { _, event ->
-                when (event) {
-                    Lifecycle.Event.ON_START -> registerSensors()
-                    Lifecycle.Event.ON_STOP -> { manager.unregisterListener(listener); registered = false }
-                    else -> Unit
-                }
-            }
-            lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
-            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) registerSensors()
-            calibrated = false
-            status = if (english) "Keep phone still for 8-second baseline…" else "८ सेकंद फोन स्थिर ठेवा…"
-            onDispose {
-                lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
-                manager.unregisterListener(listener)
-            }
-        } else {
-            calibrated = false
-            onDispose { }
-        }
-    }
-
-    if (activeSessionId != null) {
-        Card(Modifier.fillMaxWidth().padding(top = 10.dp), shape = RoundedCornerShape(18.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f).padding(end = 10.dp)) {
-                        Text(if (english) "Auto detect" else "स्वयंचलित ओळख", color = ink, fontWeight = FontWeight.SemiBold)
-                    }
-                    androidx.compose.material3.Switch(checked = enabled, onCheckedChange = { enabled = it }, enabled = linear != null)
-                }
-                if (linear == null) {
-                    Text(if (english) "This phone does not expose a linear-acceleration sensor." else "या फोनमध्ये linear-acceleration सेन्सर उपलब्ध नाही.", color = Color(0xFFB45353), style = MaterialTheme.typography.labelSmall)
-                }
-                if (enabled && linear != null) {
-                    Text(status.ifBlank { if (calibrated) "Ready" else if (english) "Calibrating…" else "कॅलिब्रेट होत आहे…" },
-                        color = ink.copy(alpha = .6f), style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun BabyMotionSensorEngine(
-    activeSessionId: Long,
-    enabled: Boolean,
-    onDetected: (Long, Float) -> Unit,
-    onStatus: (String) -> Unit
-) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val manager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
-    val linear = remember { manager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION) }
-    val gyro = remember { manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) }
-    val detectedCallback by rememberUpdatedState(onDetected)
-    val statusCallback by rememberUpdatedState(onStatus)
-
-    DisposableEffect(enabled, activeSessionId, linear, gyro, lifecycleOwner) {
-        if (enabled && linear != null) {
-            val startedAt = System.currentTimeMillis()
-            val samples = ArrayList<Float>()
-            var baseline = 0f
-            var threshold = 0.55f
-            var gyroMagnitude = 0f
-            var lastDetection = 0L
-            var calibrated = false
-            val listener = object : SensorEventListener {
-                override fun onSensorChanged(event: SensorEvent) {
-                    if (event.sensor.type == Sensor.TYPE_GYROSCOPE) {
-                        val v = event.values
-                        gyroMagnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-                        return
-                    }
-                    if (event.sensor.type != Sensor.TYPE_LINEAR_ACCELERATION) return
-                    val v = event.values
-                    val magnitude = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-                    if (!calibrated) {
-                        samples.add(magnitude)
-                        if (System.currentTimeMillis() - startedAt >= 8000L && samples.size >= 40) {
-                            val sorted = samples.sorted()
-                            baseline = sorted[sorted.size / 2]
-                            val deviations = sorted.map { kotlin.math.abs(it - baseline) }.sorted()
-                            threshold = maxOf(0.55f, baseline + 5f * deviations[deviations.size / 2])
-                            calibrated = true
-                            statusCallback(if (true) "Ready" else "Ready")
-                        }
-                        return
-                    }
-                    val spike = magnitude > maxOf(threshold, baseline + 0.65f)
-                    val quietRotation = gyro == null || gyroMagnitude < 1.2f
-                    val now = System.currentTimeMillis()
-                    if (spike && quietRotation && now - lastDetection > 2200L) {
-                        lastDetection = now
-                        detectedCallback(now, magnitude)
-                        statusCallback("Ready")
-                    } else if (!spike) baseline = baseline * 0.995f + magnitude * 0.005f
-                }
-                override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-            }
-            var registered = false
-            val register = {
-                if (!registered) {
-                    manager.registerListener(listener, linear, SensorManager.SENSOR_DELAY_GAME)
-                    gyro?.let { manager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME) }
-                    registered = true
-                }
-            }
-            val observer = LifecycleEventObserver { _, event ->
-                when (event) {
-                    Lifecycle.Event.ON_START -> register()
-                    Lifecycle.Event.ON_STOP -> { manager.unregisterListener(listener); registered = false }
-                    else -> Unit
-                }
-            }
-            lifecycleOwner.lifecycle.addObserver(observer)
-            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) register()
-            statusCallback(if (linear == null) "Sensor unavailable" else "Calibrating")
-            onDispose {
-                lifecycleOwner.lifecycle.removeObserver(observer)
-                manager.unregisterListener(listener)
-            }
-        } else {
-            onDispose { }
-        }
-    }
-}
-
