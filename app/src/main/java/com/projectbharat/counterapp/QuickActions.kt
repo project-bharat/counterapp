@@ -115,7 +115,7 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                 val today = date.toString()
                 val todayLabel = date.format(DateTimeFormatter.ofPattern("EEE, dd MMM"))
                 val mantra = categories.firstOrNull { it.kind == "MANTRA" }
-                val mantraCount = mantra?.let { dao.countNow(it.id, today) } ?: 0
+                val mantraCount = mantra?.let { dao.japaDayTotal(it.id, today).first() } ?: 0
                 ids.forEach { id ->
                     val views = RemoteViews(context.packageName, R.layout.counter_widget)
                     views.setTextViewText(R.id.widget_date, todayLabel)

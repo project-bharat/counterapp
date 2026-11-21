@@ -15,6 +15,9 @@ import android.os.Bundle
 import android.media.ToneGenerator
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -162,6 +165,12 @@ class CounterViewModel(private val repo: CounterRepository) : ViewModel() {
     fun mantraLogsForDay(id: Long, date: LocalDate) = repo.mantraLogsForDay(id, date)
     fun allMantraLogs(id: Long) = repo.allMantraLogs(id)
     fun mantraToday(id: Long, mantra: String) = repo.mantraToday(id, mantra)
+    fun activeJapaSession(id: Long, mantra: String) = repo.activeJapaSession(id, mantra)
+    fun japaGoals(id: Long) = repo.japaGoals(id)
+    fun japaDayTotal(id: Long, date: LocalDate) = repo.japaDayTotal(id, date)
+    suspend fun saveJapaGoal(id: Long, target: Int) = repo.saveJapaGoal(id, target)
+    suspend fun finishJapaSession(session: JapaSession) =
+        repo.finishJapaSession(session.categoryId, session.mantra, session.id)
     fun mantraAllTime(id: Long, mantra: String) = repo.mantraAllTime(id, mantra)
     fun mantraWeek(id: Long, mantra: String) = repo.mantraWeek(id, mantra)
     suspend fun addMantra(id: Long, mantra: String) = repo.addMantraCount(id, mantra)
@@ -246,6 +255,17 @@ fun CounterApp(repo: CounterRepository) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     var resetDialog by remember { mutableStateOf(false) }
     var historyDate by remember { mutableStateOf(LocalDate.now()) }
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            today = LocalDate.now()
+            delay(15_000)
+        }
+    }
+    var editGoalDialog by remember { mutableStateOf(false) }
+    var finishedSession by remember { mutableStateOf<JapaSession?>(null) }
+    var finishingSession by remember { mutableStateOf(false) }
+    BackHandler(monthlyHistory && japaReportScreen) { monthlyHistory = false }
     val scope = rememberCoroutineScope()
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
@@ -309,7 +329,7 @@ fun CounterApp(repo: CounterRepository) {
                 .getString("target_${selected.id}", "राम") ?: "राम"
         }
     }
-    val countFlow = remember(selected?.id, selected?.kind, mantraTarget) {
+    val countFlow = remember(selected?.id, selected?.kind, mantraTarget, today) {
         selected?.let { if (it.kind == "MANTRA") vm.mantraToday(it.id, mantraTarget) else vm.count(it.id) } ?: flowOf(0)
     }
     val mantraTotalFlow = remember(selected?.id, selected?.kind, mantraTarget) {
@@ -324,6 +344,21 @@ fun CounterApp(repo: CounterRepository) {
     val allMantraLogsFlow = remember(selected?.id, selected?.kind) {
         selected?.takeIf { it.kind == "MANTRA" }?.let { vm.allMantraLogs(it.id) } ?: flowOf(emptyList())
     }
+    val japaCategoryId = selected?.takeIf { it.kind == "MANTRA" }?.id
+    val goalsFlow = remember(japaCategoryId) {
+        japaCategoryId?.let(vm::japaGoals) ?: flowOf(emptyList())
+    }
+    val goalHistory by goalsFlow.collectAsStateWithLifecycle(emptyList())
+    val dailyGoal = japaGoalOn(goalHistory, today)
+    val dayTotalFlow = remember(japaCategoryId, today) {
+        japaCategoryId?.let { vm.japaDayTotal(it, today) } ?: flowOf(0)
+    }
+    val japaDayTotal by dayTotalFlow.collectAsStateWithLifecycle(0)
+    val activeJapaFlow = remember(japaCategoryId, mantraTarget) {
+        japaCategoryId?.let { vm.activeJapaSession(it, mantraTarget) } ?: flowOf(null)
+    }
+    val storedSession by activeJapaFlow.collectAsStateWithLifecycle(null)
+    val activeJapa = storedSession?.takeIf { it.categoryId == japaCategoryId && it.mantra == mantraTarget.trim() }
     val count by countFlow.collectAsStateWithLifecycle(0)
     val mantraTotal by mantraTotalFlow.collectAsStateWithLifecycle(0)
     LaunchedEffect(count, selected?.id) { CounterHomeWidget.refresh(context) }
@@ -470,12 +505,14 @@ fun CounterApp(repo: CounterRepository) {
                         english = english, ink = ink, date = historyDate, logs = historyLogs, days = days,
                         onPrevious = { historyDate = historyDate.minusDays(1) },
                         onNext = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
+                        onBack = if (japaReportScreen) ({ monthlyHistory = false }) else null,
                         onUpdate = { log -> scope.launch { vm.updateLog(log) } },
                         onDelete = { log -> scope.launch { vm.deleteLog(log.id) } }
                     )
                 } else if (japaReportScreen && selected?.kind == "MANTRA") {
                     JapaReportScreen(
-                        logs = allMantraLogs, english = english, ink = ink,
+                        logs = allMantraLogs, goals = goalHistory, today = today, english = english, ink = ink,
+                        onDaySelected = { date -> historyDate = date; monthlyHistory = true },
                         onBack = { japaReportScreen = false }
                     )
                 } else if (weekly) {
@@ -500,6 +537,24 @@ fun CounterApp(repo: CounterRepository) {
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
                         categoryId = selected.id, count = count, totalCount = mantraTotal, english = english, ink = ink,
+                        dailyGoal = dailyGoal,
+                        dayTotal = japaDayTotal,
+                        sessionCount = activeJapa?.count ?: 0,
+                        onEditGoal = { editGoalDialog = true },
+                        onFinish = activeJapa?.takeUnless { finishingSession }?.let { session ->
+                            {
+                                finishingSession = true
+                                scope.launch {
+                                    try {
+                                        ChantRecognitionService.stop(context)
+                                        finishedSession = vm.finishJapaSession(session)
+                                    } finally {
+                                        finishingSession = false
+                                    }
+                                }
+                                Unit
+                            }
+                        },
                         onMantraChange = { mantra -> mantraTarget = mantra },
                         onManualCount = { mantra ->
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -529,6 +584,49 @@ fun CounterApp(repo: CounterRepository) {
         }
     }
 
+    }
+    if (editGoalDialog && japaCategoryId != null) {
+        var input by remember(japaCategoryId) { mutableStateOf(dailyGoal.toString()) }
+        val target = input.toIntOrNull()?.takeIf { it in 1..999_999 }
+        AlertDialog(
+            onDismissRequest = { editGoalDialog = false },
+            title = { Text(if (english) "Daily Japa goal" else "दररोजचे जप लक्ष्य") },
+            text = {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { if (it.length <= 6 && it.all(Char::isDigit)) input = it },
+                    label = { Text(if (english) "Chants per day" else "दररोजचे जप") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    target?.let { scope.launch { vm.saveJapaGoal(japaCategoryId, it) } }
+                    editGoalDialog = false
+                }, enabled = target != null) { Text(if (english) "Save" else "जतन करा") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editGoalDialog = false }) { Text(if (english) "Cancel" else "रद्द") }
+            }
+        )
+    }
+    finishedSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { finishedSession = null },
+            title = { Text(if (english) "Japa session saved" else "जप सत्र जतन झाले") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(session.mantra, style = MaterialTheme.typography.titleMedium)
+                    Text(if (english) "This session · ${session.count} chants" else "या सत्रात · ${session.count} जप")
+                    Text(if (english) "${session.count / 108} malas · ${session.count % 108}/108 toward the next"
+                        else "${session.count / 108} माळा · पुढील माळेसाठी ${session.count % 108}/108")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { finishedSession = null }) { Text(if (english) "Done" else "पूर्ण") }
+            }
+        )
     }
     pendingRestoreUri?.let { uri ->
         AlertDialog(

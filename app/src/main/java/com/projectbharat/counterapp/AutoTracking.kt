@@ -94,6 +94,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import com.projectbharat.counterapp.data.DayTotal
 import com.projectbharat.counterapp.data.CounterLog
+import com.projectbharat.counterapp.data.JapaGoal
+import com.projectbharat.counterapp.data.japaGoalOn
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import java.time.LocalDate
 
 private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiver) {
@@ -145,7 +150,20 @@ private val chantPresets = listOf(
 )
 
 @Composable
-fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, english: Boolean, ink: Color, onMantraChange: (String) -> Unit, onManualCount: (String) -> Unit) {
+fun AutoChantCounterScreen(
+    categoryId: Long,
+    count: Int,
+    totalCount: Int,
+    english: Boolean,
+    ink: Color,
+    dailyGoal: Int,
+    dayTotal: Int,
+    sessionCount: Int,
+    onEditGoal: () -> Unit,
+    onFinish: (() -> Unit)?,
+    onMantraChange: (String) -> Unit,
+    onManualCount: (String) -> Unit
+) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("chant_settings", Context.MODE_PRIVATE) }
     var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", if (english) "Ram" else "राम") ?: "राम") }
@@ -321,6 +339,24 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
                     }
                 }
                 }
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(if (english) "Daily goal · $dayTotal/$dailyGoal" else "दररोजचे लक्ष्य · $dayTotal/$dailyGoal",
+                            color = ink, style = MaterialTheme.typography.labelLarge)
+                        if (sessionCount > 0) Text(
+                            if (english) "This session · $sessionCount" else "या सत्रात · $sessionCount",
+                            color = ink.copy(alpha = .7f), style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    TextButton(onClick = onEditGoal) { Text(if (english) "Edit goal" else "लक्ष्य बदला") }
+                    if (onFinish != null) {
+                        TextButton(onClick = onFinish) { Text(if (english) "Finish" else "सत्र पूर्ण करा") }
+                    }
+                }
+                LinearProgressIndicator(
+                    progress = { (dayTotal.toFloat() / dailyGoal).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("All", "Ram", "Krishna", "Shiva", "Ganesh", "Hanuman", "Devi", "Vishnu", "Dattatreya", "Guru", "Other").forEach { deity ->
@@ -467,15 +503,22 @@ fun AutoChantCounterScreen(categoryId: Long, count: Int, totalCount: Int, englis
 
 
 @Composable
-fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBack: () -> Unit) {
-    var month by remember { mutableStateOf(LocalDate.now().withDayOfMonth(1)) }
+fun JapaReportScreen(
+    logs: List<CounterLog>,
+    goals: List<JapaGoal>,
+    today: LocalDate,
+    english: Boolean,
+    ink: Color,
+    onDaySelected: (LocalDate) -> Unit,
+    onBack: () -> Unit
+) {
+    var month by remember { mutableStateOf(today.withDayOfMonth(1)) }
     var period by remember { mutableStateOf("WEEKLY") }
     var anchor by remember { mutableStateOf(LocalDate.now()) }
     var chartMode by remember { mutableStateOf("BAR") }
     val totalsByDate = remember(logs) { logs.groupBy { it.date }.mapValues { (_, records) -> records.sumOf { it.count } } }
     val activeDates = remember(totalsByDate) { totalsByDate.filterValues { it > 0 }.keys.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet() }
     val total = logs.sumOf { it.count }
-    val today = LocalDate.now()
     val todayCount = totalsByDate[today.toString()] ?: 0
     val average = if (activeDates.isNotEmpty()) total / activeDates.size else 0
     val best = totalsByDate.maxByOrNull { it.value }
@@ -483,6 +526,13 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
         var cursor = if (today in activeDates) today else today.minusDays(1)
         var streak = 0
         while (cursor in activeDates) { streak++; cursor = cursor.minusDays(1) }
+        streak
+    }
+    val goalStreak = run {
+        fun reached(date: LocalDate) = (totalsByDate[date.toString()] ?: 0) >= japaGoalOn(goals, date)
+        var cursor = if (reached(today)) today else today.minusDays(1)
+        var streak = 0
+        while (reached(cursor)) { streak++; cursor = cursor.minusDays(1) }
         streak
     }
     val longestStreak = run {
@@ -520,7 +570,7 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
             StepMetricCard(if (english) "TODAY" else "आज", NumberFormat.getIntegerInstance().format(todayCount), if (english) "Japa count" else "आजचा जप", ink, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepMetricCard(if (english) "CURRENT STREAK" else "सध्याची सलगता", "$currentStreak", if (english) "days" else "दिवस", ink, Modifier.weight(1f))
+            StepMetricCard(if (english) "PRACTICE STREAK" else "जपाची सध्याची सलगता", "$currentStreak", if (english) "days" else "दिवस", ink, Modifier.weight(1f))
             StepMetricCard(if (english) "LONGEST STREAK" else "सर्वाधिक सलगता", "$longestStreak", if (english) "days" else "दिवस", ink, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -531,6 +581,10 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
             StepMetricCard(if (english) "BEST DAY" else "सर्वोत्तम दिवस", NumberFormat.getIntegerInstance().format(best?.value ?: 0), best?.key?.let { runCatching { LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy")) }.getOrDefault(it) } ?: "—", ink, Modifier.weight(1f))
             StepMetricCard(if (english) "TOTAL MALAS" else "पूर्ण माळा", NumberFormat.getIntegerInstance().format(total / 108), if (english) "108 japa each" else "प्रत्येक माळ १०८", ink, Modifier.weight(1f))
         }
+        Text(
+            if (english) "Goal streak · $goalStreak days" else "लक्ष्याची सलगता · $goalStreak दिवस",
+            color = ink, style = MaterialTheme.typography.titleSmall
+        )
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -552,15 +606,33 @@ fun JapaReportScreen(logs: List<CounterLog>, english: Boolean, ink: Color, onBac
                                 if (day != null) {
                                     val date = month.withDayOfMonth(day)
                                     val value = totalsByDate[date.toString()] ?: 0
-                                    Surface(shape = CircleShape, color = when { value >= 108 -> Color(0xFFDDEEE4); date < today && value < 108 -> Color(0xFFF5D9D9); value > 0 -> Color(0xFFE7D8F6); else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha=.35f) }) {
-                                        Text(if (value >= 108) "$day ✓" else if (date < today) "$day ×" else day.toString(), modifier = Modifier.padding(6.dp), color = ink, style = MaterialTheme.typography.labelSmall, fontWeight = if (value > 0) FontWeight.Bold else FontWeight.Normal)
+                                    val target = japaGoalOn(goals, date)
+                                    val reached = value >= target
+                                    val label = if (english) "$date, $value of $target chants"
+                                        else "$date, $target पैकी $value जप"
+                                    Surface(
+                                        modifier = Modifier.fillMaxSize().semantics { contentDescription = label }
+                                            .clickable(enabled = !date.isAfter(today)) { onDaySelected(date) },
+                                        shape = CircleShape,
+                                        color = when {
+                                            reached -> Color(0xFFDDEEE4)
+                                            value > 0 -> Color(0xFFE7D8F6)
+                                            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .35f)
+                                        }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(if (reached) "$day ✓" else day.toString(),
+                                                modifier = Modifier.clearAndSetSemantics { },
+                                                color = if (value > 0) Color(0xFF20262B) else ink,
+                                                style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                Text(if (english) "Green ✓ = 108+ japa · Red × = missed/under goal" else "हिरवे ✓ = १०८+ जप · लाल × = लक्ष्य अपूर्ण", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                Text(if (english) "✓ Goal reached · Purple = partial progress" else "✓ लक्ष्य पूर्ण · जांभळे = काही जप झाले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
             }
         }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

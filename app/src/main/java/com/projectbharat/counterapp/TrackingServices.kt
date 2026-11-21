@@ -175,13 +175,17 @@ class ChantRecognitionService : Service() {
             updateJapaNotification(log?.count ?: 0, "Voice count active · Listening")
         }
         sendState(false, if (language == "en") "Preparing recognizer…" else "ओळख यंत्रणा तयार होत आहे…")
+        val voiceStartedAt = System.currentTimeMillis()
+        val voiceCategoryId = categoryId
+        val voiceMantra = mantra
+        val voiceLanguage = language
         worker = Thread {
             try {
                 if (previousWorker?.isAlive == true) previousWorker.join()
                 if (!Thread.currentThread().isInterrupted) {
                     stopRequested = false
                     partialCounted = 0
-                    runRecognition()
+                    runRecognition(voiceCategoryId, voiceMantra, voiceLanguage, voiceStartedAt)
                 }
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -190,7 +194,7 @@ class ChantRecognitionService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun runRecognition() {
+    private fun runRecognition(voiceCategoryId: Long, mantra: String, language: String, voiceStartedAt: Long) {
         try {
             val modelName = if (language == "hi") "vosk-model-small-hi-0.22" else "vosk-model-small-en-in-0.4"
             val modelUrl = if (language == "hi")
@@ -280,7 +284,7 @@ class ChantRecognitionService : Service() {
                         val matches = countPhrase(transcript, mantra)
                         val delta = (matches - partialCounted).coerceAtLeast(0)
                         partialCounted = 0
-                        sendRecognitionUpdate(transcript, delta)
+                        sendRecognitionUpdate(transcript, delta, voiceCategoryId, mantra, voiceStartedAt)
                         lastPartial = ""
                     } else {
                         val partial = JSONObject(activeRecognizer.partialResult ?: "{}").optString("partial").trim()
@@ -289,7 +293,7 @@ class ChantRecognitionService : Service() {
                             val detected = countPhrase(partial, mantra)
                             val delta = (detected - partialCounted).coerceAtLeast(0)
                             if (detected > partialCounted) partialCounted = detected
-                            sendRecognitionUpdate(partial, delta)
+                            sendRecognitionUpdate(partial, delta, voiceCategoryId, mantra, voiceStartedAt)
                         }
                     }
                 }
@@ -322,20 +326,29 @@ class ChantRecognitionService : Service() {
         }
     }
 
-    private fun sendRecognitionUpdate(transcript: String, matches: Int) {
-        val matched = matches > 0 || countPhrase(transcript, mantra) > 0
+    private fun sendRecognitionUpdate(
+        transcript: String, matches: Int, voiceCategoryId: Long, voiceMantra: String, voiceStartedAt: Long
+    ) {
+        val matched = matches > 0 || countPhrase(transcript, voiceMantra) > 0
+        val countedAt = System.currentTimeMillis()
+        val date = LocalDate.now().toString()
         sendState(true, if (matched) "Mantra matched" else "Listening offline", transcript, matched)
         scope.launch {
             val dao = CounterDatabase.get(this@ChantRecognitionService).dao()
             if (matches > 0) {
-                dao.incrementMantraDaily(categoryId, LocalDate.now().toString(), mantra, matches)
-                val log = dao.findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
+                if (!dao.incrementMantraDaily(voiceCategoryId, date, voiceMantra, matches, countedAt, voiceStartedAt)) {
+                    return@launch
+                }
+                CounterHomeWidget.refresh(applicationContext)
+                if (!recording || stopRequested || voiceCategoryId != categoryId || voiceMantra != mantra) return@launch
+                val log = dao.findMantraLog(voiceCategoryId, date, "MANTRA:" + voiceMantra)
                 updateJapaNotification(log?.count ?: 0, transcript.ifBlank { "Mantra matched" })
                 sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
                     .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
                     .putExtra("transcript", transcript).putExtra("matched", true))
             } else {
-                val log = dao.findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
+                if (!recording || stopRequested || voiceCategoryId != categoryId || voiceMantra != mantra) return@launch
+                val log = dao.findMantraLog(voiceCategoryId, date, "MANTRA:" + voiceMantra)
                 updateJapaNotification(log?.count ?: 0, transcript.ifBlank { "Listening offline" })
             }
         }

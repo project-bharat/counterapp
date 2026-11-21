@@ -32,12 +32,16 @@ fun CounterHistoryScreen(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onUpdate: (CounterLog) -> Unit,
-    onDelete: (CounterLog) -> Unit
+    onDelete: (CounterLog) -> Unit,
+    onBack: (() -> Unit)? = null
 ) {
     var editing by remember { mutableStateOf<CounterLog?>(null) }
     var deleting by remember { mutableStateOf<CounterLog?>(null) }
     val total = logs.sumOf { it.count }
     Column(Modifier.fillMaxSize()) {
+        if (onBack != null) {
+            TextButton(onClick = onBack) { Text(if (english) "Back to Japa report" else "जप अहवालाकडे परत") }
+        }
         Text(if (english) "HISTORY & ANALYTICS" else "इतिहास व विश्लेषण", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Card(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(12.dp)) {

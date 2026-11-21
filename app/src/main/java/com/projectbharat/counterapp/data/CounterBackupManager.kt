@@ -2,6 +2,7 @@ package com.projectbharat.counterapp.data
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.withTransaction
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -11,46 +12,63 @@ object CounterBackupManager {
     private const val FORMAT_VERSION = 1
 
     suspend fun exportJson(context: Context, uri: Uri) {
-        val dao = CounterDatabase.get(context).dao()
-        val categories = dao.allCategories()
-        val logs = dao.allLogs()
-        val sessions = dao.allBabySessions()
-        val detections = dao.allBabyDetections()
-        val walkingSessions = dao.allWalkingSessions()
-        val root = JSONObject().put("formatVersion", FORMAT_VERSION)
-            .put("app", "Daily Counter")
-            .put("exportedAt", System.currentTimeMillis())
-        root.put("categories", JSONArray().apply {
-            categories.forEach { c ->
-                put(JSONObject().put("id", c.id).put("titleMr", c.titleMr).put("titleEn", c.titleEn)
-                    .put("kind", c.kind).put("goal", c.goal).put("enabled", c.enabled))
-            }
-        })
-        root.put("logs", JSONArray().apply {
-            logs.forEach { l ->
-                put(JSONObject().put("id", l.id).put("date", l.date).put("timestamp", l.timestamp)
-                    .put("categoryId", l.categoryId).put("count", l.count)
-                    .putNullable("sessionDurationMs", l.sessionDurationMs).putNullable("strength", l.strength)
-                    .putNullable("note", l.note).putNullable("sessionId", l.sessionId))
-            }
-        })
-        root.put("babyDetections", JSONArray().apply {
-            detections.forEach { d -> put(JSONObject().put("id", d.id).put("sessionId", d.sessionId).put("timestamp", d.timestamp).put("magnitude", d.magnitude.toDouble()).put("status", d.status)) }
-        })
-        root.put("walkingSessions", JSONArray().apply {
-            walkingSessions.forEach { s -> put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
-                .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt).put("steps", s.steps)
-                .put("distanceMeters", s.distanceMeters).put("gpsReliable", s.gpsReliable)) }
-        })
-        root.put("babySessions", JSONArray().apply {
-            sessions.forEach { s ->
-                put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
-                    .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt)
-                    .put("dayPeriod", s.dayPeriod).put("movementCount", s.movementCount)
-                    .putNullable("timeToTenMs", s.timeToTenMs).putNullable("strength", s.strength)
-                    .putNullable("note", s.note).put("trackingMode", s.trackingMode).put("firstHourCount", s.firstHourCount))
-            }
-        })
+        val database = CounterDatabase.get(context)
+        val root = database.withTransaction {
+            val dao = database.dao()
+            val categories = dao.allCategories()
+            val logs = dao.allLogs()
+            val sessions = dao.allBabySessions()
+            val detections = dao.allBabyDetections()
+            val walkingSessions = dao.allWalkingSessions()
+            val root = JSONObject().put("formatVersion", FORMAT_VERSION)
+                .put("app", "Daily Counter")
+                .put("exportedAt", System.currentTimeMillis())
+            root.put("categories", JSONArray().apply {
+                categories.forEach { c ->
+                    put(JSONObject().put("id", c.id).put("titleMr", c.titleMr).put("titleEn", c.titleEn)
+                        .put("kind", c.kind).put("goal", c.goal).put("enabled", c.enabled))
+                }
+            })
+            root.put("logs", JSONArray().apply {
+                logs.forEach { l ->
+                    put(JSONObject().put("id", l.id).put("date", l.date).put("timestamp", l.timestamp)
+                        .put("categoryId", l.categoryId).put("count", l.count)
+                        .putNullable("sessionDurationMs", l.sessionDurationMs).putNullable("strength", l.strength)
+                        .putNullable("note", l.note).putNullable("sessionId", l.sessionId))
+                }
+            })
+            root.put("babyDetections", JSONArray().apply {
+                detections.forEach { d -> put(JSONObject().put("id", d.id).put("sessionId", d.sessionId).put("timestamp", d.timestamp).put("magnitude", d.magnitude.toDouble()).put("status", d.status)) }
+            })
+            root.put("walkingSessions", JSONArray().apply {
+                walkingSessions.forEach { s -> put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
+                    .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt).put("steps", s.steps)
+                    .put("distanceMeters", s.distanceMeters).put("gpsReliable", s.gpsReliable)) }
+            })
+            root.put("babySessions", JSONArray().apply {
+                sessions.forEach { s ->
+                    put(JSONObject().put("id", s.id).put("categoryId", s.categoryId).put("date", s.date)
+                        .put("startedAt", s.startedAt).putNullable("endedAt", s.endedAt)
+                        .put("dayPeriod", s.dayPeriod).put("movementCount", s.movementCount)
+                        .putNullable("timeToTenMs", s.timeToTenMs).putNullable("strength", s.strength)
+                        .putNullable("note", s.note).put("trackingMode", s.trackingMode).put("firstHourCount", s.firstHourCount))
+                }
+            })
+            root.put("japaSessions", JSONArray().apply {
+                dao.allJapaSessions().forEach { session ->
+                    put(JSONObject().put("id", session.id).put("categoryId", session.categoryId)
+                        .put("mantra", session.mantra).put("startedAt", session.startedAt)
+                        .putNullable("endedAt", session.endedAt).put("count", session.count))
+                }
+            })
+            root.put("japaGoals", JSONArray().apply {
+                dao.allJapaGoals().forEach { goal ->
+                    put(JSONObject().put("categoryId", goal.categoryId)
+                        .put("effectiveDate", goal.effectiveDate).put("target", goal.target))
+                }
+            })
+            root
+        }
         context.contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { it.write(root.toString(2)) }
             ?: error("Unable to create backup file")
     }
@@ -99,7 +117,28 @@ object CounterBackupManager {
         require(detections.all { d -> sessions.any { it.id == d.sessionId } && d.status in setOf("PENDING", "CONFIRMED", "DISMISSED") }) { "Invalid baby detection records" }
         require(walkingSessions.all { it.steps >= 0 && it.distanceMeters >= 0.0 && categories.any { c -> c.id == it.categoryId } }) { "Invalid walking session records" }
         BackupSnapshotValidator.validate(categories, logs, sessions)
-        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions, detections, walkingSessions)
+        val mantraIds = categories.filter { it.kind == "MANTRA" }.map { it.id }.toSet()
+        val japaSessionArray = root.optJSONArray("japaSessions") ?: JSONArray()
+        val japaSessions = (0 until japaSessionArray.length()).map { index ->
+            val row = japaSessionArray.getJSONObject(index)
+            JapaSession(row.getLong("id"), row.getLong("categoryId"), row.getString("mantra"),
+                row.getLong("startedAt"), row.longOrNull("endedAt"), row.getInt("count"))
+        }
+        require(japaSessions.all { it.id > 0 && it.categoryId in mantraIds && it.mantra.isNotBlank() &&
+            it.startedAt > 0 && (it.endedAt == null || it.endedAt >= it.startedAt) && it.count > 0 })
+        require(japaSessions.distinctBy { it.id }.size == japaSessions.size)
+        val active = japaSessions.filter { it.endedAt == null }
+        require(active.distinctBy { it.categoryId to it.mantra }.size == active.size)
+        val japaGoalArray = root.optJSONArray("japaGoals") ?: JSONArray()
+        val japaGoals = (0 until japaGoalArray.length()).map { index ->
+            val row = japaGoalArray.getJSONObject(index)
+            val date = java.time.LocalDate.parse(row.getString("effectiveDate"))
+            JapaGoal(row.getLong("categoryId"), date.toString(), row.getInt("target"))
+        }
+        require(japaGoals.all { it.categoryId in mantraIds && it.target in 1..999_999 })
+        require(japaGoals.distinctBy { it.categoryId to it.effectiveDate }.size == japaGoals.size)
+        CounterDatabase.get(context).dao().restoreSnapshot(categories, logs, sessions, detections, walkingSessions,
+            japaSessions, japaGoals)
     }
 
     suspend fun exportCsv(context: Context, uri: Uri) {

@@ -66,6 +66,24 @@ data class WalkingSession(
     @ColumnInfo(defaultValue = "0") val gpsReliable: Boolean = false
 )
 
+@Entity(tableName = "japa_sessions", indices = [Index("categoryId", "mantra", "endedAt")])
+data class JapaSession(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val categoryId: Long,
+    val mantra: String,
+    val startedAt: Long,
+    val endedAt: Long? = null,
+    val count: Int = 0
+)
+
+@Entity(tableName = "japa_goals", primaryKeys = ["categoryId", "effectiveDate"])
+data class JapaGoal(val categoryId: Long, val effectiveDate: String, val target: Int)
+
+const val DEFAULT_JAPA_GOAL = 108
+
+fun japaGoalOn(goals: List<JapaGoal>, date: java.time.LocalDate): Int =
+    goals.lastOrNull { it.effectiveDate <= date.toString() }?.target ?: DEFAULT_JAPA_GOAL
+
 @Dao
 interface CounterDao {
     @Query("SELECT * FROM categories WHERE enabled = 1 AND kind NOT IN ('STEPS', 'BABY') ORDER BY id")
@@ -207,14 +225,83 @@ interface CounterDao {
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note=:note LIMIT 1")
     suspend fun findMantraLog(categoryId: Long, date: String, note: String): CounterLog?
 
+    @Query("SELECT * FROM japa_sessions WHERE categoryId=:categoryId AND mantra=:mantra AND endedAt IS NULL ORDER BY id DESC LIMIT 1")
+    fun activeJapaSession(categoryId: Long, mantra: String): Flow<JapaSession?>
+
+    @Query("SELECT * FROM japa_sessions WHERE categoryId=:categoryId AND mantra=:mantra ORDER BY id DESC LIMIT 1")
+    suspend fun latestJapaSession(categoryId: Long, mantra: String): JapaSession?
+
+    @Insert
+    suspend fun insertJapaSession(session: JapaSession): Long
+
+    @Query("UPDATE japa_sessions SET count=count+:amount WHERE id=:id")
+    suspend fun incrementJapaSession(id: Long, amount: Int)
+
+    @Query("UPDATE japa_sessions SET endedAt=:endedAt WHERE id=:id")
+    suspend fun closeJapaSession(id: Long, endedAt: Long)
+
     @Transaction
-    suspend fun incrementMantraDaily(categoryId: Long, date: String, mantra: String, amount: Int = 1) {
-        if (amount <= 0) return
+    suspend fun finishJapaSession(categoryId: Long, mantra: String, id: Long, endedAt: Long): JapaSession? {
+        val session = latestJapaSession(categoryId, mantra)
+            ?.takeIf { it.id == id && it.endedAt == null } ?: return null
+        val finishTime = endedAt.coerceAtLeast(session.startedAt)
+        closeJapaSession(session.id, finishTime)
+        return session.copy(endedAt = finishTime)
+    }
+
+    @Transaction
+    suspend fun incrementMantraDaily(
+        categoryId: Long,
+        date: String,
+        mantra: String,
+        amount: Int = 1,
+        countedAt: Long = System.currentTimeMillis(),
+        voiceStartedAt: Long? = null
+    ): Boolean {
+        if (amount <= 0) return false
+        val latest = latestJapaSession(categoryId, mantra)
+        // Finish and persist run in the same database transaction queue. Voice batches
+        // from a finished run cannot reopen it even if a manual tap starts another.
+        if (voiceStartedAt != null && finishedSince(categoryId, mantra, voiceStartedAt)) return false
+        val id = latest?.takeIf { it.endedAt == null }?.id
+            ?: insertJapaSession(JapaSession(categoryId = categoryId, mantra = mantra, startedAt = countedAt))
         val note = "MANTRA:" + mantra
         val existing = findMantraLog(categoryId, date, note)
-        if (existing == null) addLog(CounterLog(date = date, timestamp = System.currentTimeMillis(), categoryId = categoryId, count = amount, note = note))
+        if (existing == null) addLog(CounterLog(date = date, timestamp = countedAt, categoryId = categoryId, count = amount, note = note))
         else updateLog(existing.copy(count = existing.count + amount))
+        incrementJapaSession(id, amount)
+        return true
     }
+
+    @Query("SELECT EXISTS(SELECT 1 FROM japa_sessions WHERE categoryId=:categoryId AND mantra=:mantra AND endedAt>=:since)")
+    suspend fun finishedSince(categoryId: Long, mantra: String, since: Long): Boolean
+
+    @Query("SELECT * FROM japa_goals WHERE categoryId=:categoryId ORDER BY effectiveDate")
+    fun japaGoals(categoryId: Long): Flow<List<JapaGoal>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveJapaGoal(goal: JapaGoal)
+
+    @Query("SELECT COALESCE(SUM(count), 0) FROM counter_logs WHERE categoryId=:categoryId AND date=:date AND note LIKE 'MANTRA:%'")
+    fun japaDayTotal(categoryId: Long, date: String): Flow<Int>
+
+    @Query("SELECT * FROM japa_sessions ORDER BY id")
+    suspend fun allJapaSessions(): List<JapaSession>
+
+    @Query("SELECT * FROM japa_goals ORDER BY categoryId, effectiveDate")
+    suspend fun allJapaGoals(): List<JapaGoal>
+
+    @Insert
+    suspend fun insertJapaSessions(sessions: List<JapaSession>)
+
+    @Insert
+    suspend fun insertJapaGoals(goals: List<JapaGoal>)
+
+    @Query("DELETE FROM japa_sessions")
+    suspend fun deleteAllJapaSessions()
+
+    @Query("DELETE FROM japa_goals")
+    suspend fun deleteAllJapaGoals()
 
     @Query("SELECT * FROM counter_logs WHERE categoryId=:categoryId AND date BETWEEN :fromDate AND :toDate ORDER BY timestamp DESC, id DESC")
     fun logsForRange(categoryId: Long, fromDate: String, toDate: String): Flow<List<CounterLog>>
@@ -262,7 +349,9 @@ interface CounterDao {
     suspend fun deleteAllBabySessions()
 
     @Transaction
-    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>, detections: List<BabyDetection>, walkingSessions: List<WalkingSession>) {
+    suspend fun restoreSnapshot(categories: List<CounterCategory>, logs: List<CounterLog>, sessions: List<BabySession>, detections: List<BabyDetection>, walkingSessions: List<WalkingSession>, japaSessions: List<JapaSession>, japaGoals: List<JapaGoal>) {
+        deleteAllJapaSessions()
+        deleteAllJapaGoals()
         deleteAllLogs()
         deleteAllBabySessions()
         deleteAllBabyDetections()
@@ -270,6 +359,8 @@ interface CounterDao {
         deleteAllCategories()
         insertCategories(categories)
         ensureJapaCategory()
+        if (japaSessions.isNotEmpty()) insertJapaSessions(japaSessions)
+        if (japaGoals.isNotEmpty()) insertJapaGoals(japaGoals)
         if (sessions.isNotEmpty()) insertBabySessions(sessions)
         if (detections.isNotEmpty()) insertBabyDetections(detections)
         if (walkingSessions.isNotEmpty()) insertWalkingSessions(walkingSessions)
@@ -331,7 +422,7 @@ interface CounterDao {
 
 data class DayTotal(val date: String, val total: Int)
 
-@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class, WalkingSession::class], version = 8, exportSchema = false)
+@Database(entities = [CounterCategory::class, CounterLog::class, BabySession::class, BabyDetection::class, WalkingSession::class, JapaSession::class, JapaGoal::class], version = 9, exportSchema = false)
 abstract class CounterDatabase : RoomDatabase() {
     abstract fun dao(): CounterDao
     companion object {
@@ -386,9 +477,16 @@ abstract class CounterDatabase : RoomDatabase() {
                 db.execSQL("UPDATE categories SET enabled = 0 WHERE kind = 'STEPS'")
             }
         }
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS japa_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, categoryId INTEGER NOT NULL, mantra TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, count INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_japa_sessions_categoryId_mantra_endedAt ON japa_sessions(categoryId, mantra, endedAt)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS japa_goals (categoryId INTEGER NOT NULL, effectiveDate TEXT NOT NULL, target INTEGER NOT NULL, PRIMARY KEY(categoryId, effectiveDate))")
+            }
+        }
         fun get(context: Context): CounterDatabase = INSTANCE ?: synchronized(this) {
             INSTANCE ?: Room.databaseBuilder(context.applicationContext, CounterDatabase::class.java, "counterapp.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { INSTANCE = it }
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { INSTANCE = it }
         }
     }
 }

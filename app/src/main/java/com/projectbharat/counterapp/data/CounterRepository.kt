@@ -21,6 +21,16 @@ class CounterRepository(private val dao: CounterDao) {
     fun logsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.logsForDay(categoryId, date.toString())
     fun mantraLogsForDay(categoryId: Long, date: LocalDate): Flow<List<CounterLog>> = dao.mantraLogsForDay(categoryId, date.toString())
     fun allMantraLogs(categoryId: Long): Flow<List<CounterLog>> = dao.allMantraLogs(categoryId)
+    fun activeJapaSession(categoryId: Long, mantra: String) = dao.activeJapaSession(categoryId, mantra.trim())
+    fun japaGoals(categoryId: Long) = dao.japaGoals(categoryId)
+    fun japaDayTotal(categoryId: Long, date: LocalDate) = dao.japaDayTotal(categoryId, date.toString())
+    suspend fun saveJapaGoal(categoryId: Long, target: Int) {
+        require(target in 1..999_999)
+        dao.saveJapaGoal(JapaGoal(categoryId, LocalDate.now().toString(), target))
+    }
+    suspend fun finishJapaSession(categoryId: Long, mantra: String, id: Long) =
+        dao.finishJapaSession(categoryId, mantra.trim(), id, System.currentTimeMillis())
+
     fun mantraToday(categoryId: Long, mantra: String): Flow<Int> = dao.mantraTodayCount(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
     fun mantraAllTime(categoryId: Long, mantra: String): Flow<Int> = dao.mantraAllTimeCount(categoryId, "MANTRA:" + mantra)
     fun mantraWeek(categoryId: Long, mantra: String): Flow<List<DayTotal>> {
