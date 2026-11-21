@@ -16,10 +16,9 @@ Marathi-first native Android Japa counter built with Kotlin, Jetpack Compose Mat
 - The user can stop voice counting from the app or its persistent notification.
 
 ## Build locally
-Install JDK 17 and Android SDK, then run:
+Install JDK 17, Gradle 8.7 and Android SDK Platform 35, then run:
 ```sh
-chmod +x ./gradlew
-./gradlew assembleDebug
+gradle testDebugUnitTest assembleDebug
 ``
 APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
@@ -27,7 +26,7 @@ APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 1. Open the repository's **Actions** tab.
 2. Select **Android Debug APK** and open the latest successful run.
 3. Under **Artifacts**, download **Japa-Counter-Build-<number>**.
-4. Extract the ZIP to get `app-debug.apk`.
+4. Extract the artifact to get the numbered debug APK and a ZIP containing the same APK.
 
 Every push to `main` or `japa-ui-recovery-528` triggers the workflow. You can also start it manually with **Run workflow**.
 

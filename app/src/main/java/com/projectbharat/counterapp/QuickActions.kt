@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter
 
 object CounterQuickActions {
     const val EXTRA_COUNTER_KIND = "counter_kind"
+    private val retiredShortcutIds = setOf("counter_baby", "counter_steps")
 
     private fun japaIntent(context: Context) =
         Intent(context, MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_COUNTER)
@@ -47,7 +48,12 @@ object CounterQuickActions {
                 .build())
         } else emptyList()
         ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
-        ShortcutManagerCompat.disableShortcuts(context, listOf("counter_baby"), "This shortcut has been retired")
+        val retiredPinnedShortcuts = ShortcutManagerCompat.getShortcuts(context, ShortcutManagerCompat.FLAG_MATCH_PINNED)
+            .map { it.id }
+            .filter { it in retiredShortcutIds }
+        if (retiredPinnedShortcuts.isNotEmpty()) {
+            ShortcutManagerCompat.disableShortcuts(context, retiredPinnedShortcuts, "This shortcut has been retired")
+        }
     }
 }
 
