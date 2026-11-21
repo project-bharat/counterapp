@@ -74,3 +74,4 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Magic Count requests Bluetooth headset input when Android exposes a compatible call-audio route. The listening panel reports the microphone actually used, including handset fallback.
 - Choose Mantra opens a full page with search, filters, favourites, and a Start Japa button. Practice places the logo, counter, and controls directly on the app gradient.
 - Physical Bluetooth verification is pending for Classic SCO and LE Audio headsets.
+- **Build #559** passed Android compilation and unit tests, including legacy Bluetooth PCM conversion. Check the microphone indicator, recognition, and routing after Stop on a physical headset. [Build #559](https://github.com/project-bharat/japacounterapp/actions/runs/44918472738)
