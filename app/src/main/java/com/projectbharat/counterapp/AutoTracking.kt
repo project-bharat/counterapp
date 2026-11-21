@@ -130,10 +130,10 @@ private fun ProgressGradientCard(
 ) {
     val dark = isSystemInDarkTheme()
     val colors = when {
-        dark && highlight -> listOf(Color(0xFF193C37), Color(0xFF203546))
-        dark -> listOf(Color(0xFF343451), Color(0xFF20354B))
-        highlight -> listOf(Color(0xFFD7EFE1), Color(0xFFF3F8EB))
-        else -> listOf(Color(0xFFE5DDF7), Color(0xFFF9F4FF), Color(0xFFDDEEF4))
+        dark && highlight -> listOf(Color(0xFF523017), Color(0xFF28211E))
+        dark -> listOf(Color(0xFF392A23), Color(0xFF242120))
+        highlight -> listOf(Color(0xFFFFDEAC), Color(0xFFFFF3DB))
+        else -> listOf(Color(0xFFF7E7D5), Color(0xFFFFFBF4))
     }
     Surface(
         modifier = modifier,
@@ -662,6 +662,7 @@ fun JapaReportScreen(
     ink: Color,
     mantraLabel: (String) -> String,
     onDaySelected: (LocalDate) -> Unit,
+    onAchievements: () -> Unit,
     onEditGoal: () -> Unit
 ) {
     var monthValue by rememberSaveable { mutableStateOf(today.withDayOfMonth(1).toEpochDay()) }
@@ -736,9 +737,6 @@ fun JapaReportScreen(
                 }
             }
         }
-        SettingsGroup(if (uiLanguage.isEnglish) "Last 7 days · All mantras" else uiLanguage.indic("मागील ७ दिवस · सर्व मंत्र", "पिछले ७ दिन · सभी मंत्र")) {
-            JapaActivityChart(recentWeek, "BAR", Modifier.fillMaxWidth().height(124.dp), ink, uiLanguage)
-        }
         val milestone = if (total < 108) 108 else if (total < 1080) 1080 else ((total.toLong() / 1080) + 1) * 1080
         val monthlyTotal = totalsByDate.filterKeys { it.startsWith(today.toString().take(7)) }.values.sum()
         ProgressGradientCard(Modifier.fillMaxWidth()) {
@@ -748,6 +746,9 @@ fun JapaReportScreen(
                 Text("$total / $milestone", style = MaterialTheme.typography.headlineMedium,
                     color = ink, fontWeight = FontWeight.Bold)
                 Text(uiLanguage.text("Lifetime chants", "आजवरचे जप", "अब तक के जप"), color = ink)
+                OutlinedButton(onClick = onAchievements) {
+                    Text(uiLanguage.text("View achievements", "पदके पहा", "उपलब्धियाँ देखें"))
+                }
                 FilledTonalButton(onClick = { shareKind = 2 }) {
                     Icon(Icons.Default.Share, null)
                     Spacer(Modifier.width(6.dp))
@@ -912,7 +913,7 @@ private fun JapaActivityChart(days:List<DayTotal>, mode:String, modifier:Modifie
         val slot=size.width/days.size.coerceAtLeast(1)
         if(mode=="BAR") days.forEachIndexed { i,d ->
             val h=(bottom-top)*d.total/max
-            drawRoundRect(brush=Brush.verticalGradient(listOf(Color(0xFF9B7BC4),Color(0xFF6C4B9B)),startY=bottom-h,endY=bottom),topLeft=Offset(i*slot+slot*.2f,bottom-h),size=Size(slot*.6f,h),cornerRadius=androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()))
+            drawRoundRect(brush=Brush.verticalGradient(listOf(Color(0xFFFFB660),Color(0xFFB75213)),startY=bottom-h,endY=bottom),topLeft=Offset(i*slot+slot*.2f,bottom-h),size=Size(slot*.6f,h),cornerRadius=androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()))
         } else {
             val points=days.mapIndexed { i,d -> Offset(i*slot+slot/2,bottom-(bottom-top)*d.total/max) }
             points.zipWithNext().forEach { (a,b)->drawLine(Color(0xFF7655A5),a,b,strokeWidth=3.dp.toPx()) }

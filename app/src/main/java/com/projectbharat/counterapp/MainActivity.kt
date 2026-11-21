@@ -216,6 +216,7 @@ fun CounterApp(repo: CounterRepository) {
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var tab by rememberSaveable { mutableStateOf(0) }
     var help by rememberSaveable { mutableStateOf(false) }
+    var achievements by rememberSaveable { mutableStateOf(false) }
     fun navigate(destination: Int) {
         tab = destination
         monthlyHistory = false
@@ -223,6 +224,7 @@ fun CounterApp(repo: CounterRepository) {
         remindersScreen = false
         backupScreen = false
         help = false
+        achievements = false
     }
     var resetDialog by remember { mutableStateOf(false) }
     var historyDate by remember { mutableStateOf(LocalDate.now()) }
@@ -237,7 +239,7 @@ fun CounterApp(repo: CounterRepository) {
     var finishedSession by remember { mutableStateOf<JapaSession?>(null) }
     var finishingSession by remember { mutableStateOf(false) }
     var mantraLibrary by rememberSaveable { mutableStateOf(false) }
-    val child = monthlyHistory || categoryScreen || remindersScreen || backupScreen || help
+    val child = monthlyHistory || categoryScreen || remindersScreen || backupScreen || help || achievements
     fun goBack() {
         when {
             mantraLibrary -> mantraLibrary = false
@@ -358,42 +360,53 @@ fun CounterApp(repo: CounterRepository) {
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
     val allMantraLogs by allMantraLogsFlow.collectAsStateWithLifecycle(emptyList())
     val dark = isSystemInDarkTheme()
-    val page = if (dark) Color(0xFF0B1420) else Cream
-    val ink = if (dark) Color(0xFFF2F5F8) else Navy
-    val scheme = if (dark) darkColorScheme(primary = Color(0xFFB8D5F2), onPrimary = Color(0xFF102238), secondary = Color(0xFFE3BD73), onSecondary = Color(0xFF30230C), background = Color(0xFF0B1420), onBackground = Color(0xFFF2F5F8), surface = Color(0xFF172638), onSurface = Color(0xFFF2F5F8), surfaceVariant = Color(0xFF22384D), onSurfaceVariant = Color(0xFFC4D0DC), outline = Color(0xFF52677B))
-                 else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
+    val page = if (dark) Color(0xFF141414) else Color(0xFFFFF7E9)
+    val ink = if (dark) Color(0xFFFFF5E7) else Color(0xFF27263F)
+    val scheme = if (dark) darkColorScheme(primary = Color(0xFFFFB86B), onPrimary = Color(0xFF432000), secondary = Color(0xFFFFC77F), background = page, onBackground = ink, surface = Color(0xFF222020), onSurface = ink, surfaceVariant = Color(0xFF342D29), onSurfaceVariant = Color(0xFFE9D5C4))
+                 else lightColorScheme(primary = Color(0xFF984400), onPrimary = Color.White, secondary = Color(0xFF815300), background = page, onBackground = ink, surface = Color(0xFFFFFBF4), onSurface = ink)
 
     MaterialTheme(colorScheme = scheme) {
         if (voiceModelsDialog) VoiceModelsDialog(uiLanguage = uiLanguage, onDismiss = { voiceModelsDialog = false })
+        Box(Modifier.fillMaxSize()) {
+        if (tab == 0 && !child) {
+            Image(painterResource(R.drawable.practice_sunrise), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(if (dark)
+                listOf(Color(0xCC101323), Color(0xAA151620), Color(0xEE17181F))
+                else listOf(Color(0x88FFF6E8), Color(0xBBFFF8EC), Color(0xEEF7EEE4)))))
+        }
         Scaffold(
-            modifier = Modifier.background(Brush.verticalGradient(
-                if (dark) listOf(Color(0xFF22233D), Color(0xFF182739), page)
-                else listOf(Color(0xFFEAE5FA), Color(0xFFF8F0E1), Color(0xFFF3EDF8))
-            )),
             containerColor = Color.Transparent,
             bottomBar = {
-                if (!mantraLibrary) {
-                    val footerShape = RoundedCornerShape(28.dp)
-                    val glow = if (dark) Color(0xFF9C80F7) else Color(0xFF8D69DE)
-                    val footerColors = if (dark)
-                        listOf(Color(0xFF233548), Color(0xFF33304D), Color(0xFF203D46))
-                    else listOf(Color(0xFFF6EDFF), Color(0xFFFFFCFA), Color(0xFFE3F4F5))
-                    NavigationBar(
-                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp)
-                            .shadow(12.dp, footerShape, ambientColor = glow, spotColor = glow)
-                            .clip(footerShape)
-                            .background(Brush.horizontalGradient(footerColors))
-                            .border(1.dp, Brush.horizontalGradient(listOf(glow.copy(alpha = .5f),
-                                Color.White.copy(alpha = .65f), Color(0xFF82CFD3).copy(alpha = .55f))), footerShape),
-                        containerColor = Color.Transparent,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0, 0, 0, 0)
-                    ) {
-                        val labels = if (uiLanguage.isEnglish) listOf("Practice", "Progress", "Settings") else listOf("जप", uiLanguage.indic("प्रगती", "प्रगति"), uiLanguage.indic("सेटिंग्ज", "सेटिंग्स"))
-                        val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Edit)
-                        labels.forEachIndexed { index, label ->
-                            NavigationBarItem(selected = tab == index, onClick = { navigate(index) },
-                                icon = { Icon(icons[index], null) }, label = { Text(label) })
+                if (!mantraLibrary && !child) {
+                    val shape = RoundedCornerShape(28.dp)
+                    Row(Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 10.dp)
+                        .fillMaxWidth().shadow(10.dp, shape).clip(shape)
+                        .background(if (dark) Color(0xFF262321) else Color(0xFFFFFBF4))
+                        .padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        listOf(1, 0, 2).forEach { index ->
+                            val label = when (index) {
+                                1 -> uiLanguage.text("Progress", "प्रगती", "प्रगति")
+                                2 -> uiLanguage.text("Settings", "सेटिंग्ज", "सेटिंग्स")
+                                else -> uiLanguage.text("Practice", "जप", "जप")
+                            }
+                            val icon = when (index) {
+                                1 -> Icons.Default.BarChart
+                                2 -> Icons.Default.Edit
+                                else -> Icons.Default.SelfImprovement
+                            }
+                            Column(Modifier.weight(1f).clickable { navigate(index) }.padding(4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally) {
+                                Surface(shape = CircleShape, color = if (index == 0) MaterialTheme.colorScheme.primary
+                                    else Color.Transparent, modifier = Modifier.size(if (index == 0) 40.dp else 32.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(icon, null, tint = if (index == 0) MaterialTheme.colorScheme.onPrimary
+                                            else if (tab == index) MaterialTheme.colorScheme.primary else ink)
+                                    }
+                                }
+                                Text(label, color = if (tab == index) MaterialTheme.colorScheme.primary else ink,
+                                    style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
@@ -418,7 +431,9 @@ fun CounterApp(repo: CounterRepository) {
                     }, color = ink, style = MaterialTheme.typography.titleMedium)
                 }
                 Box(Modifier.weight(1f)) {
-                if (help) {
+                if (achievements) {
+                    JapaAchievements(allMantraLogs, uiLanguage)
+                } else if (help) {
                     JapaHelpScreen(uiLanguage)
                 } else if (backupScreen) {
                     BackupSettingsScreen(uiLanguage = uiLanguage, ink = ink, message = backupMessage, busy = backupBusy,
@@ -449,6 +464,7 @@ fun CounterApp(repo: CounterRepository) {
                             logs = allMantraLogs, goals = goalHistory, today = today, uiLanguage = uiLanguage, ink = ink,
                             mantraLabel = { displayMantra(context, selected.id, it, latinMantras) },
                             onDaySelected = { date -> historyDate = date; monthlyHistory = true },
+                            onAchievements = { achievements = true },
                             onEditGoal = { editGoalDialog = true }
                         )
                     }
@@ -546,6 +562,7 @@ fun CounterApp(repo: CounterRepository) {
                 }
             }
         }
+    }
     }
     if (editGoalDialog && japaCategoryId != null) {
         var input by remember(japaCategoryId) { mutableStateOf(dailyGoal.toString()) }
