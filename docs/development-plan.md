@@ -62,3 +62,8 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 
 - Restored the Build #548 header, tab bar, in-place Practice counter, voice switch, and dialogs for mantra selection and session completion.
 - Retained the Bhajame app name, independent language and mantra-script settings, the existing voice model, and image sharing.
+
+### Targeted UI polish after Build #555
+
+- Separated the language and mantra-script dropdowns. The counter stays on Practice, with a Magic Count switch and boxed actions below the listening panel.
+- Updated the floating footer with a gradient and colored glow. Applied light and dark gradients to daily-goal, milestone, and other Progress figures.

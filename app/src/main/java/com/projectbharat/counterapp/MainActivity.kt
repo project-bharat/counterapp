@@ -27,6 +27,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.filled.Settings
@@ -363,7 +365,22 @@ fun CounterApp(repo: CounterRepository) {
         Scaffold(
             containerColor = page,
             bottomBar = {
-                NavigationBar {
+                val footerShape = RoundedCornerShape(28.dp)
+                val glow = if (dark) Color(0xFF9C80F7) else Color(0xFF8D69DE)
+                val footerColors = if (dark)
+                    listOf(Color(0xFF233548), Color(0xFF33304D), Color(0xFF203D46))
+                else listOf(Color(0xFFF6EDFF), Color(0xFFFFFCFA), Color(0xFFE3F4F5))
+                NavigationBar(
+                    modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp)
+                        .shadow(12.dp, footerShape, ambientColor = glow, spotColor = glow)
+                        .clip(footerShape)
+                        .background(Brush.horizontalGradient(footerColors))
+                        .border(1.dp, Brush.horizontalGradient(listOf(glow.copy(alpha = .5f),
+                            Color.White.copy(alpha = .65f), Color(0xFF82CFD3).copy(alpha = .55f))), footerShape),
+                    containerColor = Color.Transparent,
+                    tonalElevation = 0.dp,
+                    windowInsets = WindowInsets(0, 0, 0, 0)
+                ) {
                     val labels = if (uiLanguage.isEnglish) listOf("Practice", "Progress", "Settings") else listOf("जप", uiLanguage.indic("प्रगती", "प्रगति"), uiLanguage.indic("सेटिंग्ज", "सेटिंग्स"))
                     val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Edit)
                     labels.forEachIndexed { index, label ->

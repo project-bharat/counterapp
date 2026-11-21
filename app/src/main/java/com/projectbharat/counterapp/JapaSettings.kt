@@ -60,8 +60,13 @@ internal fun JapaSettingsScreen(
 @Composable
 private fun SettingsDropdown(title: String, options: List<String>, index: Int, onSelect: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth()) {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        OutlinedButton(
+            onClick = { expanded = true },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            shape = RoundedCornerShape(16.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
+        ) {
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.labelMedium)
                 Text(options[index])
@@ -115,7 +120,7 @@ internal fun JapaHelpScreen(uiLanguage: UiLanguage) {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty()
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SettingsGroup(if (uiLanguage.isEnglish) "Voice counting" else uiLanguage.indic("आवाज मोजणी", "आवाज़ से गिनती")) {
+        SettingsGroup(uiLanguage.text("Magic Count", "मॅजिक काउंट", "मैजिक काउंट")) {
             Text(if (uiLanguage.isEnglish) "Allow microphone access and install an offline model. You can always count by tapping."
                 else uiLanguage.indic("मायक्रोफोनची परवानगी द्या व ऑफलाइन मॉडेल डाउनलोड करा. स्पर्श करून जप मोजता येतात.", "माइक्रोफ़ोन की अनुमति दें और ऑफ़लाइन मॉडल डाउनलोड करें। टैप करके भी जप गिन सकते हैं।"))
         }
