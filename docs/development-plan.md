@@ -56,3 +56,4 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Changed the app label to **Bhajame - Daily Japa & Bhakti**. Replacement horizontal artwork is pending the final asset files.
 - Added separate settings for app language (Marathi, Hindi, English) and mantra display script (Devanagari, English script). Script changes affect presentation and retain stored counting keys.
 - Voice counting uses the same existing Devanagari Vosk model with either display script. The current Devanagari model is the Hindi acoustic model already used for Marathi chanting.
+- **Build #553** passed Android compilation and unit tests. Phone review should confirm that switching either dropdown preserves the current mantra and its count, and that both scripts use the same voice model. [Build #553](https://github.com/project-bharat/japacounterapp/actions/runs/44898609742)
