@@ -105,6 +105,18 @@ private fun registerTrackingReceiver(context: Context, receiver: BroadcastReceiv
     }
 }
 
+@Composable
+private fun StepMetricCard(label: String, value: String, note: String, ink: Color, modifier: Modifier = Modifier) {
+    Card(modifier, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(13.dp)) {
+            Text(label, color = ink.copy(alpha = .58f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text(value, color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(note, color = ink.copy(alpha = .55f), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
 private data class ChantPreset(val title: String, val devanagari: String, val latin: String, val deity: String = "Other")
 
 private val chantPresets = listOf(
