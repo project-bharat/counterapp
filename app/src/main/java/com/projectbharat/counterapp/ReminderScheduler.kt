@@ -95,9 +95,9 @@ object DailyReminderScheduler {
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(NotificationChannel(CHANNEL, "Daily counter reminders", NotificationManager.IMPORTANCE_DEFAULT))
         }
-        val languageEnglish = context.getSharedPreferences("app_preferences", Context.MODE_PRIVATE).getBoolean("english_language", false)
-        val title = if (languageEnglish) item.titleEn else item.titleMr
-        val body = if (languageEnglish) "A gentle reminder for your daily routine." else "तुमच्या दैनंदिन नोंदीसाठी एक छोटी आठवण."
+        val uiLanguage = UiLanguage.load(context)
+        val title = if (uiLanguage.isEnglish) item.titleEn else uiLanguage.indic(item.titleMr, "जप का अनुस्मारक")
+        val body = if (uiLanguage.isEnglish) "A gentle reminder for your daily routine." else uiLanguage.indic("तुमच्या दैनंदिन नोंदीसाठी एक छोटी आठवण.", "आपकी दैनिक साधना के लिए एक छोटा अनुस्मारक।")
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)

@@ -46,18 +46,20 @@ private data class VoiceModelStatus(
 )
 
 @Composable
-fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
+fun VoiceModelsDialog(uiLanguage: UiLanguage, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var models by remember { mutableStateOf(emptyList<VoiceModelStatus>()) }
     var refreshing by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(uiLanguage) {
         while (isActive) {
             val snapshot = withContext(Dispatchers.IO) {
                 val workManager = WorkManager.getInstance(context)
                 val definitions = listOf(
-                    Triple("vosk_hi", "Vosk · Hindi / Sanskrit", "Japa and mantra recognition"),
-                    Triple("vosk_en", "Vosk · English", "Japa and mantra recognition")
+                    Triple("vosk_hi", if (uiLanguage.isEnglish) "Devanagari voice model"
+                        else uiLanguage.indic("देवनागरी आवाज मॉडेल", "देवनागरी आवाज़ मॉडल"),
+                        if (uiLanguage.isEnglish) "Used with either mantra display script"
+                        else uiLanguage.indic("दोन्ही मंत्र लिप्यांसोबत वापरले जाते", "मंत्र की दोनों लिपियों के साथ इस्तेमाल होता है"))
                 )
                 definitions.map { (key, title, purpose) ->
                     val installed = when (key) {
@@ -80,7 +82,7 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (english) "Offline voice models" else "ऑफलाइन आवाज मॉडेल") },
+        title = { Text(if (uiLanguage.isEnglish) "Offline voice models" else uiLanguage.indic("ऑफलाइन आवाज मॉडेल", "ऑफ़लाइन आवाज़ मॉडल")) },
         text = {
             Column(
                 Modifier.fillMaxWidth().height(390.dp).verticalScroll(rememberScrollState()),
@@ -97,12 +99,12 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
                                 Text(model.title, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
                                 Text(
                                     when {
-                                        model.installed -> if (english) "Ready" else "तयार"
-                                        model.state == WorkInfo.State.RUNNING -> if (english) "Working" else "सुरू"
-                                        model.state == WorkInfo.State.ENQUEUED || model.state == WorkInfo.State.BLOCKED -> if (english) "Queued" else "रांगेत"
-                                        model.state == WorkInfo.State.FAILED -> if (english) "Failed" else "अयशस्वी"
-                                        model.state == WorkInfo.State.SUCCEEDED -> if (english) "Verifying" else "तपासत आहे"
-                                        else -> if (english) "Not downloaded" else "डाउनलोड नाही"
+                                        model.installed -> if (uiLanguage.isEnglish) "Ready" else uiLanguage.indic("तयार", "तैयार")
+                                        model.state == WorkInfo.State.RUNNING -> if (uiLanguage.isEnglish) "Working" else uiLanguage.indic("सुरू", "जारी")
+                                        model.state == WorkInfo.State.ENQUEUED || model.state == WorkInfo.State.BLOCKED -> if (uiLanguage.isEnglish) "Queued" else uiLanguage.indic("रांगेत", "कतार में")
+                                        model.state == WorkInfo.State.FAILED -> if (uiLanguage.isEnglish) "Failed" else uiLanguage.indic("अयशस्वी", "विफल")
+                                        model.state == WorkInfo.State.SUCCEEDED -> if (uiLanguage.isEnglish) "Verifying" else uiLanguage.indic("तपासत आहे", "जाँच जारी है")
+                                        else -> if (uiLanguage.isEnglish) "Not downloaded" else uiLanguage.indic("डाउनलोड नाही", "डाउनलोड नहीं है")
                                     },
                                     color = if (model.installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     style = MaterialTheme.typography.labelMedium,
@@ -116,13 +118,13 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
                                     modifier = Modifier.fillMaxWidth()
                                 )
                                 Text(
-                                    model.message.ifBlank { if (english) "Preparing model…" else "मॉडेल तयार होत आहे…" },
+                                    model.message.ifBlank { if (uiLanguage.isEnglish) "Preparing model…" else uiLanguage.indic("मॉडेल तयार होत आहे…", "मॉडल तैयार हो रहा है…") },
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             } else if (!model.installed && (model.state == WorkInfo.State.ENQUEUED || model.state == WorkInfo.State.BLOCKED)) {
-                                Text(if (english) "Waiting for the previous model to finish" else "मागील मॉडेल पूर्ण होण्याची प्रतीक्षा", style = MaterialTheme.typography.labelSmall)
+                                Text(if (uiLanguage.isEnglish) "Waiting for the previous model to finish" else uiLanguage.indic("मागील मॉडेल पूर्ण होण्याची प्रतीक्षा", "पिछले मॉडल का इंतज़ार है"), style = MaterialTheme.typography.labelSmall)
                             } else if (!model.installed && model.state == WorkInfo.State.FAILED) {
-                                Text(if (english) "Download failed. Use Download all to retry." else "डाउनलोड अयशस्वी. पुन्हा प्रयत्न करण्यासाठी सर्व डाउनलोड करा.", style = MaterialTheme.typography.labelSmall)
+                                Text(if (uiLanguage.isEnglish) "Download failed. Use Download all to retry." else uiLanguage.indic("डाउनलोड अयशस्वी. पुन्हा प्रयत्न करण्यासाठी सर्व डाउनलोड करा.", "डाउनलोड विफल रहा। फिर से कोशिश करने के लिए सभी मॉडल डाउनलोड करें।"), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -130,18 +132,18 @@ fun VoiceModelsDialog(english: Boolean, onDismiss: () -> Unit) {
                 if (refreshing && models.isEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         CircularProgressIndicator()
-                        Text(if (english) "Checking installed models…" else "डाउनलोड तपासत आहे…")
+                        Text(if (uiLanguage.isEnglish) "Checking installed models…" else uiLanguage.indic("डाउनलोड तपासत आहे…", "डाउनलोड की जाँच जारी है…"))
                     }
                 }
             }
         },
         confirmButton = {
             Button(onClick = { SpeechModelDownloadScheduler.enqueueAll(context, wifiOnly = false) }) {
-                Text(if (english) "Download all models" else "सर्व मॉडेल डाउनलोड करा")
+                Text(if (uiLanguage.isEnglish) "Download all models" else uiLanguage.indic("सर्व मॉडेल डाउनलोड करा", "सभी मॉडल डाउनलोड करें"))
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text(if (english) "Close" else "बंद करा") }
+            OutlinedButton(onClick = onDismiss) { Text(if (uiLanguage.isEnglish) "Close" else uiLanguage.indic("बंद करा", "बंद करें")) }
         }
     )
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="count">गिनती</string>
+    <string name="undo">वापस लें</string>
+    <string name="reset">रीसेट</string>
+    <string name="weekly_report">साप्ताहिक रिपोर्ट</string>
+    <string name="today">आज</string>
+    <string name="add_category">श्रेणी जोड़ें</string>
+    <string name="widget_description">आज के जप देखें और जप शुरू करें।</string>
+</resources>

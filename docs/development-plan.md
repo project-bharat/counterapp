@@ -50,3 +50,9 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Added branded PNG sharing for saved sessions, daily progress, and monthly recaps. Session images include the selected mantra and saved time in UTC. Aggregate cards identify their scope.
 - Progress analytics now uses weekly and monthly filters, and the daily goal has a completion state. The voice notification has a Stop action and replaces the quick-start notification while active.
 - Google and Drive branding appears in the backup and Pro preview. Phone review remains pending for system Back, notification behavior, and image sharing.
+
+### Bhajame name and language settings
+
+- Changed the app label to **Bhajame - Daily Japa & Bhakti**. Replacement horizontal artwork is pending the final asset files.
+- Added separate settings for app language (Marathi, Hindi, English) and mantra display script (Devanagari, English script). Script changes affect presentation and retain stored counting keys.
+- Voice counting uses the same existing Devanagari Vosk model with either display script. The current Devanagari model is the Hindi acoustic model already used for Marathi chanting.

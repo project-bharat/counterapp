@@ -78,7 +78,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 @Composable
-private fun BilanLaunchSplash() {
+private fun BhajameLaunchSplash() {
     val dark = isSystemInDarkTheme()
     Box(
         modifier = Modifier
@@ -92,13 +92,13 @@ private fun BilanLaunchSplash() {
         ) {
             Image(
                 painter = painterResource(id = R.drawable.splash_logo),
-                contentDescription = "Bilan Counter logo",
+                contentDescription = null,
                 modifier = Modifier.size(164.dp),
                 contentScale = ContentScale.Fit
             )
             Spacer(modifier = Modifier.height(18.dp))
             Text(
-                text = "Bilan Counter",
+                text = "Bhajame - Daily Japa & Bhakti",
                 color = if (dark) Color(0xFFF3EEE3) else Color(0xFF31413A),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
@@ -147,7 +147,7 @@ class MainActivity : ComponentActivity() {
                 showBrandSplash = false
             }
             if (showBrandSplash) {
-                BilanLaunchSplash()
+                BhajameLaunchSplash()
             } else {
                 CounterApp(repo)
             }
@@ -203,16 +203,9 @@ fun CounterApp(repo: CounterRepository) {
     val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var selectedId by rememberSaveable { mutableLongStateOf(1L) }
-    var english by remember(context) {
-        mutableStateOf(
-            context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
-                .getBoolean("english_language", false)
-        )
-    }
-    LaunchedEffect(english) {
-        context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
-            .edit().putBoolean("english_language", english).apply()
-    }
+    val appPreferences = remember { context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE) }
+    var uiLanguage by remember { mutableStateOf(UiLanguage.load(context)) }
+    var latinMantras by remember { mutableStateOf(appPreferences.getBoolean("mantra_latin_script", false)) }
     var monthlyHistory by remember { mutableStateOf(false) }
 
     val reportState = rememberSaveableStateHolder()
@@ -274,8 +267,8 @@ fun CounterApp(repo: CounterRepository) {
             backupBusy = true
             backupMessage = null
             runCatching { withContext(Dispatchers.IO) { CounterBackupManager.exportJson(context, uri) } }
-                .onSuccess { backupMessage = if (english) "Backup saved successfully." else "बॅकअप यशस्वीपणे जतन झाला." }
-                .onFailure { backupMessage = (if (english) "Backup failed: " else "बॅकअप अयशस्वी: ") + (it.message ?: "Unknown error") }
+                .onSuccess { backupMessage = if (uiLanguage.isEnglish) "Backup saved successfully." else uiLanguage.indic("बॅकअप यशस्वीपणे जतन झाला.", "बैकअप सहेजा गया।") }
+                .onFailure { backupMessage = (if (uiLanguage.isEnglish) "Backup failed: " else uiLanguage.indic("बॅकअप अयशस्वी: ", "बैकअप विफल: ")) + (it.message ?: "Unknown error") }
             backupBusy = false
         }
     }
@@ -284,8 +277,8 @@ fun CounterApp(repo: CounterRepository) {
             backupBusy = true
             backupMessage = null
             runCatching { withContext(Dispatchers.IO) { CounterBackupManager.exportCsv(context, uri) } }
-                .onSuccess { backupMessage = if (english) "CSV exported successfully." else "CSV निर्यात यशस्वी." }
-                .onFailure { backupMessage = (if (english) "CSV export failed: " else "CSV निर्यात अयशस्वी: ") + (it.message ?: "Unknown error") }
+                .onSuccess { backupMessage = if (uiLanguage.isEnglish) "CSV exported successfully." else uiLanguage.indic("CSV निर्यात यशस्वी.", "CSV निर्यात सफल रहा।") }
+                .onFailure { backupMessage = (if (uiLanguage.isEnglish) "CSV export failed: " else uiLanguage.indic("CSV निर्यात अयशस्वी: ", "CSV निर्यात विफल: ")) + (it.message ?: "Unknown error") }
             backupBusy = false
         }
     }
@@ -310,8 +303,7 @@ fun CounterApp(repo: CounterRepository) {
             val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
             val target = prefs.getString("target_${category.id}", "राम") ?: "राम"
             mantraTarget = target
-            val language = if (target.any { it in '\u0900'..'\u097F' }) "hi" else "en"
-            ChantRecognitionService.start(context, category.id, target, language)
+            ChantRecognitionService.start(context, category.id, target)
         }
         activity?.consumeLaunchCounterKind()
     }
@@ -379,7 +371,7 @@ fun CounterApp(repo: CounterRepository) {
                  else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
 
     MaterialTheme(colorScheme = scheme) {
-        if (voiceModelsDialog) VoiceModelsDialog(english = english, onDismiss = { voiceModelsDialog = false })
+        if (voiceModelsDialog) VoiceModelsDialog(uiLanguage = uiLanguage, onDismiss = { voiceModelsDialog = false })
         Scaffold(
             modifier = Modifier.background(Brush.verticalGradient(
                 if (dark) listOf(Color(0xFF152921), Color(0xFF152033), page)
@@ -394,7 +386,7 @@ fun CounterApp(repo: CounterRepository) {
                     tonalElevation = 5.dp,
                     windowInsets = WindowInsets(0, 0, 0, 0)
                 ) {
-                    val labels = if (english) listOf("Practice", "Progress", "Settings") else listOf("जप", "प्रगती", "सेटिंग्ज")
+                    val labels = if (uiLanguage.isEnglish) listOf("Practice", "Progress", "Settings") else listOf("जप", uiLanguage.indic("प्रगती", "प्रगति"), uiLanguage.indic("सेटिंग्ज", "सेटिंग्स"))
                     val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Settings)
                     labels.forEachIndexed { index, label ->
                         NavigationBarItem(selected = tab == index, onClick = { navigate(index) },
@@ -409,26 +401,26 @@ fun CounterApp(repo: CounterRepository) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (child) FilledTonalIconButton(onClick = ::goBack) {
-                        Icon(Icons.Default.ArrowBack, if (english) "Back" else "मागे")
+                        Icon(Icons.Default.ArrowBack, if (uiLanguage.isEnglish) "Back" else uiLanguage.indic("मागे", "वापस"))
                     }
                     Image(painterResource(if (dark) R.drawable.bilan_header_logo_light else R.drawable.bilan_header_logo_dark), "Bilan",
                         Modifier.width(94.dp).height(36.dp), contentScale = ContentScale.Fit)
                     Spacer(Modifier.weight(1f))
                     Text(when {
-                        finishedSession != null -> if (english) "Session summary" else "सत्राचा सारांश"
-                        mantraLibrary -> if (english) "Mantra library" else "मंत्र संग्रह"
-                        focusSession -> if (english) "Japa session" else "जप सत्र"
-                        tab == 1 -> if (english) "Progress" else "प्रगती"
-                        tab == 2 -> if (english) "Settings" else "सेटिंग्ज"
-                        else -> if (english) "Japa Practice" else "जप साधना"
+                        finishedSession != null -> if (uiLanguage.isEnglish) "Session summary" else uiLanguage.indic("सत्राचा सारांश", "सत्र का सारांश")
+                        mantraLibrary -> if (uiLanguage.isEnglish) "Mantra library" else "मंत्र संग्रह"
+                        focusSession -> if (uiLanguage.isEnglish) "Japa session" else "जप सत्र"
+                        tab == 1 -> if (uiLanguage.isEnglish) "Progress" else uiLanguage.indic("प्रगती", "प्रगति")
+                        tab == 2 -> if (uiLanguage.isEnglish) "Settings" else uiLanguage.indic("सेटिंग्ज", "सेटिंग्स")
+                        else -> if (uiLanguage.isEnglish) "Japa Practice" else "जप साधना"
                     }, color = ink, style = MaterialTheme.typography.titleMedium)
                 }
                 Box(Modifier.weight(1f)) {
                 val summary = finishedSession
                 if (summary != null) {
-                    val title = if (english) "Japa session saved" else "जप सत्र जतन झाले"
-                    val card = JapaImageCard(title, summary.mantra, summary.count,
-                        if (english) "Today · $japaDayTotal/$dailyGoal" else "आज · $japaDayTotal/$dailyGoal", english,
+                    val title = if (uiLanguage.isEnglish) "Japa session saved" else uiLanguage.indic("जप सत्र जतन झाले", "जप सत्र सहेजा गया")
+                    val card = JapaImageCard(title, displayMantra(context, summary.categoryId, summary.mantra, latinMantras), summary.count,
+                        if (uiLanguage.isEnglish) "Today · $japaDayTotal/$dailyGoal" else "आज · $japaDayTotal/$dailyGoal", uiLanguage,
                         summary.endedAt ?: summary.startedAt)
                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -438,30 +430,31 @@ fun CounterApp(repo: CounterRepository) {
                         }, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Default.Share, null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (english) "Share image" else "चित्र शेअर करा")
+                            Text(if (uiLanguage.isEnglish) "Share image" else uiLanguage.indic("चित्र शेअर करा", "चित्र साझा करें"))
                         }
                         OutlinedButton(onClick = ::goBack, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (english) "Done" else "पूर्ण")
+                            Text(if (uiLanguage.isEnglish) "Done" else uiLanguage.indic("पूर्ण", "हो गया"))
                         }
                     }
                 } else if (help) {
-                    JapaHelpScreen(english)
+                    JapaHelpScreen(uiLanguage)
                 } else if (backupScreen) {
-                    BackupSettingsScreen(english = english, ink = ink, message = backupMessage, busy = backupBusy,
+                    BackupSettingsScreen(uiLanguage = uiLanguage, ink = ink, message = backupMessage, busy = backupBusy,
                         onExportBackup = { jsonExportLauncher.launch("AppBackup_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm")) + ".json") },
                         onImportBackup = { jsonImportLauncher.launch(arrayOf("application/json", "text/*")) },
                         onExportCsv = { csvExportLauncher.launch("daily-counter-history.csv") })
                 } else if (categoryScreen) {
-                    CategoryManagementScreen(categories = categories, archivedCategories = archivedCategories, english = english, ink = ink,
+                    CategoryManagementScreen(categories = categories, archivedCategories = archivedCategories, uiLanguage = uiLanguage, ink = ink,
                         onAdd = { mr, en -> scope.launch { vm.addCategory(mr, en) } },
                         onUpdate = { item -> scope.launch { vm.updateCategory(item) } },
                         onArchive = { item -> scope.launch { runCatching { vm.archiveCategory(item.id) }.onFailure { backupMessage = it.message } } },
                         onRestore = { item -> scope.launch { vm.restoreCategory(item.id) } })
                 } else if (remindersScreen) {
-                    ReminderSettingsScreen(english = english, ink = ink)
+                    ReminderSettingsScreen(uiLanguage = uiLanguage, ink = ink)
                 } else if (monthlyHistory && selected != null) {
                     CounterHistoryScreen(
-                        english = english, ink = ink, date = historyDate, logs = historyLogs, days = days,
+                        uiLanguage = uiLanguage, ink = ink, date = historyDate, logs = historyLogs, days = days,
+                        mantraLabel = { displayMantra(context, selected.id, it, latinMantras) },
                         onPrevious = { historyDate = historyDate.minusDays(1) },
                         onNext = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
                         onBack = null,
@@ -471,7 +464,8 @@ fun CounterApp(repo: CounterRepository) {
                 } else if (tab == 1 && selected?.kind == "MANTRA") {
                     reportState.SaveableStateProvider("japa-report") {
                         JapaReportScreen(
-                            logs = allMantraLogs, goals = goalHistory, today = today, english = english, ink = ink,
+                            logs = allMantraLogs, goals = goalHistory, today = today, uiLanguage = uiLanguage, ink = ink,
+                            mantraLabel = { displayMantra(context, selected.id, it, latinMantras) },
                             onDaySelected = { date -> historyDate = date; monthlyHistory = true },
                             onEditGoal = { editGoalDialog = true }
                         )
@@ -479,28 +473,38 @@ fun CounterApp(repo: CounterRepository) {
                 } else if (tab == 1) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            StatTile(if (english) "TOTAL" else "एकूण", days.sumOf { it.total }.toString(), ink, Modifier.weight(1f))
-                            StatTile(if (english) "DAILY AVG" else "दररोज सरासरी", "%.1f".format(days.sumOf { it.total }.toDouble() / 7.0), ink, Modifier.weight(1f))
+                            StatTile(if (uiLanguage.isEnglish) "TOTAL" else uiLanguage.indic("एकूण", "कुल"), days.sumOf { it.total }.toString(), ink, Modifier.weight(1f))
+                            StatTile(if (uiLanguage.isEnglish) "DAILY AVG" else uiLanguage.indic("दररोज सरासरी", "दैनिक औसत"), "%.1f".format(days.sumOf { it.total }.toDouble() / 7.0), ink, Modifier.weight(1f))
                         }
                         Spacer(Modifier.height(14.dp))
                         WeeklyChart(days, Modifier.fillMaxWidth().height(210.dp))
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = {
-                            val title = if (english) "Weekly progress" else "साप्ताहिक प्रगती"
-                            val category = selected?.let { if (english) it.titleEn else it.titleMr }.orEmpty()
+                            val title = if (uiLanguage.isEnglish) "Weekly progress" else uiLanguage.indic("साप्ताहिक प्रगती", "साप्ताहिक प्रगति")
+                            val category = selected?.let { if (uiLanguage.isEnglish) it.titleEn else it.titleMr }.orEmpty()
                             val card = JapaImageCard(title, category, days.sumOf { it.total },
-                                if (english) "Last 7 days" else "मागील ७ दिवस", english)
+                                if (uiLanguage.isEnglish) "Last 7 days" else uiLanguage.indic("मागील ७ दिवस", "पिछले ७ दिन"), uiLanguage)
                             scope.launch { shareJapaImage(context, card) }
                         }) {
                             Icon(Icons.Default.Share, null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (english) "Share image" else "चित्र शेअर करा")
+                            Text(if (uiLanguage.isEnglish) "Share image" else uiLanguage.indic("चित्र शेअर करा", "चित्र साझा करें"))
                         }
                     }
                 } else if (tab == 2) {
                     JapaSettingsScreen(
-                        english, tapFeedback, malaFeedback, soundFeedback,
-                        onLanguage = { english = !english },
+                        uiLanguage, tapFeedback, malaFeedback, soundFeedback,
+                        latinMantras = latinMantras,
+                        onLanguage = {
+                            uiLanguage = it
+                            appPreferences.edit().putString("ui_language", it.tag).apply()
+                            if (!focusSession && activeJapa == null) QuickActionsNotification.show(context)
+                            CounterHomeWidget.refresh(context)
+                        },
+                        onMantraScript = {
+                            latinMantras = it
+                            appPreferences.edit().putBoolean("mantra_latin_script", it).apply()
+                        },
                         onTap = { tapFeedback = it; preferences.edit().putBoolean("tap", it).apply() },
                         onMala = { malaFeedback = it; preferences.edit().putBoolean("mala", it).apply() },
                         onSound = { soundFeedback = it; preferences.edit().putBoolean("sound", it).apply() },
@@ -509,15 +513,16 @@ fun CounterApp(repo: CounterRepository) {
                         onBackup = { backupScreen = true },
                         onCounters = { categoryScreen = true },
                         onHelp = { help = true },
-                        counterNames = categories.map { if (english) it.titleEn else it.titleMr },
+                        counterNames = categories.map { if (uiLanguage.isEnglish) it.titleEn else it.titleMr },
                         selectedCounter = categories.indexOfFirst { it.id == selected?.id },
                         onCounter = { index -> selectedId = categories[index].id; navigate(0) }
                     )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
-                        categoryId = selected.id, count = count, totalCount = mantraTotal, english = english, ink = ink,
+                        categoryId = selected.id, count = count, totalCount = mantraTotal, uiLanguage = uiLanguage, ink = ink,
                         dailyGoal = dailyGoal,
                         dayTotal = japaDayTotal,
+                        latinMantras = latinMantras,
                         sessionCount = activeJapa?.count ?: 0,
                         focusSession = focusSession,
                         mantraLibrary = mantraLibrary,
@@ -549,8 +554,8 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 } else if (selected != null) {
                     CounterTapScreen(
-                        english = english, count = count, goal = selected.goal, kind = selected.kind,
-                        categoryTitle = if (english) selected.titleEn else selected.titleMr,
+                        uiLanguage = uiLanguage, count = count, goal = selected.goal, kind = selected.kind,
+                        categoryTitle = if (uiLanguage.isEnglish) selected.titleEn else selected.titleMr,
                         ink = ink, onTap = { haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65); scope.launch { vm.add(selected.id, null) } },
                         onUndo = { scope.launch { vm.undo(selected.id) } }, onReset = { resetDialog = true }
                     )
@@ -558,7 +563,7 @@ fun CounterApp(repo: CounterRepository) {
                 }
                 if (tab == 1 && selected?.kind != "MANTRA" && !child) {
                     TextButton(onClick = { historyDate = today; monthlyHistory = true }) {
-                        Text(if (english) "Open history" else "इतिहास उघडा")
+                        Text(if (uiLanguage.isEnglish) "Open history" else uiLanguage.indic("इतिहास उघडा", "इतिहास खोलें"))
                     }
                 }
             }
@@ -570,12 +575,12 @@ fun CounterApp(repo: CounterRepository) {
         AlertDialog(
             onDismissRequest = { editGoalDialog = false },
             icon = { Icon(Icons.Default.Edit, null) },
-            title = { Text(if (english) "Daily Japa goal" else "दररोजचे जप लक्ष्य") },
+            title = { Text(if (uiLanguage.isEnglish) "Daily Japa goal" else uiLanguage.indic("दररोजचे जप लक्ष्य", "दैनिक जप लक्ष्य")) },
             text = {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { if (it.length <= 6 && it.all(Char::isDigit)) input = it },
-                    label = { Text(if (english) "Chants per day" else "दररोजचे जप") },
+                    label = { Text(if (uiLanguage.isEnglish) "Chants per day" else uiLanguage.indic("दररोजचे जप", "प्रतिदिन जप")) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true
                 )
@@ -584,18 +589,18 @@ fun CounterApp(repo: CounterRepository) {
                 Button(onClick = {
                     target?.let { scope.launch { vm.saveJapaGoal(japaCategoryId, it) } }
                     editGoalDialog = false
-                }, enabled = target != null) { Text(if (english) "Save" else "जतन करा") }
+                }, enabled = target != null) { Text(if (uiLanguage.isEnglish) "Save" else uiLanguage.indic("जतन करा", "सहेजें")) }
             },
             dismissButton = {
-                TextButton(onClick = { editGoalDialog = false }) { Text(if (english) "Cancel" else "रद्द") }
+                TextButton(onClick = { editGoalDialog = false }) { Text(if (uiLanguage.isEnglish) "Cancel" else uiLanguage.indic("रद्द", "रद्द करें")) }
             }
         )
     }
     pendingRestoreUri?.let { uri ->
         AlertDialog(
             onDismissRequest = { pendingRestoreUri = null },
-            title = { Text(if (english) "Replace app data?" else "सध्याचा डेटा बदलायचा?") },
-            text = { Text(if (english) "Restoring replaces all counters, history and session records on this device. Export a backup first if you need to keep the current data." else "बॅकअप पुनर्संचयित केल्याने या उपकरणावरील सर्व मोजण्या, इतिहास आणि सत्रांच्या नोंदी बदलली जातील. सध्याचा डेटा हवा असल्यास आधी बॅकअप घ्या.") },
+            title = { Text(if (uiLanguage.isEnglish) "Replace app data?" else uiLanguage.indic("सध्याचा डेटा बदलायचा?", "वर्तमान डेटा बदलें?")) },
+            text = { Text(if (uiLanguage.isEnglish) "Restoring replaces all counters, history and session records on this device. Export a backup first if you need to keep the current data." else uiLanguage.indic("बॅकअप पुनर्संचयित केल्याने या उपकरणावरील सर्व मोजण्या, इतिहास आणि सत्रांच्या नोंदी बदलली जातील. सध्याचा डेटा हवा असल्यास आधी बॅकअप घ्या.", "बैकअप बहाल करने से इस डिवाइस के सभी काउंटर, इतिहास और सत्र बदल जाएँगे। वर्तमान डेटा रखने के लिए पहले बैकअप लें।")) },
             confirmButton = {
                 TextButton(onClick = {
                     pendingRestoreUri = null
@@ -603,22 +608,22 @@ fun CounterApp(repo: CounterRepository) {
                         backupBusy = true
                         backupMessage = null
                         runCatching { withContext(Dispatchers.IO) { CounterBackupManager.restoreJson(context, uri) } }
-                            .onSuccess { backupMessage = if (english) "Backup restored successfully." else "बॅकअप यशस्वीपणे पुनर्संचयित झाला." }
-                            .onFailure { backupMessage = (if (english) "Restore failed: " else "पुनर्संचयित करणे अयशस्वी: ") + (it.message ?: "Unknown error") }
+                            .onSuccess { backupMessage = if (uiLanguage.isEnglish) "Backup restored successfully." else uiLanguage.indic("बॅकअप यशस्वीपणे पुनर्संचयित झाला.", "बैकअप बहाल हो गया।") }
+                            .onFailure { backupMessage = (if (uiLanguage.isEnglish) "Restore failed: " else uiLanguage.indic("पुनर्संचयित करणे अयशस्वी: ", "बहाली विफल: ")) + (it.message ?: "Unknown error") }
                         backupBusy = false
                     }
-                }) { Text(if (english) "Replace data" else "डेटा बदला") }
+                }) { Text(if (uiLanguage.isEnglish) "Replace data" else uiLanguage.indic("डेटा बदला", "डेटा बदलें")) }
             },
-            dismissButton = { TextButton(onClick = { pendingRestoreUri = null }) { Text(if (english) "Cancel" else "रद्द") } }
+            dismissButton = { TextButton(onClick = { pendingRestoreUri = null }) { Text(if (uiLanguage.isEnglish) "Cancel" else uiLanguage.indic("रद्द", "रद्द करें")) } }
         )
     }
-    if (resetDialog) AlertDialog(onDismissRequest = { resetDialog = false }, title = { Text(if (english) "Reset today's count?" else "आजची मोजणी रीसेट करायची?") },
-        confirmButton = { TextButton(onClick = { scope.launch { selected?.let { vm.reset(it.id) } }; resetDialog = false }) { Text(if (english) "Reset" else "रीसेट") } },
-        dismissButton = { TextButton(onClick = { resetDialog = false }) { Text(if (english) "Cancel" else "रद्द") } })
+    if (resetDialog) AlertDialog(onDismissRequest = { resetDialog = false }, title = { Text(if (uiLanguage.isEnglish) "Reset today's count?" else uiLanguage.indic("आजची मोजणी रीसेट करायची?", "आज की गिनती रीसेट करें?")) },
+        confirmButton = { TextButton(onClick = { scope.launch { selected?.let { vm.reset(it.id) } }; resetDialog = false }) { Text(if (uiLanguage.isEnglish) "Reset" else "रीसेट") } },
+        dismissButton = { TextButton(onClick = { resetDialog = false }) { Text(if (uiLanguage.isEnglish) "Cancel" else uiLanguage.indic("रद्द", "रद्द करें")) } })
 }
 
 @Composable
-private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,categoryTitle:String,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
+private fun CounterTapScreen(uiLanguage:UiLanguage,count:Int,goal:Int,kind:String,categoryTitle:String,ink:Color,onTap:()->Unit,onUndo:()->Unit,onReset:()->Unit) {
     val mantra = kind == "MANTRA"
     val tapScale = remember { Animatable(1f) }
     val tapScope = rememberCoroutineScope()
@@ -629,11 +634,11 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
                     Icon(Icons.Default.SelfImprovement,null,tint=Color(0xFF7855A6),modifier=Modifier.size(30.dp))
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(if(english) "TODAY" else "आज",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelMedium,fontWeight=FontWeight.Bold)
+                Text(if(uiLanguage.isEnglish) "TODAY" else "आज",color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelMedium,fontWeight=FontWeight.Bold)
                 Text(count.toString(),color=ink,style=MaterialTheme.typography.displayLarge,fontWeight=FontWeight.ExtraBold)
-                Text(if(mantra) { if(english) "CHANTS" else "जप" } else categoryTitle,color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+                Text(if(mantra) { if(uiLanguage.isEnglish) "CHANTS" else "जप" } else categoryTitle,color=ink.copy(alpha=.55f),style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
                 if(mantra) {
-                    Text((count/108).toString()+" "+(if(english) "mala" else "माळ")+" · "+(count%108)+"/108",color=Gold,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=9.dp))
+                    Text((count/108).toString()+" "+(if(uiLanguage.isEnglish) "mala" else uiLanguage.indic("माळ", "माला"))+" · "+(count%108)+"/108",color=Gold,style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=9.dp))
                     Row(Modifier.padding(top=8.dp),horizontalArrangement=Arrangement.Center) { repeat(12) { index -> Box(Modifier.padding(3.dp).size(11.dp).background(if(index<count%108*12/108) Gold else Color(0xFFE8E1D7),CircleShape)) } }
                 }
             }
@@ -644,13 +649,13 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
             Column(horizontalAlignment=Alignment.CenterHorizontally) {
                 Icon(Icons.Default.SelfImprovement,null,tint=ink,modifier=Modifier.size(36.dp))
                 Text("+1",color=ink,style=MaterialTheme.typography.displayMedium,fontWeight=FontWeight.ExtraBold)
-                Text(if(english) "TAP TO ADD" else "मोजणी वाढवा",color=ink,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
+                Text(if(uiLanguage.isEnglish) "TAP TO ADD" else uiLanguage.indic("मोजणी वाढवा", "गिनती बढ़ाएँ"),color=ink,style=MaterialTheme.typography.labelSmall,fontWeight=FontWeight.Bold)
             }
         }
         Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick=onUndo,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Undo,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Undo" else "मागे") }
-            OutlinedButton(onClick=onReset,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Refresh,null); Spacer(Modifier.width(5.dp)); Text(if(english) "Reset" else "रीसेट") }
+            OutlinedButton(onClick=onUndo,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Undo,null); Spacer(Modifier.width(5.dp)); Text(if(uiLanguage.isEnglish) "Undo" else uiLanguage.indic("मागे", "वापस")) }
+            OutlinedButton(onClick=onReset,modifier=Modifier.weight(1f),shape=RoundedCornerShape(15.dp)) { Icon(Icons.Default.Refresh,null); Spacer(Modifier.width(5.dp)); Text(if(uiLanguage.isEnglish) "Reset" else "रीसेट") }
         }
         Spacer(Modifier.weight(.8f))
     }
@@ -658,19 +663,19 @@ private fun CounterTapScreen(english:Boolean,count:Int,goal:Int,kind:String,cate
 
 
 @Composable
-private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
+private fun ReminderSettingsScreen(uiLanguage: UiLanguage, ink: Color) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val settings = remember { mutableStateListOf<DailyReminder>().apply { addAll(DailyReminderScheduler.load(context)) } }
     Column(Modifier.fillMaxSize()) {
-        Text(if (english) "DAILY REMINDERS" else "दैनिक स्मरणपत्रे", color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(if (english) "Choose times that fit your routine." else "तुमच्या दिनक्रमानुसार वेळ निवडा.", color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        Text(if (uiLanguage.isEnglish) "DAILY REMINDERS" else uiLanguage.indic("दैनिक स्मरणपत्रे", "दैनिक अनुस्मारक"), color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(if (uiLanguage.isEnglish) "Choose times that fit your routine." else uiLanguage.indic("तुमच्या दिनक्रमानुसार वेळ निवडा.", "अपनी दिनचर्या के अनुसार समय चुनें।"), color = ink.copy(alpha = .65f), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
             items(settings, key = { it.id }) { item ->
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(if (english) item.titleEn else item.titleMr, color = ink, fontWeight = FontWeight.SemiBold)
+                            Text(if (uiLanguage.isEnglish) item.titleEn else uiLanguage.indic(item.titleMr, "जप का अनुस्मारक"), color = ink, fontWeight = FontWeight.SemiBold)
                             Text("%02d:%02d".format(item.hour, item.minute), color = Color(0xFF39865B), style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.clickable {
                                     TimePickerDialog(context, { _, hour, minute ->
@@ -681,7 +686,7 @@ private fun ReminderSettingsScreen(english: Boolean, ink: Color) {
                                         }
                                     }, item.hour, item.minute, false).show()
                                 })
-                            Text(if (english) "Tap time to change" else "वेळ बदलण्यासाठी टॅप करा", color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall)
+                            Text(if (uiLanguage.isEnglish) "Tap time to change" else uiLanguage.indic("वेळ बदलण्यासाठी टॅप करा", "समय बदलने के लिए टैप करें"), color = ink.copy(alpha = .45f), style = MaterialTheme.typography.labelSmall)
                         }
                         Switch(checked = item.enabled, onCheckedChange = { enabled ->
                             val index = settings.indexOfFirst { it.id == item.id }

@@ -28,7 +28,6 @@ import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -37,7 +36,7 @@ internal data class JapaImageCard(
     val mantra: String,
     val chants: Int,
     val detail: String,
-    val english: Boolean,
+    val uiLanguage: UiLanguage,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -54,7 +53,7 @@ internal suspend fun shareJapaImage(context: Context, card: JapaImageCard) {
             val directory = File(context.cacheDir, "japa-share").apply { mkdirs() }
             directory.listFiles()?.filter { it.lastModified() < System.currentTimeMillis() - 86_400_000 }
                 ?.forEach { it.delete() }
-            val file = File.createTempFile("bilan-japa-", ".png", directory)
+            val file = File.createTempFile("bhajame-japa-", ".png", directory)
             val bitmap = renderJapaImage(context, card)
             try {
                 file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
@@ -65,13 +64,13 @@ internal suspend fun shareJapaImage(context: Context, card: JapaImageCard) {
         }.getOrNull()
     }
     if (uri == null) {
-        Toast.makeText(context, if (card.english) "Could not create image" else "चित्र तयार झाले नाही", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, if (card.uiLanguage.isEnglish) "Could not create image" else card.uiLanguage.indic("चित्र तयार झाले नाही", "चित्र नहीं बन सका"), Toast.LENGTH_SHORT).show()
         return
     }
     val send = Intent(Intent.ACTION_SEND).setType("image/png")
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        .apply { clipData = ClipData.newUri(context.contentResolver, "Bilan Japa", uri) }
+        .apply { clipData = ClipData.newUri(context.contentResolver, "Bhajame Japa", uri) }
     context.startActivity(Intent.createChooser(send, card.title))
 }
 
@@ -98,7 +97,7 @@ private fun renderJapaImage(context: Context, card: JapaImageCard): Bitmap {
             color = 0xFF253C35.toInt()
             textSize = size
             typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
-            textLocale = Locale.forLanguageTag(if (card.english) "en" else "mr")
+            textLocale = card.uiLanguage.locale
         }
         val layout = StaticLayout.Builder.obtain(value, 0, value.length, ink, 820)
             .setAlignment(Layout.Alignment.ALIGN_CENTER).setMaxLines(maxLines)
@@ -111,9 +110,9 @@ private fun renderJapaImage(context: Context, card: JapaImageCard): Bitmap {
     text(card.title, 310f, 54f, true)
     text(card.mantra, 455f, 42f, maxLines = 3)
     text(card.chants.toString(), 655f, 134f, true, 1)
-    text(if (card.english) "Chants  ·  ${card.chants / 108} malas" else "जप  ·  ${card.chants / 108} माळा", 825f, 45f)
+    text(if (card.uiLanguage.isEnglish) "Chants  ·  ${card.chants / 108} malas" else card.uiLanguage.indic("जप  ·  ${card.chants / 108} माळा", "जप  ·  ${card.chants / 108} माला"), 825f, 45f)
     text(card.detail, 990f, 40f)
-    val utc = DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm 'UTC'", Locale.forLanguageTag(if (card.english) "en" else "mr"))
+    val utc = DateTimeFormatter.ofPattern("dd MMM yyyy · HH:mm 'UTC'", card.uiLanguage.locale)
         .withZone(ZoneOffset.UTC).format(Instant.ofEpochMilli(card.timestamp))
     text(utc, 1140f, 32f)
     return bitmap

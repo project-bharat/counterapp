@@ -84,15 +84,17 @@ object QuickActionsNotification {
         val open = PendingIntent.getActivity(context, 7100,
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val uiLanguage = UiLanguage.load(context)
+        val start = if (uiLanguage.isEnglish) "Start Japa" else uiLanguage.indic("जप सुरू करा", "जप शुरू करें")
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_today)
-            .setContentTitle("Daily Counter")
-            .setContentText("Quick start · Japa")
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(start)
             .setContentIntent(open)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
-            .addAction(android.R.drawable.ic_media_play, "Start Japa",
+            .addAction(android.R.drawable.ic_media_play, start,
                 CounterQuickActions.activityPending(context, 7104))
             .build()
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
@@ -121,13 +123,14 @@ class CounterHomeWidget : android.appwidget.AppWidgetProvider() {
                 val categories = dao.categories().first()
                 val date = LocalDate.now()
                 val today = date.toString()
-                val todayLabel = date.format(DateTimeFormatter.ofPattern("EEE, dd MMM"))
+                val uiLanguage = UiLanguage.load(context)
+                val todayLabel = date.format(DateTimeFormatter.ofPattern("EEE, dd MMM", uiLanguage.locale))
                 val mantra = categories.firstOrNull { it.kind == "MANTRA" }
                 val mantraCount = mantra?.let { dao.japaDayTotal(it.id, today).first() } ?: 0
                 ids.forEach { id ->
                     val views = RemoteViews(context.packageName, R.layout.counter_widget)
                     views.setTextViewText(R.id.widget_date, todayLabel)
-                    views.setTextViewText(R.id.widget_japa_action, "📿  JAPA\n$mantraCount chants\n＋ Start")
+                    views.setTextViewText(R.id.widget_japa_action, if (uiLanguage.isEnglish) "📿  JAPA\n$mantraCount chants\n＋ Start" else uiLanguage.indic("📿  जप\n$mantraCount जप\n＋ सुरू करा", "📿  जप\n$mantraCount जप\n＋ शुरू करें"))
                     views.setOnClickPendingIntent(R.id.widget_japa_action, CounterQuickActions.activityPending(context, 8102))
                     manager.updateAppWidget(id, views)
                 }

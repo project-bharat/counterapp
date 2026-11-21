@@ -88,7 +88,7 @@ class SpeechModelDownloadWorker(context: Context, params: WorkerParameters) : Co
 
 /** Queues each voice model once, one after another, so large model downloads do not compete. */
 object SpeechModelDownloadScheduler {
-    private val modelKeys = listOf("vosk_hi", "vosk_en")
+    private val modelKeys = listOf("vosk_hi")
 
     fun enqueueAll(context: Context, wifiOnly: Boolean) {
         val constraints = Constraints.Builder()

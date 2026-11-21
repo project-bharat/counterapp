@@ -60,7 +60,13 @@ private object TrackingNotifications {
             .setContentTitle(title).setContentText(text).setOngoing(true)
             .setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setContentIntent(CounterQuickActions.activityPending(context, 7110, quickStart = false))
-            .apply { if (stopIntent != null) addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent) }
+            .apply {
+                if (stopIntent != null) {
+                    val ui = UiLanguage.load(context)
+                    addAction(android.R.drawable.ic_media_pause,
+                        if (ui.isEnglish) "Stop" else ui.indic("थांबवा", "रोकें"), stopIntent)
+                }
+            }
             .build()
     }
 }
@@ -131,7 +137,7 @@ class ChantRecognitionService : Service() {
     private var worker: Thread? = null
     private var categoryId = -1L
     private var mantra = "Ram"
-    private var language = "en"
+    private val language = "hi"
     private var partialCounted = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -146,7 +152,6 @@ class ChantRecognitionService : Service() {
         }
         categoryId = intent?.getLongExtra("category_id", -1L) ?: -1L
         mantra = intent?.getStringExtra(EXTRA_MANTRA)?.trim().orEmpty().ifBlank { "Ram" }
-        language = intent?.getStringExtra(EXTRA_LANGUAGE).orEmpty().ifBlank { "en" }
         if (categoryId <= 0 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY
         }
@@ -178,14 +183,14 @@ class ChantRecognitionService : Service() {
         val voiceStartedAt = System.currentTimeMillis()
         val voiceCategoryId = categoryId
         val voiceMantra = mantra
-        val voiceLanguage = language
+        val recognitionPhrase = displayMantra(this, voiceCategoryId, voiceMantra, latin = false)
         worker = Thread {
             try {
                 if (previousWorker?.isAlive == true) previousWorker.join()
                 if (!Thread.currentThread().isInterrupted) {
                     stopRequested = false
                     partialCounted = 0
-                    runRecognition(voiceCategoryId, voiceMantra, voiceLanguage, voiceStartedAt)
+                    runRecognition(voiceCategoryId, voiceMantra, recognitionPhrase, language, voiceStartedAt)
                 }
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -194,7 +199,7 @@ class ChantRecognitionService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun runRecognition(voiceCategoryId: Long, mantra: String, language: String, voiceStartedAt: Long) {
+    private fun runRecognition(voiceCategoryId: Long, mantra: String, phrase: String, language: String, voiceStartedAt: Long) {
         try {
             val modelName = if (language == "hi") "vosk-model-small-hi-0.22" else "vosk-model-small-en-in-0.4"
             val modelUrl = if (language == "hi")
@@ -203,7 +208,7 @@ class ChantRecognitionService : Service() {
             val modelDir = File(filesDir, modelName)
             if (!File(modelDir, "am/final.mdl").exists()) downloadAndExtractModel(modelUrl, modelName, modelDir)
             if (stopRequested || Thread.currentThread().isInterrupted) return
-            val recognizerKey = modelDir.absolutePath + "|" + language + "|" + mantra.trim()
+            val recognizerKey = modelDir.absolutePath + "|" + language + "|" + phrase.trim()
             val warmRecognizer = VoskRecognizerCache.isCached(recognizerKey)
             sendState(true, if (language == "en") {
                 if (warmRecognizer) "Reconnecting microphone…" else if (VoskModelCache.isCached(modelDir)) "Preparing speech recognizer…" else "Loading offline speech model…"
@@ -212,8 +217,8 @@ class ChantRecognitionService : Service() {
             })
             VoskRecognizerCache.clearForModelChange(modelDir.absolutePath)
             model = VoskModelCache.get(modelDir)
-            val cleanMantra = mantra.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
-            val grammarPhrases = linkedSetOf(mantra, cleanMantra)
+            val cleanMantra = phrase.replace(Regex("[।॥,;]"), " ").replace(Regex("\\s+"), " ").trim()
+            val grammarPhrases = linkedSetOf(phrase, cleanMantra)
             // Allow consecutive repetitions to be decoded as one continuous utterance.
             if (cleanMantra.split(" ").size <= 14) {
                 grammarPhrases.add("$cleanMantra $cleanMantra")
@@ -281,19 +286,19 @@ class ChantRecognitionService : Service() {
                     val activeRecognizer = recognizer ?: continue
                     if (activeRecognizer.acceptWaveForm(buffer, read)) {
                         val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
-                        val matches = countPhrase(transcript, mantra)
+                        val matches = countPhrase(transcript, phrase)
                         val delta = (matches - partialCounted).coerceAtLeast(0)
                         partialCounted = 0
-                        sendRecognitionUpdate(transcript, delta, voiceCategoryId, mantra, voiceStartedAt)
+                        sendRecognitionUpdate(transcript, delta, voiceCategoryId, mantra, phrase, voiceStartedAt)
                         lastPartial = ""
                     } else {
                         val partial = JSONObject(activeRecognizer.partialResult ?: "{}").optString("partial").trim()
                         if (partial != lastPartial) {
                             lastPartial = partial
-                            val detected = countPhrase(partial, mantra)
+                            val detected = countPhrase(partial, phrase)
                             val delta = (detected - partialCounted).coerceAtLeast(0)
                             if (detected > partialCounted) partialCounted = detected
-                            sendRecognitionUpdate(partial, delta, voiceCategoryId, mantra, voiceStartedAt)
+                            sendRecognitionUpdate(partial, delta, voiceCategoryId, mantra, phrase, voiceStartedAt)
                         }
                     }
                 }
@@ -327,9 +332,9 @@ class ChantRecognitionService : Service() {
     }
 
     private fun sendRecognitionUpdate(
-        transcript: String, matches: Int, voiceCategoryId: Long, voiceMantra: String, voiceStartedAt: Long
+        transcript: String, matches: Int, voiceCategoryId: Long, voiceMantra: String, phrase: String, voiceStartedAt: Long
     ) {
-        val matched = matches > 0 || countPhrase(transcript, voiceMantra) > 0
+        val matched = matches > 0 || countPhrase(transcript, phrase) > 0
         val countedAt = System.currentTimeMillis()
         val date = LocalDate.now().toString()
         sendState(true, if (matched) "Mantra matched" else "Listening offline", transcript, matched)
@@ -486,12 +491,11 @@ class ChantRecognitionService : Service() {
 
     companion object {
         const val EXTRA_MANTRA = "mantra"
-        const val EXTRA_LANGUAGE = "language"
         private const val ACTION_PAUSE_CHANT = "com.projectbharat.counterapp.action.PAUSE_CHANT"
-        fun start(context: Context, categoryId: Long, mantra: String, language: String) {
+        fun start(context: Context, categoryId: Long, mantra: String) {
             val intent = Intent(context, ChantRecognitionService::class.java)
                 .putExtra("category_id", categoryId)
-                .putExtra(EXTRA_MANTRA, mantra).putExtra(EXTRA_LANGUAGE, language)
+                .putExtra(EXTRA_MANTRA, mantra)
             ContextCompat.startForegroundService(context, intent)
         }
         fun stop(context: Context) { context.startService(Intent(context, ChantRecognitionService::class.java).setAction(ACTION_PAUSE_CHANT)) }
