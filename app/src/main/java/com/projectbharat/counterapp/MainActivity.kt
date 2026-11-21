@@ -236,14 +236,16 @@ fun CounterApp(repo: CounterRepository) {
     var editGoalDialog by remember { mutableStateOf(false) }
     var finishedSession by remember { mutableStateOf<JapaSession?>(null) }
     var finishingSession by remember { mutableStateOf(false) }
+    var mantraLibrary by rememberSaveable { mutableStateOf(false) }
     val child = monthlyHistory || categoryScreen || remindersScreen || backupScreen || help
     fun goBack() {
         when {
+            mantraLibrary -> mantraLibrary = false
             child -> navigate(tab)
             else -> navigate(0)
         }
     }
-    BackHandler(child || tab != 0) { goBack() }
+    BackHandler(mantraLibrary || child || tab != 0) { goBack() }
     val preferences = remember { context.getSharedPreferences("practice_feedback", android.content.Context.MODE_PRIVATE) }
     var tapFeedback by remember { mutableStateOf(preferences.getBoolean("tap", true)) }
     var malaFeedback by remember { mutableStateOf(preferences.getBoolean("mala", false)) }
@@ -288,6 +290,7 @@ fun CounterApp(repo: CounterRepository) {
         val category = categories.firstOrNull { it.kind == "MANTRA" } ?: return@LaunchedEffect
         selectedId = category.id
         navigate(0)
+        mantraLibrary = false
         if (shortcutQuickStart &&
             ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
@@ -363,50 +366,56 @@ fun CounterApp(repo: CounterRepository) {
     MaterialTheme(colorScheme = scheme) {
         if (voiceModelsDialog) VoiceModelsDialog(uiLanguage = uiLanguage, onDismiss = { voiceModelsDialog = false })
         Scaffold(
-            containerColor = page,
+            modifier = Modifier.background(Brush.verticalGradient(
+                if (dark) listOf(Color(0xFF22233D), Color(0xFF182739), page)
+                else listOf(Color(0xFFEAE5FA), Color(0xFFF8F0E1), Color(0xFFF3EDF8))
+            )),
+            containerColor = Color.Transparent,
             bottomBar = {
-                val footerShape = RoundedCornerShape(28.dp)
-                val glow = if (dark) Color(0xFF9C80F7) else Color(0xFF8D69DE)
-                val footerColors = if (dark)
-                    listOf(Color(0xFF233548), Color(0xFF33304D), Color(0xFF203D46))
-                else listOf(Color(0xFFF6EDFF), Color(0xFFFFFCFA), Color(0xFFE3F4F5))
-                NavigationBar(
-                    modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp)
-                        .shadow(12.dp, footerShape, ambientColor = glow, spotColor = glow)
-                        .clip(footerShape)
-                        .background(Brush.horizontalGradient(footerColors))
-                        .border(1.dp, Brush.horizontalGradient(listOf(glow.copy(alpha = .5f),
-                            Color.White.copy(alpha = .65f), Color(0xFF82CFD3).copy(alpha = .55f))), footerShape),
-                    containerColor = Color.Transparent,
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0, 0, 0, 0)
-                ) {
-                    val labels = if (uiLanguage.isEnglish) listOf("Practice", "Progress", "Settings") else listOf("जप", uiLanguage.indic("प्रगती", "प्रगति"), uiLanguage.indic("सेटिंग्ज", "सेटिंग्स"))
-                    val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Edit)
-                    labels.forEachIndexed { index, label ->
-                        NavigationBarItem(selected = tab == index, onClick = { navigate(index) },
-                            icon = { Icon(icons[index], null) }, label = { Text(label) })
+                if (!mantraLibrary) {
+                    val footerShape = RoundedCornerShape(28.dp)
+                    val glow = if (dark) Color(0xFF9C80F7) else Color(0xFF8D69DE)
+                    val footerColors = if (dark)
+                        listOf(Color(0xFF233548), Color(0xFF33304D), Color(0xFF203D46))
+                    else listOf(Color(0xFFF6EDFF), Color(0xFFFFFCFA), Color(0xFFE3F4F5))
+                    NavigationBar(
+                        modifier = Modifier.navigationBarsPadding().padding(horizontal = 18.dp, vertical = 8.dp)
+                            .shadow(12.dp, footerShape, ambientColor = glow, spotColor = glow)
+                            .clip(footerShape)
+                            .background(Brush.horizontalGradient(footerColors))
+                            .border(1.dp, Brush.horizontalGradient(listOf(glow.copy(alpha = .5f),
+                                Color.White.copy(alpha = .65f), Color(0xFF82CFD3).copy(alpha = .55f))), footerShape),
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0, 0, 0, 0)
+                    ) {
+                        val labels = if (uiLanguage.isEnglish) listOf("Practice", "Progress", "Settings") else listOf("जप", uiLanguage.indic("प्रगती", "प्रगति"), uiLanguage.indic("सेटिंग्ज", "सेटिंग्स"))
+                        val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Edit)
+                        labels.forEachIndexed { index, label ->
+                            NavigationBarItem(selected = tab == index, onClick = { navigate(index) },
+                                icon = { Icon(icons[index], null) }, label = { Text(label) })
+                        }
                     }
                 }
             }
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        .background(Color(0xFF31413A), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 26.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (child) TextButton(onClick = { navigate(tab) }) {
-                        Text(if (uiLanguage.isEnglish) "Back" else uiLanguage.indic("मागे", "वापस"), color = Color.White)
+                    if (child || mantraLibrary) TextButton(onClick = ::goBack) {
+                        Text(if (uiLanguage.isEnglish) "Back" else uiLanguage.indic("मागे", "वापस"), color = ink)
                     }
-                    Image(painterResource(R.drawable.bilan_header_logo_light), "Bilan",
-                        Modifier.width(86.dp).height(30.dp), contentScale = ContentScale.Fit)
+                    Image(painterResource(if (dark) R.drawable.bilan_header_logo_light else R.drawable.bilan_header_logo_dark), "Bilan",
+                        Modifier.width(96.dp).height(36.dp), contentScale = ContentScale.Fit)
                     Spacer(Modifier.weight(1f))
-                    Text(when (tab) {
-                        1 -> if (uiLanguage.isEnglish) "Progress" else uiLanguage.indic("प्रगती", "प्रगति")
-                        2 -> if (uiLanguage.isEnglish) "Settings" else uiLanguage.indic("सेटिंग्ज", "सेटिंग्स")
+                    Text(when {
+                        mantraLibrary -> uiLanguage.text("Mantra library", "मंत्र संग्रह", "मंत्र संग्रह")
+                        tab == 1 -> if (uiLanguage.isEnglish) "Progress" else uiLanguage.indic("प्रगती", "प्रगति")
+                        tab == 2 -> if (uiLanguage.isEnglish) "Settings" else uiLanguage.indic("सेटिंग्ज", "सेटिंग्स")
                         else -> if (uiLanguage.isEnglish) "Japa Practice" else "जप साधना"
-                    }, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    }, color = ink, style = MaterialTheme.typography.titleMedium)
                 }
                 Box(Modifier.weight(1f)) {
                 if (help) {
@@ -496,6 +505,8 @@ fun CounterApp(repo: CounterRepository) {
                         dailyGoal = dailyGoal,
                         dayTotal = japaDayTotal,
                         latinMantras = latinMantras,
+                        mantraLibrary = mantraLibrary,
+                        onLibraryChange = { mantraLibrary = it },
                         sessionCount = activeJapa?.count ?: 0,
                         onEditGoal = { editGoalDialog = true },
                         onFinish = activeJapa?.takeUnless { finishingSession }?.let { session ->

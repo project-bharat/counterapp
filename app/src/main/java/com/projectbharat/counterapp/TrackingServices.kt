@@ -135,6 +135,7 @@ class ChantRecognitionService : Service() {
     private var recognizer: Recognizer? = null
     private var model: Model? = null
     private var worker: Thread? = null
+    private val recognitionLock = Any()
     private var categoryId = -1L
     private var mantra = "Ram"
     private val language = "hi"
@@ -189,10 +190,12 @@ class ChantRecognitionService : Service() {
         worker = Thread {
             try {
                 if (previousWorker?.isAlive == true) previousWorker.join()
-                if (!Thread.currentThread().isInterrupted) {
-                    stopRequested = false
-                    partialCounted = 0
-                    runRecognition(voiceCategoryId, voiceMantra, recognitionPhrase, language, voiceStartedAt)
+                synchronized(recognitionLock) {
+                    if (!Thread.currentThread().isInterrupted) {
+                        stopRequested = false
+                        partialCounted = 0
+                        runRecognition(voiceCategoryId, voiceMantra, recognitionPhrase, language, voiceStartedAt)
+                    }
                 }
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
@@ -202,6 +205,8 @@ class ChantRecognitionService : Service() {
     }
 
     private fun runRecognition(voiceCategoryId: Long, mantra: String, phrase: String, language: String, voiceStartedAt: Long) {
+        var inputRoute: ChantAudioRoute? = null
+        val routePrefs = getSharedPreferences("tracking_state", MODE_PRIVATE)
         try {
             val modelName = if (language == "hi") "vosk-model-small-hi-0.22" else "vosk-model-small-en-in-0.4"
             val modelUrl = if (language == "hi")
@@ -255,14 +260,19 @@ class ChantRecognitionService : Service() {
             recognizer = VoskRecognizerCache.get(model!!, modelDir.absolutePath, recognizerKey, grammar)
             val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
-            val audioManager = getSystemService(AudioManager::class.java)
-            if (audioManager?.mode == AudioManager.MODE_IN_CALL || (Build.VERSION.SDK_INT >= 24 && runCatching { audioManager?.activeRecordingConfigurations?.isNotEmpty() == true }.getOrDefault(false))) {
+            val audioManager = requireNotNull(getSystemService(AudioManager::class.java))
+            if (audioManager.mode == AudioManager.MODE_IN_CALL) {
                 throw IllegalStateException("Microphone busy — another app or call is using it")
             }
-            val record = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000,
+            val route = ChantAudioRoute(audioManager)
+            inputRoute = route
+            val source = route.prepare()
+            if (stopRequested || Thread.currentThread().isInterrupted) return
+            val record = AudioRecord(source, 16000,
                 AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 8192))
-            if (record.state != AudioRecord.STATE_INITIALIZED) { record.release(); throw IllegalStateException("Microphone unavailable") }
             audioRecord = record
+            if (record.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException("Microphone unavailable")
+            route.preferHeadset(record)
             if (stopRequested || Thread.currentThread().isInterrupted) { record.release(); audioRecord = null; return }
             try {
                 record.startRecording()
@@ -281,10 +291,27 @@ class ChantRecognitionService : Service() {
             sendState(true, if (language == "en") "Offline model ready · listening offline" else "ऑफलाइन मॉडेल तयार · ऐकत आहे")
             val buffer = ByteArray(maxOf(minBuffer, 8192))
             var lastPartial = ""
+            var lastRouteCheck = 0L
+            var lastRouteStatus: String? = null
             while (recording && !Thread.currentThread().isInterrupted) {
                 val read = record.read(buffer, 0, buffer.size)
                 if (read < 0) throw IllegalStateException("Microphone read failed: " + read)
                 if (read > 0) {
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastRouteCheck >= 500L) {
+                        lastRouteCheck = now
+                        val routed = record.routedDevice
+                        val routeStatus = when {
+                            routed == null -> null
+                            routed.isBluetoothVoice() -> "bluetooth"
+                            route.headsetRequested -> "bluetooth_unavailable"
+                            else -> "device"
+                        }
+                        if (routeStatus != lastRouteStatus) {
+                            lastRouteStatus = routeStatus
+                            routePrefs.edit().putString("chant_input_route", routeStatus).apply()
+                        }
+                    }
                     val activeRecognizer = recognizer ?: continue
                     if (activeRecognizer.acceptWaveForm(buffer, read)) {
                         val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
@@ -325,9 +352,14 @@ class ChantRecognitionService : Service() {
             }
         } finally {
             recording = false
-            getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_audio_active", false).apply()
-            try { audioRecord?.stop() } catch (_: Exception) { }
-            audioRecord?.release(); audioRecord = null
+            routePrefs.edit().putBoolean("chant_audio_active", false).remove("chant_input_route").apply()
+            try {
+                try { audioRecord?.stop() } catch (_: Exception) { }
+                audioRecord?.release()
+            } finally {
+                audioRecord = null
+                runCatching { inputRoute?.close() }.onFailure { Log.w("CounterAppVosk", "Could not release audio route", it) }
+            }
             recognizer = null
             // Both model and grammar recognizer remain cached for a fast next start.
         }

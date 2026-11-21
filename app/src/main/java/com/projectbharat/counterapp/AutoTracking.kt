@@ -12,6 +12,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.PaddingValues
@@ -202,6 +205,8 @@ fun AutoChantCounterScreen(
     dayTotal: Int,
     sessionCount: Int,
     latinMantras: Boolean,
+    mantraLibrary: Boolean,
+    onLibraryChange: (Boolean) -> Unit,
     onEditGoal: () -> Unit,
     onFinish: (() -> Unit)?,
     onMantraChange: (String) -> Unit,
@@ -215,12 +220,13 @@ fun AutoChantCounterScreen(
     }
     var target by remember(categoryId) { mutableStateOf(prefs.getString("target_$categoryId", "राम") ?: "राम") }
     var automatic by remember { mutableStateOf(context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)) }
+    var inputRoute by remember { mutableStateOf<String?>(null) }
     var running by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var transcript by remember { mutableStateOf("") }
     var matched by remember { mutableStateOf(false) }
     var matchedCount by remember { mutableIntStateOf(0) }
-    var presetMenu by rememberSaveable { mutableStateOf(false) }
+    var pendingMantra by remember(categoryId) { mutableStateOf<ChantPreset?>(null) }
     var selectedDeity by remember(categoryId) { mutableStateOf("All") }
     var query by rememberSaveable(categoryId) { mutableStateOf("") }
     var collection by rememberSaveable(categoryId) { mutableStateOf(0) }
@@ -320,6 +326,8 @@ fun AutoChantCounterScreen(
         var lastRetryAt = 0L
         while (true) {
             val active = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_audio_active", false)
+            inputRoute = context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE)
+                .getString("chant_input_route", null)
             running = active
             val recoverable = status.contains("reconnecting", true) || status.contains("stopped", true) || status.contains("error", true)
             if (automatic && !active && recoverable && System.currentTimeMillis() - lastRetryAt >= 15000L) {
@@ -331,192 +339,202 @@ fun AutoChantCounterScreen(
         }
     }
 
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                val malaProgress = if (totalCount > 0 && totalCount % 108 == 0) 108 else totalCount % 108
-                val malaFraction = malaProgress / 108f
-                val beadTint by animateColorAsState(if (malaProgress == 108) Color(0xFFB87928) else Color(0xFF7650A1), label = "beadCountTint")
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFEAF3F9)) {
-                        Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(totalCount.toString(), color = Color(0xFF285D87), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            Text(if (uiLanguage.isEnglish) "LIFETIME" else uiLanguage.indic("आजवरचे जप", "अब तक के जप"), color = Color(0xFF285D87), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
-                    }
-                    Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFF4EFF9)) {
-                        Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("$malaProgress/108", color = beadTint, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            Text(if (uiLanguage.isEnglish) "MALA PROGRESS" else uiLanguage.indic("माळ प्रगती", "माला की प्रगति"), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
-                    }
-                    Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFFFF4E4)) {
-                        Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text((totalCount / 108).toString(), color = Color(0xFFB87928), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            Text(if (uiLanguage.isEnglish) "MALAS" else uiLanguage.indic("पूर्ण माळा", "पूरी मालाएँ"), color = Color(0xFF9A6828), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                        }
+    if (!mantraLibrary) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val malaProgress = if (totalCount > 0 && totalCount % 108 == 0) 108 else totalCount % 108
+            val malaFraction = malaProgress / 108f
+            val beadTint by animateColorAsState(if (malaProgress == 108) Color(0xFFB87928) else Color(0xFF7650A1), label = "beadCountTint")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFEAF3F9)) {
+                    Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(totalCount.toString(), color = Color(0xFF285D87), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Text(if (uiLanguage.isEnglish) "LIFETIME" else uiLanguage.indic("आजवरचे जप", "अब तक के जप"), color = Color(0xFF285D87), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
-                Text(displayMantra(context, categoryId, target, latinMantras), color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
-                val manualInteraction = remember { MutableInteractionSource() }
-                val manualPressed by manualInteraction.collectIsPressedAsState()
-                val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
-                val circleAccent by animateColorAsState(if (count > 0 && count % 108 == 0) Color(0xFFD5A24B) else Color(0xFFB895D7), label = "japaCircleAccent")
-                Box(Modifier.padding(top = 6.dp).size(226.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
-                        progress = { malaFraction },
-                        modifier = Modifier.size(226.dp),
-                        strokeWidth = 9.dp,
-                        color = beadTint,
-                        trackColor = Color(0xFFE8E1D7)
-                    )
-                    Box(
-                        Modifier.size(201.dp)
-                            .graphicsLayer(scaleX = manualScale, scaleY = manualScale)
-                            .shadow(12.dp, CircleShape)
-                            .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
-                            .border(3.dp, circleAccent, CircleShape)
-                            .clickable(interactionSource = manualInteraction, indication = null, onClick = { onManualCount(target) }),
-                        contentAlignment = Alignment.Center
-                    ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.SelfImprovement, null, tint = Color(0xFF7855A6), modifier = Modifier.size(42.dp))
-                        Text((if (sessionCount > 0) sessionCount.toString() else "+1"), color = Color(0xFF38234F), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
-                        Text(if (uiLanguage.isEnglish) "TAP TO COUNT" else uiLanguage.indic("स्पर्श करून मोजा", "गिनने के लिए टैप करें"), color = Color(0xFF38234F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFF4EFF9)) {
+                    Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("$malaProgress/108", color = beadTint, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Text(if (uiLanguage.isEnglish) "MALA PROGRESS" else uiLanguage.indic("माळ प्रगती", "माला की प्रगति"), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
-                }
-                val magicCountLabel = uiLanguage.text("Magic Count", "मॅजिक काउंट", "मैजिक काउंट")
-                Surface(
-                    modifier = Modifier.padding(top = 12.dp),
-                    shape = RoundedCornerShape(22.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Row(
-                        Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(9.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Text(magicCountLabel, style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Switch(
-                            checked = automatic,
-                            modifier = Modifier.semantics { contentDescription = magicCountLabel },
-                            onCheckedChange = { enabled ->
-                                if (!enabled) stopRecognition()
-                                else {
-                                    automatic = false
-                                    matched = false
-                                    matchedCount = 0
-                                    transcript = ""
-                                    status = uiLanguage.text("Starting Magic Count…", "मॅजिक काउंट सुरू होत आहे…", "मैजिक काउंट शुरू हो रहा है…")
-                                    running = false
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
-                                        microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-                                    else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-                                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    else startService()
-                                }
-                            }
-                        )
+                Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFFFF4E4)) {
+                    Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text((totalCount / 108).toString(), color = Color(0xFFB87928), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                        Text(if (uiLanguage.isEnglish) "MALAS" else uiLanguage.indic("पूर्ण माळा", "पूरी मालाएँ"), color = Color(0xFF9A6828), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
-                if (!automatic && status.isNotBlank()) {
-                    Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(if (uiLanguage.isEnglish) "Today · $dayTotal/$dailyGoal" else "आज · $dayTotal/$dailyGoal",
-                            color = ink, style = MaterialTheme.typography.labelLarge)
-                        if (sessionCount > 0) Text(
-                            if (uiLanguage.isEnglish) "This session · $sessionCount" else uiLanguage.indic("या सत्रात · $sessionCount", "इस सत्र में · $sessionCount"),
-                            color = ink.copy(alpha = .7f), style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-                LinearProgressIndicator(
-                    progress = { (dayTotal.toFloat() / dailyGoal).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth()
+            }
+            Text(displayMantra(context, categoryId, target, latinMantras), color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
+            val manualInteraction = remember { MutableInteractionSource() }
+            val manualPressed by manualInteraction.collectIsPressedAsState()
+            val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
+            val circleAccent by animateColorAsState(if (count > 0 && count % 108 == 0) Color(0xFFD5A24B) else Color(0xFFB895D7), label = "japaCircleAccent")
+            Box(Modifier.padding(top = 6.dp).size(226.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(
+                    progress = { malaFraction },
+                    modifier = Modifier.size(226.dp),
+                    strokeWidth = 9.dp,
+                    color = beadTint,
+                    trackColor = Color(0xFFE8E1D7)
                 )
-                if (automatic) {
-                    val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true) || status.contains("ऐकत आहे", true) || status.contains("मंत्र जुळला", true))
-                    val micPulse = rememberInfiniteTransition(label = "offlineMicPulse")
-                    val micScale by micPulse.animateFloat(
-                        initialValue = 1f, targetValue = 1.18f,
-                        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                            animation = androidx.compose.animation.core.tween(650),
-                            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
-                        ), label = "micScale"
-                    )
-                    Surface(
-                        Modifier.fillMaxWidth().padding(top = 10.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (listeningOffline) Color(0xFFE4F5EA) else Color(0xFFF3EFF8)
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp)) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                if (listeningOffline) {
-                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF16834F), modifier = Modifier.size(22.dp).graphicsLayer(scaleX = micScale, scaleY = micScale))
-                                    Text(if (uiLanguage.isEnglish) "LISTENING OFFLINE" else uiLanguage.indic("ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है"), modifier = Modifier.weight(1f), color = Color(0xFF16834F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF76528D), modifier = Modifier.size(20.dp))
-                                    Text(if (uiLanguage.isEnglish) "LIVE RECOGNITION" else uiLanguage.indic("थेट आवाज ओळख", "लाइव आवाज़ पहचान"), modifier = Modifier.weight(1f), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                }
+                Box(
+                    Modifier.size(201.dp)
+                        .graphicsLayer(scaleX = manualScale, scaleY = manualScale)
+                        .shadow(12.dp, CircleShape)
+                        .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
+                        .border(3.dp, circleAccent, CircleShape)
+                        .clickable(interactionSource = manualInteraction, indication = null, onClick = { onManualCount(target) }),
+                    contentAlignment = Alignment.Center
+                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.SelfImprovement, null, tint = Color(0xFF7855A6), modifier = Modifier.size(42.dp))
+                    Text((if (sessionCount > 0) sessionCount.toString() else "+1"), color = Color(0xFF38234F), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                    Text(if (uiLanguage.isEnglish) "TAP TO COUNT" else uiLanguage.indic("स्पर्श करून मोजा", "गिनने के लिए टैप करें"), color = Color(0xFF38234F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+            }
+            val magicCountLabel = uiLanguage.text("Magic Count", "मॅजिक काउंट", "मैजिक काउंट")
+            Surface(
+                modifier = Modifier.padding(top = 12.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Text(magicCountLabel, style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Switch(
+                        checked = automatic,
+                        modifier = Modifier.semantics { contentDescription = magicCountLabel },
+                        onCheckedChange = { enabled ->
+                            if (!enabled) stopRecognition()
+                            else {
+                                automatic = false
+                                matched = false
+                                matchedCount = 0
+                                transcript = ""
+                                status = uiLanguage.text("Starting Magic Count…", "मॅजिक काउंट सुरू होत आहे…", "मैजिक काउंट शुरू हो रहा है…")
+                                running = false
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+                                    microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                                else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                else startService()
                             }
-                            if (listeningOffline) {
-                                val spoken = displayMantra(context, categoryId, target, latin = false)
-                                val formatted = if (latinMantras && spoken.isNotBlank()) {
-                                    transcript.replace(spoken, displayMantra(context, categoryId, target, latin = true))
-                                } else transcript
-                                Text(formatted.ifBlank { uiLanguage.text("Listening offline", "ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है") },
-                                    color = Color(0xFF16834F), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Text(uiLanguage.text("Preparing offline model…", "ऑफलाइन मॉडेल तयार होत आहे…", "ऑफ़लाइन मॉडल तैयार हो रहा है…"),
-                                        color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                            if (matched) Text(
-                                uiLanguage.text("Mantra matched", "मंत्र जुळला", "मंत्र पहचाना गया") +
-                                    if (matchedCount > 0) " · +$matchedCount" else "",
-                                color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
                         }
+                    )
+                }
+            }
+            if (!automatic && status.isNotBlank()) {
+                Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (uiLanguage.isEnglish) "Today · $dayTotal/$dailyGoal" else "आज · $dayTotal/$dailyGoal",
+                        color = ink, style = MaterialTheme.typography.labelLarge)
+                    if (sessionCount > 0) Text(
+                        if (uiLanguage.isEnglish) "This session · $sessionCount" else uiLanguage.indic("या सत्रात · $sessionCount", "इस सत्र में · $sessionCount"),
+                        color = ink.copy(alpha = .7f), style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+            LinearProgressIndicator(
+                progress = { (dayTotal.toFloat() / dailyGoal).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (automatic) {
+                val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true) || status.contains("ऐकत आहे", true) || status.contains("मंत्र जुळला", true))
+                val micPulse = rememberInfiniteTransition(label = "offlineMicPulse")
+                val micScale by micPulse.animateFloat(
+                    initialValue = 1f, targetValue = 1.18f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animation = androidx.compose.animation.core.tween(650),
+                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                    ), label = "micScale"
+                )
+                Surface(
+                    Modifier.fillMaxWidth().padding(top = 10.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (listeningOffline) Color(0xFFE4F5EA) else Color(0xFFF3EFF8)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                            if (listeningOffline) {
+                                Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF16834F), modifier = Modifier.size(22.dp).graphicsLayer(scaleX = micScale, scaleY = micScale))
+                                Text(if (uiLanguage.isEnglish) "LISTENING OFFLINE" else uiLanguage.indic("ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है"), modifier = Modifier.weight(1f), color = Color(0xFF16834F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            } else {
+                                Icon(Icons.Default.Mic, contentDescription = null, tint = Color(0xFF76528D), modifier = Modifier.size(20.dp))
+                                Text(if (uiLanguage.isEnglish) "LIVE RECOGNITION" else uiLanguage.indic("थेट आवाज ओळख", "लाइव आवाज़ पहचान"), modifier = Modifier.weight(1f), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (listeningOffline) {
+                            val spoken = displayMantra(context, categoryId, target, latin = false)
+                            val formatted = if (latinMantras && spoken.isNotBlank()) {
+                                transcript.replace(spoken, displayMantra(context, categoryId, target, latin = true))
+                            } else transcript
+                            Text(formatted.ifBlank { uiLanguage.text("Listening offline", "ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है") },
+                                color = Color(0xFF16834F), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Text(uiLanguage.text("Preparing offline model…", "ऑफलाइन मॉडेल तयार होत आहे…", "ऑफ़लाइन मॉडल तैयार हो रहा है…"),
+                                    color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (inputRoute != null) Text(
+                            when (inputRoute) {
+                                "bluetooth" -> uiLanguage.text("Bluetooth microphone", "ब्लूटूथ मायक्रोफोन", "ब्लूटूथ माइक्रोफ़ोन")
+                                "bluetooth_unavailable" -> uiLanguage.text("Headset mic unavailable · using device mic",
+                                    "हेडसेटचा माइक उपलब्ध नाही · फोनचा माइक वापरत आहे", "हेडसेट माइक उपलब्ध नहीं · फ़ोन का माइक इस्तेमाल हो रहा है")
+                                else -> uiLanguage.text("Device microphone", "उपकरणाचा मायक्रोफोन", "डिवाइस का माइक्रोफ़ोन")
+                            },
+                            color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall
+                        )
+                        if (matched) Text(
+                            uiLanguage.text("Mantra matched", "मंत्र जुळला", "मंत्र पहचाना गया") +
+                                if (matchedCount > 0) " · +$matchedCount" else "",
+                            color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                Column(
-                    Modifier.padding(top = 14.dp).widthIn(max = 272.dp).fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(onClick = { presetMenu = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(14.dp)) {
-                        Icon(Icons.Default.Search, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(uiLanguage.text("Choose mantra", "मंत्र निवडा", "मंत्र चुनें"))
+            }
+            Column(
+                Modifier.padding(top = 14.dp).widthIn(max = 272.dp).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(onClick = { pendingMantra = null; onLibraryChange(true) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(14.dp)) {
+                    Icon(Icons.Default.Search, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(uiLanguage.text("Choose mantra", "मंत्र निवडा", "मंत्र चुनें"))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onEditGoal,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(8.dp)) {
+                        Icon(Icons.Default.Edit, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(uiLanguage.text("Edit goal", "लक्ष्य बदला", "लक्ष्य बदलें"))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onEditGoal,
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(8.dp)) {
-                            Icon(Icons.Default.Edit, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(5.dp))
-                            Text(uiLanguage.text("Edit goal", "लक्ष्य बदला", "लक्ष्य बदलें"))
-                        }
-                        Button(onClick = { onFinish?.invoke() }, enabled = onFinish != null,
-                            modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(8.dp)) {
-                            Icon(Icons.Default.Check, null, Modifier.size(16.dp))
-                            Spacer(Modifier.width(5.dp))
-                            Text(uiLanguage.text("Finish", "सत्र पूर्ण करा", "पूरा करें"))
-                        }
+                    Button(onClick = { onFinish?.invoke() }, enabled = onFinish != null,
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(8.dp)) {
+                        Icon(Icons.Default.Check, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(uiLanguage.text("Finish", "सत्र पूर्ण करा", "पूरा करें"))
                     }
                 }
             }
         }
     }
-    if (presetMenu) {
+    if (mantraLibrary) {
         val groups = listOf("All", "Ram", "Krishna", "Shiva", "Ganesh", "Hanuman", "Devi", "Vishnu", "Dattatreya", "Guru", "Other")
         val groupsMr = listOf(uiLanguage.indic("सर्व", "सभी"), "राम", "कृष्ण", "शिव", "गणेश", "हनुमान", "देवी", "विष्णू", "दत्तात्रेय", "गुरु", uiLanguage.indic("इतर", "अन्य"))
         val visible = (chantPresets + customMantras).distinctBy { it.devanagari }.filter { item ->
@@ -528,59 +546,80 @@ fun AutoChantCounterScreen(
                     else -> true
                 }
         }.let { items -> if (collection == 1) items.sortedBy { recent.indexOf(it.devanagari) } else items }
-        AlertDialog(
-            onDismissRequest = { presetMenu = false },
-            title = { Text(if (uiLanguage.isEnglish) "Choose mantra" else uiLanguage.indic("मंत्र निवडा", "मंत्र चुनें")) },
-            text = {
-                Column {
-                    OutlinedTextField(query, { query = it }, singleLine = true,
-                        label = { Text(if (uiLanguage.isEnglish) "Search mantras" else uiLanguage.indic("मंत्र शोधा", "मंत्र खोजें")) })
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        val labels = if (uiLanguage.isEnglish) listOf("All", "Recent", "Favourites") else listOf(uiLanguage.indic("सर्व", "सभी"), uiLanguage.indic("अलीकडील", "हाल के"), uiLanguage.indic("आवडते", "पसंदीदा"))
-                        labels.forEachIndexed { index, label ->
-                            FilterChip(collection == index, { collection = index }, { Text(label) })
-                        }
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        groups.forEachIndexed { index, group ->
-                            FilterChip(selectedDeity == group, { selectedDeity = group },
-                                { Text(if (uiLanguage.isEnglish) group else groupsMr[index]) })
-                        }
-                    }
-                    Column(Modifier.heightIn(max = 244.dp).verticalScroll(rememberScrollState())) {
-                        if (visible.isEmpty()) Text(if (uiLanguage.isEnglish) "No matching mantras" else uiLanguage.indic("जुळणारे मंत्र नाहीत", "कोई मिलता-जुलता मंत्र नहीं है"))
-                        visible.forEach { item ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                TextButton(modifier = Modifier.weight(1f), onClick = {
-                                    target = if (legacyLatinKey) item.latin else item.devanagari
-                                    prefs.edit().putString("target_$categoryId", target).apply()
-                                    rememberMantra(item.devanagari)
-                                    onMantraChange(target)
-                                    if (automatic) startService()
-                                    presetMenu = false
-                                }) { Text(if (latinMantras) item.latin else item.devanagari) }
-                                val favourite = item.devanagari in favourites
-                                IconButton(onClick = {
-                                    favourites = if (favourite) favourites - item.devanagari else favourites + item.devanagari
-                                    prefs.edit().putStringSet("favourites_$categoryId", favourites).apply()
-                                }) {
-                                    Icon(if (favourite) Icons.Default.Star else Icons.Default.StarBorder,
-                                        contentDescription = if (uiLanguage.isEnglish) {
-                                            if (favourite) "Remove favourite" else "Add favourite"
-                                        } else if (favourite) uiLanguage.indic("आवडीतून काढा", "पसंदीदा से हटाएँ") else uiLanguage.indic("आवडीत जोडा", "पसंदीदा में जोड़ें"))
-                                }
+        val selection = pendingMantra
+        Column(Modifier.fillMaxSize().imePadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                label = { Text(uiLanguage.text("Search mantras", "मंत्र शोधा", "मंत्र खोजें")) })
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val labels = listOf(uiLanguage.text("All", "सर्व", "सभी"), uiLanguage.text("Recent", "अलीकडील", "हाल के"),
+                    uiLanguage.text("Favourites", "आवडते", "पसंदीदा"))
+                labels.forEachIndexed { index, label ->
+                    FilterChip(collection == index, { collection = index }, { Text(label) })
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                groups.forEachIndexed { index, group ->
+                    FilterChip(selectedDeity == group, { selectedDeity = group },
+                        { Text(if (uiLanguage.isEnglish) group else groupsMr[index]) })
+                }
+            }
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (visible.isEmpty()) item {
+                    Text(uiLanguage.text("No matching mantras", "जुळणारे मंत्र नाहीत", "कोई मिलता-जुलता मंत्र नहीं है"))
+                }
+                items(visible, key = { it.devanagari }) { item ->
+                    val selected = item == selection || (selection == null &&
+                        (target == item.devanagari || target == item.latin))
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+                        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+                    ) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f).clickable { pendingMantra = item }.padding(12.dp)) {
+                                Text(if (latinMantras) item.latin else item.devanagari, style = MaterialTheme.typography.titleMedium)
+                                Text(if (latinMantras) item.devanagari else item.latin, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (selected) Icon(Icons.Default.Check, uiLanguage.text("Selected", "निवडलेला", "चुना गया"))
+                            val favourite = item.devanagari in favourites
+                            IconButton(onClick = {
+                                favourites = if (favourite) favourites - item.devanagari else favourites + item.devanagari
+                                prefs.edit().putStringSet("favourites_$categoryId", favourites).apply()
+                            }) {
+                                Icon(if (favourite) Icons.Default.Star else Icons.Default.StarBorder,
+                                    if (favourite) uiLanguage.text("Remove favourite", "आवडीतून काढा", "पसंदीदा से हटाएँ")
+                                    else uiLanguage.text("Add favourite", "आवडीत जोडा", "पसंदीदा में जोड़ें"))
                             }
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    presetMenu = false; newMantraMr = ""; newMantraEn = ""; addMantraDialog = true
-                }) { Text(if (uiLanguage.isEnglish) "Add mantra" else uiLanguage.indic("मंत्र जोडा", "मंत्र जोड़ें")) }
-            },
-            dismissButton = { TextButton(onClick = { presetMenu = false }) { Text(if (uiLanguage.isEnglish) "Close" else uiLanguage.indic("बंद करा", "बंद करें")) } }
-        )
+            }
+            if (selection != null) {
+                Text(if (latinMantras) selection.latin else selection.devanagari, style = MaterialTheme.typography.labelLarge,
+                    maxLines = 2)
+            }
+            Button(onClick = {
+                if (selection != null) {
+                    val chosen = if (legacyLatinKey) selection.latin else selection.devanagari
+                    if (chosen != target) {
+                        target = chosen
+                        prefs.edit().putString("target_$categoryId", target).apply()
+                        onMantraChange(target)
+                        if (automatic) startService()
+                    }
+                    rememberMantra(selection.devanagari)
+                }
+                onLibraryChange(false)
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text(uiLanguage.text("Start Japa", "जप सुरू करा", "जप शुरू करें"))
+            }
+            TextButton(onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
+                modifier = Modifier.fillMaxWidth()) {
+                Text(uiLanguage.text("Add mantra", "मंत्र जोडा", "मंत्र जोड़ें"))
+            }
+        }
     }
     if (addMantraDialog) {
         AlertDialog(
@@ -602,19 +641,8 @@ fun AutoChantCounterScreen(
                         val added = ChantPreset(latin, devanagari, latin)
                         customMantras = (customMantras + added).distinctBy { it.devanagari }
                         val saved = customMantras.map { it.devanagari + "\u001F" + it.latin }.toSet()
-                        val selectedText = if (legacyLatinKey) latin else devanagari
-                        prefs.edit().putStringSet("custom_mantras_$categoryId", saved)
-                            .putString("target_$categoryId", selectedText).apply()
-                        target = selectedText
-                        rememberMantra(devanagari)
-                        onMantraChange(selectedText)
-                        if (running) {
-                            transcript = ""
-                            matched = false
-                            matchedCount = 0
-                            status = if (uiLanguage.isEnglish) "Preparing offline model…" else uiLanguage.indic("ऑफलाइन मॉडेल तयार होत आहे…", "ऑफ़लाइन मॉडल तैयार हो रहा है…")
-                            ChantRecognitionService.start(context, categoryId, selectedText)
-                        }
+                        prefs.edit().putStringSet("custom_mantras_$categoryId", saved).apply()
+                        pendingMantra = added
                     }
                     addMantraDialog = false
                 }, enabled = newMantraMr.isNotBlank() && newMantraEn.isNotBlank()) { Text(if (uiLanguage.isEnglish) "Add" else uiLanguage.indic("जोडा", "जोड़ें")) }

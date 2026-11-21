@@ -68,3 +68,9 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Separated the language and mantra-script dropdowns. The counter stays on Practice, with a Magic Count switch and boxed actions below the listening panel.
 - Updated the floating footer with a gradient and colored glow. Applied light and dark gradients to daily-goal, milestone, and other Progress figures.
 - **Build #556** passed Android compilation and unit tests. The control spacing, footer glow, and KPI contrast still need a phone review. [Build #556](https://github.com/project-bharat/japacounterapp/actions/runs/44915997580)
+
+### Bluetooth microphone and mantra library
+
+- Magic Count requests Bluetooth headset input when Android exposes a compatible call-audio route. The listening panel reports the microphone actually used, including handset fallback.
+- Choose Mantra opens a full page with search, filters, favourites, and a Start Japa button. Practice places the logo, counter, and controls directly on the app gradient.
+- Physical Bluetooth verification is pending for Classic SCO and LE Audio headsets.
