@@ -10,7 +10,7 @@ Manual counting, local history, reminders, and local backup belong in the free e
 
 ## Current baseline
 
-Development is on `japa-ui-recovery-528`. The current UI candidate is **Build #548** at `3b5d54c`. GitHub Actions compiled the debug APK, passed unit tests, and uploaded the APK and ZIP. Phone testing is pending. [Build #548 and artifacts](https://github.com/project-bharat/japacounterapp/actions/runs/44891244569)
+Development is on `japa-ui-recovery-528`. The current UI candidate is **Build #550** at `60f36d8`. GitHub Actions compiled the debug APK, passed unit tests, and uploaded the APK and ZIP. Build #548 was tested on a phone, and its screenshot feedback informed Build #550. Phone testing of the redesign is pending. [Build #550 and artifacts](https://github.com/project-bharat/japacounterapp/actions/runs/44896922921)
 
 | Area | Current state |
 | --- | --- |
@@ -23,7 +23,7 @@ Development is on `japa-ui-recovery-528`. The current UI candidate is **Build #5
 
 ## Delivery order
 
-1. **Validate Build #548 on phones.** Test a fresh install and an upgrade with existing data. Check manual and voice counts across interruption, Finish, microphone denial, offline model availability, goal history, calendar navigation, reminders, widget refresh, and a local backup round trip.
+1. **Validate Build #550 on phones.** Test a fresh install and an upgrade with existing data. Check manual and voice counts across interruption, Finish, microphone denial, offline model availability, goal history, calendar navigation, reminders, widget refresh, and a local backup round trip.
 2. **Sign off on the refreshed UI.** Review one-handed controls, clarity of voice states, feedback preferences, and recent and favourite mantras. Capture screenshots in Marathi and English and review large fonts, dark mode, and TalkBack before starting Play release work.
 3. **Prepare the Play release and subscription.** Confirm the current target API and billing requirements, configure Play signing and test tracks, prepare the signed Android App Bundle and store materials, and verify purchase, restore, cancellation, and expiry in Play testing. Confirm prices and subscription periods before publishing.
 4. **Implement and verify Pro Drive backup.** Follow the backup brief. Set up Google OAuth and the Drive API, preserve older local backups, and validate account linking, revoked access, retry behavior, and conflicts across devices. [Backup and Drive sync brief](backup-and-drive-sync-brief.md)
