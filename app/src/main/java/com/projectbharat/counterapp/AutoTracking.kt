@@ -12,6 +12,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.imePadding
@@ -773,6 +775,45 @@ fun JapaReportScreen(
                 } },
                 dismissButton = { TextButton(onClick = { shareKind = 0 }) { Text(if (uiLanguage.isEnglish) "Close" else uiLanguage.indic("बंद करा", "बंद करें")) } })
         }
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (uiLanguage.isEnglish) "PROGRESS ANALYTICS" else uiLanguage.indic("जप प्रगती विश्लेषण", "जप प्रगति का विश्लेषण"), color = ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    SegmentedButtonRowCompat(chartMode, listOf("BAR","LINE"), { chartMode=it }, uiLanguage)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    listOf("WEEKLY","MONTHLY").forEach { p ->
+                        FilterChip(selected=period==p,onClick={period=p;anchorValue=today.toEpochDay()},label={Text(if(uiLanguage.isEnglish)p else if(p=="WEEKLY") "साप्ताहिक" else "मासिक")})
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
+                    IconButton(onClick={anchorValue=(if (period == "MONTHLY") anchor.minusMonths(1) else anchor.minusWeeks(1)).toEpochDay()}){Text("‹")}
+                    Text(periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", uiLanguage.locale))+" – "+periodEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", uiLanguage.locale)),color=ink,fontWeight=FontWeight.Medium)
+                    IconButton(onClick={anchorValue=(if (period == "MONTHLY") anchor.plusMonths(1) else anchor.plusWeeks(1)).coerceAtMost(today).toEpochDay()}){Text("›")}
+                }
+                var selectedDay by rememberSaveable(period, anchorValue) { mutableStateOf<String?>(null) }
+                JapaActivityChart(chartDays, chartMode, Modifier.fillMaxWidth().height(190.dp)
+                    .pointerInput(chartDays) {
+                        detectTapGestures { point ->
+                            val index = (point.x / size.width * chartDays.size).toInt().coerceIn(0, chartDays.lastIndex)
+                            selectedDay = chartDays[index].date
+                        }
+                    }, ink, uiLanguage)
+                selectedDay?.let { date ->
+                    val value = totalsByDate[date] ?: 0
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("$date · $value", Modifier.weight(1f), color = ink)
+                        TextButton(onClick = { runCatching { LocalDate.parse(date) }.getOrNull()?.let(onDaySelected) },
+                            enabled = runCatching { !LocalDate.parse(date).isAfter(today) }.getOrDefault(false)) {
+                            Text(uiLanguage.text("View day", "दिवस पहा", "दिन देखें"))
+                        }
+                    }
+                }
+                Surface(color=Color(0xFFE8DDF4),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
+                    Text((if(uiLanguage.isEnglish)"Total: " else uiLanguage.indic("एकूण: ", "कुल: "))+NumberFormat.getIntegerInstance(uiLanguage.locale).format(periodSum)+(if(uiLanguage.isEnglish)" Japa" else " जप"),modifier=Modifier.padding(12.dp),color=Color(0xFF5C3B85),fontWeight=FontWeight.Bold,textAlign=TextAlign.Center)
+                }
+            }
+        }
         Text(today.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", uiLanguage.locale)), color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepMetricCard(if (uiLanguage.isEnglish) "TOTAL JAPA" else uiLanguage.indic("एकूण जप", "कुल जप"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(total), if (uiLanguage.isEnglish) "${total / 108} malas" else uiLanguage.indic("${total / 108} माळा", "${total / 108} माला"), ink, Modifier.weight(1f))
@@ -782,11 +823,16 @@ fun JapaReportScreen(
             StepMetricCard(if (uiLanguage.isEnglish) "PRACTICE STREAK" else uiLanguage.indic("जपाची सध्याची सलगता", "लगातार जप के दिन"), "$currentStreak", if (uiLanguage.isEnglish) "days" else uiLanguage.indic("दिवस", "दिन"), ink, Modifier.weight(1f))
             StepMetricCard(if (uiLanguage.isEnglish) "LONGEST STREAK" else uiLanguage.indic("सर्वाधिक सलगता", "सबसे लंबी निरंतरता"), "$longestStreak", if (uiLanguage.isEnglish) "days" else uiLanguage.indic("दिवस", "दिन"), ink, Modifier.weight(1f))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        var moreStats by rememberSaveable { mutableStateOf(false) }
+        TextButton(onClick = { moreStats = !moreStats }) {
+            Text(if (moreStats) uiLanguage.text("Less stats", "कमी आकडे", "कम आँकड़े")
+                else uiLanguage.text("More stats", "अधिक आकडे", "और आँकड़े"))
+        }
+        if (moreStats) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepMetricCard(if (uiLanguage.isEnglish) "ACTIVE DAYS" else uiLanguage.indic("सक्रिय दिवस", "सक्रिय दिन"), "${activeDates.size}", if (uiLanguage.isEnglish) "All time" else uiLanguage.indic("एकूण", "कुल"), ink, Modifier.weight(1f))
             StepMetricCard(if (uiLanguage.isEnglish) "AVERAGE / DAY" else uiLanguage.indic("दररोज सरासरी", "दैनिक औसत"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(average), if (uiLanguage.isEnglish) "Per active day" else uiLanguage.indic("सक्रिय दिवस", "सक्रिय दिन"), ink, Modifier.weight(1f))
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (moreStats) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepMetricCard(if (uiLanguage.isEnglish) "BEST DAY" else uiLanguage.indic("सर्वोत्तम दिवस", "सबसे अच्छा दिन"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(best?.value ?: 0), best?.key?.let { runCatching { LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", uiLanguage.locale)) }.getOrDefault(it) } ?: "—", ink, Modifier.weight(1f))
             StepMetricCard(if (uiLanguage.isEnglish) "TOTAL MALAS" else uiLanguage.indic("पूर्ण माळा", "पूरी मालाएँ"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(total / 108), if (uiLanguage.isEnglish) "108 japa each" else uiLanguage.indic("प्रत्येक माळ १०८", "प्रति माला १०८"), ink, Modifier.weight(1f))
         }
@@ -842,28 +888,6 @@ fun JapaReportScreen(
                     }
                 }
                 Text(if (uiLanguage.isEnglish) "✓ Goal reached · • Partial practice" else uiLanguage.indic("✓ लक्ष्य पूर्ण · • काही जप झाले", "✓ लक्ष्य पूरा · • कुछ जप हुए"), color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (uiLanguage.isEnglish) "PROGRESS ANALYTICS" else uiLanguage.indic("जप प्रगती विश्लेषण", "जप प्रगति का विश्लेषण"), color = ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    SegmentedButtonRowCompat(chartMode, listOf("BAR","LINE"), { chartMode=it }, uiLanguage)
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    listOf("WEEKLY","MONTHLY").forEach { p ->
-                        FilterChip(selected=period==p,onClick={period=p;anchorValue=today.toEpochDay()},label={Text(if(uiLanguage.isEnglish)p else if(p=="WEEKLY") "साप्ताहिक" else "मासिक")})
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
-                    IconButton(onClick={anchorValue=(if (period == "MONTHLY") anchor.minusMonths(1) else anchor.minusWeeks(1)).toEpochDay()}){Text("‹")}
-                    Text(periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", uiLanguage.locale))+" – "+periodEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", uiLanguage.locale)),color=ink,fontWeight=FontWeight.Medium)
-                    IconButton(onClick={anchorValue=(if (period == "MONTHLY") anchor.plusMonths(1) else anchor.plusWeeks(1)).coerceAtMost(today).toEpochDay()}){Text("›")}
-                }
-                JapaActivityChart(chartDays, chartMode, Modifier.fillMaxWidth().height(190.dp), ink, uiLanguage)
-                Surface(color=Color(0xFFE8DDF4),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
-                    Text((if(uiLanguage.isEnglish)"Total: " else uiLanguage.indic("एकूण: ", "कुल: "))+NumberFormat.getIntegerInstance(uiLanguage.locale).format(periodSum)+(if(uiLanguage.isEnglish)" Japa" else " जप"),modifier=Modifier.padding(12.dp),color=Color(0xFF5C3B85),fontWeight=FontWeight.Bold,textAlign=TextAlign.Center)
-                }
             }
         }
         Card(Modifier.fillMaxWidth(), shape=RoundedCornerShape(20.dp), colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {

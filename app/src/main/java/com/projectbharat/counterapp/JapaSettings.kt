@@ -33,6 +33,8 @@ internal fun JapaSettingsScreen(
             PreferenceSwitch(if (uiLanguage.isEnglish) "Tap vibration" else uiLanguage.indic("स्पर्श कंपन", "टैप पर कंपन"), tap, onTap)
             PreferenceSwitch(if (uiLanguage.isEnglish) "Mala completion vibration" else uiLanguage.indic("माळ पूर्ण झाल्यावर कंपन", "माला पूरी होने पर कंपन"), mala, onMala)
             PreferenceSwitch(if (uiLanguage.isEnglish) "Tap sound" else uiLanguage.indic("स्पर्श ध्वनी", "टैप की ध्वनि"), sound, onSound)
+        }
+        SettingsGroup(uiLanguage.text("Language", "भाषा", "भाषा")) {
             SettingsDropdown(if (uiLanguage.isEnglish) "App language" else uiLanguage.indic("अॅपची भाषा", "ऐप की भाषा"),
                 UiLanguage.entries.map { it.label }, uiLanguage.ordinal) { onLanguage(UiLanguage.entries[it]) }
             SettingsDropdown(if (uiLanguage.isEnglish) "Mantra display script" else uiLanguage.indic("मंत्राची लिपी", "मंत्र की लिपि"),

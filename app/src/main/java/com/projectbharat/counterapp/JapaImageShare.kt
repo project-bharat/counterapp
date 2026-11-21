@@ -78,11 +78,13 @@ private fun renderJapaImage(context: Context, card: JapaImageCard): Bitmap {
     val bitmap = Bitmap.createBitmap(1080, 1350, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    paint.shader = LinearGradient(0f, 0f, 0f, 1350f, intArrayOf(
-        0xFFE3ECE2.toInt(), 0xFFF9F2E5.toInt(), 0xFFECE2F2.toInt()
-    ), null, Shader.TileMode.CLAMP)
-    canvas.drawPaint(paint)
-    paint.shader = null
+    val background = BitmapFactory.decodeResource(context.resources, R.drawable.practice_sunrise)
+    if (background != null) {
+        canvas.drawBitmap(background, null, RectF(0f, 0f, 1080f, 1350f), paint)
+        background.recycle()
+    } else {
+        canvas.drawColor(0xFFF5E8D5.toInt())
+    }
     paint.color = 0xFFFCF9F4.toInt()
     canvas.drawRoundRect(RectF(64f, 250f, 1016f, 1218f), 48f, 48f, paint)
     val logo = BitmapFactory.decodeResource(context.resources, R.drawable.bilan_header_logo_dark)
