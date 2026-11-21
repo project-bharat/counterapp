@@ -10,7 +10,7 @@ Manual counting, local history, reminders, and local backup belong in the free e
 
 ## Current baseline
 
-Development is on `japa-ui-recovery-528`. The last verified app build is **#546** at `eadf1fc`. GitHub Actions compiled the debug APK and passed unit tests. The standalone APK and the APK inside the ZIP were verified to match. Phone testing is pending. [Build #546 and artifacts](https://github.com/project-bharat/japacounterapp/actions/runs/44876342188)
+Development is on `japa-ui-recovery-528`. The current UI candidate is **Build #548** at `3b5d54c`. GitHub Actions compiled the debug APK, passed unit tests, and uploaded the APK and ZIP. Phone testing is pending. [Build #548 and artifacts](https://github.com/project-bharat/japacounterapp/actions/runs/44891244569)
 
 | Area | Current state |
 | --- | --- |
@@ -23,8 +23,8 @@ Development is on `japa-ui-recovery-528`. The last verified app build is **#546*
 
 ## Delivery order
 
-1. **Validate Build #546 on phones.** Test a fresh install and an upgrade with existing data. Check manual and voice counts across interruption, Finish, microphone denial, offline model availability, goal history, calendar navigation, reminders, widget refresh, and a local backup round trip.
-2. **Polish the daily practice experience.** Prioritize one-handed controls, clear voice states, feedback preferences, and recent or favourite mantras. Review Marathi wrapping, large fonts, dark mode, and TalkBack. Keep optional content and public leaderboards out of the critical path.
+1. **Validate Build #548 on phones.** Test a fresh install and an upgrade with existing data. Check manual and voice counts across interruption, Finish, microphone denial, offline model availability, goal history, calendar navigation, reminders, widget refresh, and a local backup round trip.
+2. **Sign off on the refreshed UI.** Review one-handed controls, clarity of voice states, feedback preferences, and recent and favourite mantras. Capture screenshots in Marathi and English and review large fonts, dark mode, and TalkBack before starting Play release work.
 3. **Prepare the Play release and subscription.** Confirm the current target API and billing requirements, configure Play signing and test tracks, prepare the signed Android App Bundle and store materials, and verify purchase, restore, cancellation, and expiry in Play testing. Confirm prices and subscription periods before publishing.
 4. **Implement and verify Pro Drive backup.** Follow the backup brief. Set up Google OAuth and the Drive API, preserve older local backups, and validate account linking, revoked access, retry behavior, and conflicts across devices. [Backup and Drive sync brief](backup-and-drive-sync-brief.md)
 5. **Evaluate follow-up features.** Consider personal milestones, recap cards, and advanced goals after the core flows are validated.
@@ -36,6 +36,8 @@ Development is on `japa-ui-recovery-528`. The last verified app build is **#546*
 - **21 November 2026** recorded the offline-first backup and Pro Drive sync requirements for future implementation.
 
 ## UI implementation
+
+Build #548 combines the navigation, Practice, Progress, and Settings changes for review. [Build #548](https://github.com/project-bharat/japacounterapp/actions/runs/44891244569)
 
 - Added the Practice, Progress, and Settings navigation shell around the original Japa counter.
 - Added a searchable mantra picker with recent and favourite selections, practice feedback controls, a shareable Finish summary, a daily Progress overview, and a monthly recap.
