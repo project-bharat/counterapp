@@ -36,3 +36,7 @@ The repository includes editable adaptive launcher vector resources. To replace 
 ## Existing data and backups
 
 The recovery branch hides the retired Baby Movement and Steps categories. Existing records are retained in Room and included in version 1 JSON backups. Restoring a backup replaces local records and creates a Japa category if the backup lacks one.
+
+## Development handoff
+
+See the [living development plan](docs/development-plan.md) for the current baseline, roadmap, validation status, and links to feature briefs.
