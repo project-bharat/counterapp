@@ -126,18 +126,22 @@ class MainActivity : ComponentActivity() {
         private set
     var launchCounterQuickStart by mutableStateOf(false)
         private set
-    var launchBabyVoice by mutableStateOf(false)
-        private set
-    fun consumeLaunchCounterKind() { launchCounterKind = null; launchCounterQuickStart = false; launchBabyVoice = false }
+    fun consumeLaunchCounterKind() {
+        launchCounterKind = null
+        launchCounterQuickStart = false
+    }
+
+    private fun readCounterIntent(intent: Intent) {
+        if (intent.action != ACTION_OPEN_COUNTER ||
+            intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND) != "MANTRA") return
+        launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
+        launchCounterKind = "MANTRA"
+    }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_OPEN_COUNTER) {
-            launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
-            launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
-            launchBabyVoice = intent.getBooleanExtra("baby_voice", false)
-        }
+        readCounterIntent(intent)
     }
 
     override fun onResume() {
@@ -145,15 +149,8 @@ class MainActivity : ComponentActivity() {
         QuickActionsNotification.show(this)
     }
 
-    override fun onStop() {
-        // Foreground step and Japa services continue when the UI is backgrounded.
-        super.onStop()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        launchCounterKind = intent.getStringExtra(CounterQuickActions.EXTRA_COUNTER_KIND)
-        launchCounterQuickStart = intent.getBooleanExtra("quick_start", false)
-        launchBabyVoice = intent.getBooleanExtra("baby_voice", false)
+        readCounterIntent(intent)
         // Use the Android SplashScreen API defaults. Android removes the splash
         // automatically as soon as the first app frame is ready.
         installSplashScreen()
@@ -315,9 +312,7 @@ fun CounterApp(repo: CounterRepository) {
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
     val shortcutQuickStart = activity?.launchCounterQuickStart == true
-    val shortcutBabyVoice = activity?.launchBabyVoice == true
     var autoStartBabyVoice by remember { mutableStateOf(false) }
-    LaunchedEffect(shortcutBabyVoice) { if (shortcutBabyVoice) autoStartBabyVoice = true }
     var mantraTarget by remember { mutableStateOf(context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_1", "राम") ?: "राम") }
     var showPermissionIntro by remember {
         mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
@@ -354,26 +349,19 @@ fun CounterApp(repo: CounterRepository) {
         CounterQuickActions.publishShortcuts(context, categories)
         CounterHomeWidget.refresh(context)
     }
-    LaunchedEffect(categories, shortcutKind, shortcutQuickStart, shortcutBabyVoice) {
-        shortcutKind?.let { kind ->
-            categories.firstOrNull { it.kind == kind }?.let { category ->
-                selectedId = category.id
-                if (shortcutQuickStart) when (kind) {
-                    "BABY" -> scope.launch { vm.startSession(category.id) }
-                    "MANTRA" -> {
-                        val micGranted = ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                        if (micGranted) {
-                            val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
-                            val target = prefs.getString("target_${category.id}", "राम") ?: "राम"
-                            mantraTarget = target
-                            val language = if (target.any { it in '\u0900'..'\u097F' }) "hi" else "en"
-                            ChantRecognitionService.start(context, category.id, target, language)
-                        }
-                    }
-                }
-            }
+    LaunchedEffect(categories, shortcutKind, shortcutQuickStart) {
+        if (shortcutKind == null) return@LaunchedEffect
+        val category = categories.firstOrNull { it.kind == "MANTRA" } ?: return@LaunchedEffect
+        selectedId = category.id
+        if (shortcutQuickStart &&
+            ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
+            val target = prefs.getString("target_${category.id}", "राम") ?: "राम"
+            mantraTarget = target
+            val language = if (target.any { it in '\u0900'..'\u097F' }) "hi" else "en"
+            ChantRecognitionService.start(context, category.id, target, language)
         }
-        if (shortcutKind != null) activity?.consumeLaunchCounterKind()
+        activity?.consumeLaunchCounterKind()
     }
     val selected = categories.firstOrNull { it.id == selectedId } ?: categories.firstOrNull()
     LaunchedEffect(categories) { if (categories.isNotEmpty() && categories.none { it.id == selectedId }) selectedId = categories.first().id }
@@ -418,11 +406,6 @@ fun CounterApp(repo: CounterRepository) {
     val activeSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt == null && clock < it.startedAt + limit }
     val resumableSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; it.endedAt != null && clock < it.startedAt + limit }
     val lockedSession = latestSession?.takeIf { val limit = CounterRepository.TWO_HOURS_MS; clock < it.startedAt + limit }
-    LaunchedEffect(activeSession?.id, activeSession?.movementCount, english) {
-        if (activeSession != null && selected != null) {
-            BabySessionNotification.show(context, activeSession.id, selected.id, activeSession.movementCount, english)
-        } else BabySessionNotification.cancel(context)
-    }
     LaunchedEffect(activeSession?.id) { if (activeSession == null) autoStartBabyVoice = false }
     val remainingMs = activeSession?.let { val limit = CounterRepository.TWO_HOURS_MS; (it.startedAt + limit - clock).coerceAtLeast(0L) } ?: 0L
     val detectionFlow = remember(selected?.id, historyDate) { selected?.let { vm.detectionsForDay(it.id, historyDate.toString()) } ?: flowOf(emptyList()) }

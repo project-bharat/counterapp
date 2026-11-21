@@ -59,10 +59,8 @@ private object TrackingNotifications {
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(title).setContentText(text).setOngoing(true)
             .setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .addAction(android.R.drawable.ic_menu_my_calendar, "Start session",
-                CounterQuickActions.activityPending(context, "BABY", 7103))
             .addAction(android.R.drawable.ic_media_play, "Start Japa",
-                CounterQuickActions.activityPending(context, "MANTRA", 7104))
+                CounterQuickActions.activityPending(context, 7104))
             .apply { if (stopIntent != null) addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent) }
             .build()
     }
