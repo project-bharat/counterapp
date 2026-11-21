@@ -18,6 +18,8 @@ internal class ChantAudioRoute(private val audio: AudioManager) : AutoCloseable 
     var headsetRequested = false
         private set
 
+    val sampleRate: Int get() = if (startedSco) 8000 else 16000
+
     fun prepare(): Int {
         val headset = if (Build.VERSION.SDK_INT >= 31) {
             audio.availableCommunicationDevices.firstOrNull { it.isBluetoothVoice() }
@@ -75,3 +77,23 @@ internal class ChantAudioRoute(private val audio: AudioManager) : AutoCloseable 
 internal fun AudioDeviceInfo.isBluetoothVoice(): Boolean =
     type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
         (Build.VERSION.SDK_INT >= 31 && type == AudioDeviceInfo.TYPE_BLE_HEADSET)
+
+/** Legacy SCO captures 8 kHz mono PCM. Vosk continues receiving 16 kHz PCM. */
+internal class ScoPcmResampler(inputCapacity: Int) {
+    private val output = ByteArray(inputCapacity * 2)
+    private var previousSample: Int? = null
+
+    fun convert(input: ByteArray, size: Int): ByteArray {
+        for (index in 0 until size - 1 step 2) {
+            val sample = (input[index + 1].toInt() shl 8) or (input[index].toInt() and 0xff)
+            val midpoint = ((previousSample ?: sample) + sample) / 2
+            val out = index * 2
+            output[out] = midpoint.toByte()
+            output[out + 1] = (midpoint shr 8).toByte()
+            output[out + 2] = sample.toByte()
+            output[out + 3] = (sample shr 8).toByte()
+            previousSample = sample
+        }
+        return output
+    }
+}

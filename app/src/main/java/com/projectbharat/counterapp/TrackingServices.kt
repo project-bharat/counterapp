@@ -258,8 +258,6 @@ class ChantRecognitionService : Service() {
             grammarJson.put("[unk]")
             val grammar = grammarJson.toString()
             recognizer = VoskRecognizerCache.get(model!!, modelDir.absolutePath, recognizerKey, grammar)
-            val minBuffer = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
             val audioManager = requireNotNull(getSystemService(AudioManager::class.java))
             if (audioManager.mode == AudioManager.MODE_IN_CALL) {
                 throw IllegalStateException("Microphone busy — another app or call is using it")
@@ -268,8 +266,12 @@ class ChantRecognitionService : Service() {
             inputRoute = route
             val source = route.prepare()
             if (stopRequested || Thread.currentThread().isInterrupted) return
-            val record = AudioRecord(source, 16000,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuffer, 8192))
+            val inputRate = route.sampleRate
+            val minBuffer = AudioRecord.getMinBufferSize(inputRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            if (minBuffer <= 0) throw IllegalStateException("Audio input is not supported")
+            val bufferSize = maxOf(minBuffer, inputRate / 4)
+            val record = AudioRecord(source, inputRate,
+                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
             audioRecord = record
             if (record.state != AudioRecord.STATE_INITIALIZED) throw IllegalStateException("Microphone unavailable")
             route.preferHeadset(record)
@@ -289,7 +291,8 @@ class ChantRecognitionService : Service() {
             recording = true
             getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_audio_active", true).apply()
             sendState(true, if (language == "en") "Offline model ready · listening offline" else "ऑफलाइन मॉडेल तयार · ऐकत आहे")
-            val buffer = ByteArray(maxOf(minBuffer, 8192))
+            val buffer = ByteArray(bufferSize)
+            val scoResampler = if (inputRate == 8000) ScoPcmResampler(bufferSize) else null
             var lastPartial = ""
             var lastRouteCheck = 0L
             var lastRouteStatus: String? = null
@@ -313,7 +316,10 @@ class ChantRecognitionService : Service() {
                         }
                     }
                     val activeRecognizer = recognizer ?: continue
-                    if (activeRecognizer.acceptWaveForm(buffer, read)) {
+                    val pcm = scoResampler?.convert(buffer, read) ?: buffer
+                    val samples = if (scoResampler == null) read else (read / 2) * 4
+                    if (samples == 0) continue
+                    if (activeRecognizer.acceptWaveForm(pcm, samples)) {
                         val transcript = JSONObject(activeRecognizer.result ?: "{}").optString("text").trim()
                         val matches = countPhrase(transcript, phrase)
                         val delta = (matches - partialCounted).coerceAtLeast(0)
