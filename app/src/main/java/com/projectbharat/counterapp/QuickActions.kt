@@ -40,9 +40,11 @@ object CounterQuickActions {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
     fun publishShortcuts(context: Context, categories: List<com.projectbharat.counterapp.data.CounterCategory>) {
+        val ui = UiLanguage.load(context)
         val shortcuts = if (categories.any { it.kind == "MANTRA" }) {
             listOf(ShortcutInfoCompat.Builder(context, "counter_mantra")
-                .setShortLabel("Japa").setLongLabel("Start Japa counter")
+                .setShortLabel(ui.text("Japa", "जप", "जप"))
+                .setLongLabel(ui.text("Start Japa counter", "जप मोजणी सुरू करा", "जप की गिनती शुरू करें"))
                 .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
                 .setIntent(japaIntent(context))
                 .build())

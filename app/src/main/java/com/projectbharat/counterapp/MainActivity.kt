@@ -288,7 +288,7 @@ fun CounterApp(repo: CounterRepository) {
     val haptic = LocalHapticFeedback.current
     val clickTone = remember { ToneGenerator(android.media.AudioManager.STREAM_SYSTEM, 35) }
     DisposableEffect(clickTone) { onDispose { clickTone.release() } }
-    LaunchedEffect(categories) {
+    LaunchedEffect(categories, uiLanguage) {
         CounterQuickActions.publishShortcuts(context, categories)
         CounterHomeWidget.refresh(context)
     }

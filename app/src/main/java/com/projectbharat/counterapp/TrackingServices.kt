@@ -155,8 +155,10 @@ class ChantRecognitionService : Service() {
         if (categoryId <= 0 || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             stopSelf(); return START_NOT_STICKY
         }
-        val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "Japa · " + mantra,
-            "Voice count active · " + (if (language == "en") "Preparing offline model" else "ऑफलाइन मॉडेल तयार करत आहे"),
+        val ui = UiLanguage.load(this)
+        val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID,
+            ui.text("Voice japa", "आवाजाने जप", "आवाज़ से जप"),
+            ui.text("Preparing offline model", "ऑफलाइन मॉडेल तयार करत आहे", "ऑफ़लाइन मॉडल तैयार हो रहा है"),
             stopAction())
         try {
             if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
@@ -177,7 +179,7 @@ class ChantRecognitionService : Service() {
         scope.launch {
             val log = CounterDatabase.get(this@ChantRecognitionService).dao()
                 .findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
-            updateJapaNotification(log?.count ?: 0, "Voice count active · Listening")
+            updateJapaNotification(log?.count ?: 0, ui.text("Preparing offline model", "ऑफलाइन मॉडेल तयार करत आहे", "ऑफ़लाइन मॉडल तैयार हो रहा है"))
         }
         sendState(false, if (language == "en") "Preparing recognizer…" else "ओळख यंत्रणा तयार होत आहे…")
         val voiceStartedAt = System.currentTimeMillis()
@@ -347,14 +349,14 @@ class ChantRecognitionService : Service() {
                 CounterHomeWidget.refresh(applicationContext)
                 if (!recording || stopRequested || voiceCategoryId != categoryId || voiceMantra != mantra) return@launch
                 val log = dao.findMantraLog(voiceCategoryId, date, "MANTRA:" + voiceMantra)
-                updateJapaNotification(log?.count ?: 0, transcript.ifBlank { "Mantra matched" })
+                updateJapaNotification(log?.count ?: 0, transcript.ifBlank { UiLanguage.load(this@ChantRecognitionService).text("Mantra matched", "मंत्र जुळला", "मंत्र पहचाना गया") })
                 sendBroadcast(Intent(TRACKING_STATE_CHANGED).setPackage(packageName)
                     .putExtra(EXTRA_TRACKING_KIND, "chant").putExtra("delta", matches)
                     .putExtra("transcript", transcript).putExtra("matched", true))
             } else {
                 if (!recording || stopRequested || voiceCategoryId != categoryId || voiceMantra != mantra) return@launch
                 val log = dao.findMantraLog(voiceCategoryId, date, "MANTRA:" + voiceMantra)
-                updateJapaNotification(log?.count ?: 0, transcript.ifBlank { "Listening offline" })
+                updateJapaNotification(log?.count ?: 0, transcript.ifBlank { UiLanguage.load(this@ChantRecognitionService).text("Listening offline", "ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है") })
             }
         }
     }
@@ -365,8 +367,10 @@ class ChantRecognitionService : Service() {
     )
 
     private fun updateJapaNotification(total: Int, liveText: String) {
+        if (!getSharedPreferences("tracking_state", MODE_PRIVATE).getBoolean("chant_enabled", false)) return
+        val title = UiLanguage.load(this).text("Japa", "जप", "जप")
         val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID,
-            "Japa · $total", liveText.take(120), stopAction())
+            "$title · $total", liveText.take(120), stopAction())
         getSystemService(NotificationManager::class.java).notify(TrackingNotifications.CHANT_ID, notification)
     }
 

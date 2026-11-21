@@ -23,14 +23,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
@@ -270,7 +263,7 @@ fun AutoChantCounterScreen(
             else startService()
         } else { automatic = false; running = false; status = if (uiLanguage.isEnglish) "Microphone permission denied" else uiLanguage.indic("मायक्रोफोन परवानगी नाकारली", "माइक्रोफ़ोन की अनुमति नहीं मिली") }
     }
-    DisposableEffect(context, categoryId) {
+    DisposableEffect(context, categoryId, uiLanguage) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, intent: Intent?) {
                 if (intent?.getStringExtra(EXTRA_TRACKING_KIND) != "chant") return
@@ -463,36 +456,24 @@ fun AutoChantCounterScreen(
                                     Text(if (uiLanguage.isEnglish) "LIVE RECOGNITION" else uiLanguage.indic("थेट आवाज ओळख", "लाइव आवाज़ पहचान"), modifier = Modifier.weight(1f), color = Color(0xFF76528D), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                 }
                             }
-                            if (status.contains("Starting", true) || status.contains("Preparing", true) || status.contains("Reconnecting", true) || status.contains("Checking", true) || status.contains("तयार होत", true) || status.contains("Downloading", true) || status.contains("डाउनलोड", true) || status.contains("Extracting", true) || status.contains("Loading", true) || status.contains("लोड होत", true)) {
+                            if (listeningOffline) {
+                                val spoken = displayMantra(context, categoryId, target, latin = false)
+                                val formatted = if (latinMantras && spoken.isNotBlank()) {
+                                    transcript.replace(spoken, displayMantra(context, categoryId, target, latin = true))
+                                } else transcript
+                                Text(formatted.ifBlank { uiLanguage.text("Listening offline", "ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है") },
+                                    color = Color(0xFF16834F), style = MaterialTheme.typography.bodyMedium, maxLines = 2)
+                            } else {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                    Text(if (uiLanguage.isEnglish) when { status.contains("मॉडेल तयार", true) -> "Offline model ready…"; status.contains("ऐकत आहे", true) -> "Listening offline"; status.contains("माइक पुन्हा", true) -> "Reconnecting microphone…"; status.contains("ओळख यंत्रणा", true) -> "Preparing recognizer…"; else -> status.ifBlank { "Preparing offline model…" } } else status.ifBlank { uiLanguage.indic("ऑफलाइन मॉडेल तयार होत आहे…", "ऑफ़लाइन मॉडल तैयार हो रहा है…") }, color = ink, style = MaterialTheme.typography.bodySmall)
+                                    Text(uiLanguage.text("Preparing offline model…", "ऑफलाइन मॉडेल तयार होत आहे…", "ऑफ़लाइन मॉडल तैयार हो रहा है…"),
+                                        color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
                                 }
-                            } else {
-                                Box(Modifier.fillMaxWidth().clipToBounds().padding(top = 6.dp)) {
-                                    AnimatedContent(
-                                        targetState = transcript.ifBlank {
-                                            if (listeningOffline) (if (uiLanguage.isEnglish) "Listening offline" else status.ifBlank { uiLanguage.indic("ऑफलाइन ऐकत आहे", "ऑफ़लाइन सुन रहा है") })
-                                            else if (uiLanguage.isEnglish) when {
-                                                status.contains("मॉडेल तयार", true) -> "Offline model ready"
-                                                status.contains("माइक पुन्हा", true) -> "Reconnecting microphone…"
-                                                status.contains("ओळख यंत्रणा", true) -> "Preparing recognizer…"
-                                                else -> status.ifBlank { if (running) "Listening…" else "Starting…" }
-                                            } else status.ifBlank { if (running) uiLanguage.indic("ऐकत आहे…", "सुन रहा है…") else uiLanguage.indic("सुरू होत आहे…", "शुरू हो रहा है…") }
-                                        },
-                                        transitionSpec = { (slideInHorizontally { it } + fadeIn()) togetherWith (slideOutHorizontally { -it } + fadeOut()) },
-                                        label = "recognizedPhraseTicker"
-                                    ) { visibleText ->
-                                        Text(visibleText,
-                                            color = if (matched) (if (listeningOffline) Color(0xFF16834F) else ink).copy(alpha = 0.58f) else if (listeningOffline) Color(0xFF16834F) else ink,
-                                            fontWeight = if (matched) FontWeight.Medium else FontWeight.Normal,
-                                            style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-                                    }
-                                }
-                                if (matched) Text(
-                                    (if (uiLanguage.isEnglish) "Mantra matched" else "मंत्र जुळला") + if (matchedCount > 0) " · +$matchedCount" else "",
-                                    color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
                             }
+                            if (matched) Text(
+                                uiLanguage.text("Mantra matched", "मंत्र जुळला", "मंत्र पहचाना गया") +
+                                    if (matchedCount > 0) " · +$matchedCount" else "",
+                                color = Color(0xFF16834F), style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -592,9 +573,9 @@ fun AutoChantCounterScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(value = newMantraMr, onValueChange = { newMantraMr = it },
-                        label = { Text("मंत्र (देवनागरी)") }, singleLine = false)
+                        label = { Text(uiLanguage.text("Mantra (Devanagari)", "मंत्र (देवनागरी)", "मंत्र (देवनागरी)")) }, singleLine = false)
                     OutlinedTextField(value = newMantraEn, onValueChange = { newMantraEn = it },
-                        label = { Text("Mantra (English)") }, singleLine = false)
+                        label = { Text(uiLanguage.text("Mantra (English script)", "मंत्र (इंग्रजी लिपी)", "मंत्र (अंग्रेज़ी लिपि)")) }, singleLine = false)
                 }
             },
             confirmButton = {
@@ -729,7 +710,7 @@ fun JapaReportScreen(
             }
         }
         SettingsGroup(if (uiLanguage.isEnglish) "Last 7 days · All mantras" else uiLanguage.indic("मागील ७ दिवस · सर्व मंत्र", "पिछले ७ दिन · सभी मंत्र")) {
-            JapaActivityChart(recentWeek, "BAR", Modifier.fillMaxWidth().height(124.dp), ink)
+            JapaActivityChart(recentWeek, "BAR", Modifier.fillMaxWidth().height(124.dp), ink, uiLanguage)
         }
         val milestone = if (total < 108) 108 else if (total < 1080) 1080 else ((total.toLong() / 1080) + 1) * 1080
         val monthlyTotal = totalsByDate.filterKeys { it.startsWith(today.toString().take(7)) }.values.sum()
@@ -760,8 +741,8 @@ fun JapaReportScreen(
         }
         Text(today.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy", uiLanguage.locale)), color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepMetricCard(if (uiLanguage.isEnglish) "TOTAL JAPA" else uiLanguage.indic("एकूण जप", "कुल जप"), NumberFormat.getIntegerInstance().format(total), if (uiLanguage.isEnglish) "${total / 108} malas" else uiLanguage.indic("${total / 108} माळा", "${total / 108} माला"), ink, Modifier.weight(1f))
-            StepMetricCard(if (uiLanguage.isEnglish) "TODAY" else "आज", NumberFormat.getIntegerInstance().format(todayCount), if (uiLanguage.isEnglish) "Japa count" else uiLanguage.indic("आजचा जप", "आज के जप"), ink, Modifier.weight(1f))
+            StepMetricCard(if (uiLanguage.isEnglish) "TOTAL JAPA" else uiLanguage.indic("एकूण जप", "कुल जप"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(total), if (uiLanguage.isEnglish) "${total / 108} malas" else uiLanguage.indic("${total / 108} माळा", "${total / 108} माला"), ink, Modifier.weight(1f))
+            StepMetricCard(if (uiLanguage.isEnglish) "TODAY" else "आज", NumberFormat.getIntegerInstance(uiLanguage.locale).format(todayCount), if (uiLanguage.isEnglish) "Japa count" else uiLanguage.indic("आजचा जप", "आज के जप"), ink, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepMetricCard(if (uiLanguage.isEnglish) "PRACTICE STREAK" else uiLanguage.indic("जपाची सध्याची सलगता", "लगातार जप के दिन"), "$currentStreak", if (uiLanguage.isEnglish) "days" else uiLanguage.indic("दिवस", "दिन"), ink, Modifier.weight(1f))
@@ -769,11 +750,11 @@ fun JapaReportScreen(
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepMetricCard(if (uiLanguage.isEnglish) "ACTIVE DAYS" else uiLanguage.indic("सक्रिय दिवस", "सक्रिय दिन"), "${activeDates.size}", if (uiLanguage.isEnglish) "All time" else uiLanguage.indic("एकूण", "कुल"), ink, Modifier.weight(1f))
-            StepMetricCard(if (uiLanguage.isEnglish) "AVERAGE / DAY" else uiLanguage.indic("दररोज सरासरी", "दैनिक औसत"), NumberFormat.getIntegerInstance().format(average), if (uiLanguage.isEnglish) "Per active day" else uiLanguage.indic("सक्रिय दिवस", "सक्रिय दिन"), ink, Modifier.weight(1f))
+            StepMetricCard(if (uiLanguage.isEnglish) "AVERAGE / DAY" else uiLanguage.indic("दररोज सरासरी", "दैनिक औसत"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(average), if (uiLanguage.isEnglish) "Per active day" else uiLanguage.indic("सक्रिय दिवस", "सक्रिय दिन"), ink, Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StepMetricCard(if (uiLanguage.isEnglish) "BEST DAY" else uiLanguage.indic("सर्वोत्तम दिवस", "सबसे अच्छा दिन"), NumberFormat.getIntegerInstance().format(best?.value ?: 0), best?.key?.let { runCatching { LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", uiLanguage.locale)) }.getOrDefault(it) } ?: "—", ink, Modifier.weight(1f))
-            StepMetricCard(if (uiLanguage.isEnglish) "TOTAL MALAS" else uiLanguage.indic("पूर्ण माळा", "पूरी मालाएँ"), NumberFormat.getIntegerInstance().format(total / 108), if (uiLanguage.isEnglish) "108 japa each" else uiLanguage.indic("प्रत्येक माळ १०८", "प्रति माला १०८"), ink, Modifier.weight(1f))
+            StepMetricCard(if (uiLanguage.isEnglish) "BEST DAY" else uiLanguage.indic("सर्वोत्तम दिवस", "सबसे अच्छा दिन"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(best?.value ?: 0), best?.key?.let { runCatching { LocalDate.parse(it).format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", uiLanguage.locale)) }.getOrDefault(it) } ?: "—", ink, Modifier.weight(1f))
+            StepMetricCard(if (uiLanguage.isEnglish) "TOTAL MALAS" else uiLanguage.indic("पूर्ण माळा", "पूरी मालाएँ"), NumberFormat.getIntegerInstance(uiLanguage.locale).format(total / 108), if (uiLanguage.isEnglish) "108 japa each" else uiLanguage.indic("प्रत्येक माळ १०८", "प्रति माला १०८"), ink, Modifier.weight(1f))
         }
         Text(
             if (uiLanguage.isEnglish) "Goal streak · $goalStreak days" else uiLanguage.indic("लक्ष्याची सलगता · $goalStreak दिवस", "लगातार लक्ष्य पूरे · $goalStreak दिन"),
@@ -845,9 +826,9 @@ fun JapaReportScreen(
                     Text(periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM", uiLanguage.locale))+" – "+periodEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy", uiLanguage.locale)),color=ink,fontWeight=FontWeight.Medium)
                     IconButton(onClick={anchorValue=(if (period == "MONTHLY") anchor.plusMonths(1) else anchor.plusWeeks(1)).coerceAtMost(today).toEpochDay()}){Text("›")}
                 }
-                JapaActivityChart(chartDays, chartMode, Modifier.fillMaxWidth().height(190.dp), ink)
+                JapaActivityChart(chartDays, chartMode, Modifier.fillMaxWidth().height(190.dp), ink, uiLanguage)
                 Surface(color=Color(0xFFE8DDF4),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {
-                    Text((if(uiLanguage.isEnglish)"Total: " else uiLanguage.indic("एकूण: ", "कुल: "))+NumberFormat.getIntegerInstance().format(periodSum)+(if(uiLanguage.isEnglish)" Japa" else " जप"),modifier=Modifier.padding(12.dp),color=Color(0xFF5C3B85),fontWeight=FontWeight.Bold,textAlign=TextAlign.Center)
+                    Text((if(uiLanguage.isEnglish)"Total: " else uiLanguage.indic("एकूण: ", "कुल: "))+NumberFormat.getIntegerInstance(uiLanguage.locale).format(periodSum)+(if(uiLanguage.isEnglish)" Japa" else " जप"),modifier=Modifier.padding(12.dp),color=Color(0xFF5C3B85),fontWeight=FontWeight.Bold,textAlign=TextAlign.Center)
                 }
             }
         }
@@ -858,7 +839,7 @@ fun JapaReportScreen(
                 (0..4).map{today.minusDays(it.toLong())}.forEach { date ->
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                         Text(date.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")),modifier=Modifier.weight(1f),color=ink)
-                        Text(NumberFormat.getIntegerInstance().format(totalsByDate[date.toString()]?:0),color=Color(0xFF7855A6),fontWeight=FontWeight.Bold)
+                        Text(NumberFormat.getIntegerInstance(uiLanguage.locale).format(totalsByDate[date.toString()]?:0),color=Color(0xFF7855A6),fontWeight=FontWeight.Bold)
                     }
                     if(date!=today.minusDays(4)) Divider(color=ink.copy(alpha=.08f))
                 }
@@ -872,9 +853,9 @@ fun JapaReportScreen(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(mantraLabel(mantra), color = ink, maxLines = 2)
-                            Text("${value / 108} malas", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                            Text(uiLanguage.text("${value / 108} malas", "${value / 108} माळा", "${value / 108} माला"), color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
                         }
-                        Text(NumberFormat.getIntegerInstance().format(value), color = Color(0xFF7855A6), fontWeight = FontWeight.Bold)
+                        Text(NumberFormat.getIntegerInstance(uiLanguage.locale).format(value), color = Color(0xFF7855A6), fontWeight = FontWeight.Bold)
                     }
                     LinearProgressIndicator(progress = { if (total > 0) value.toFloat() / total else 0f }, modifier = Modifier.fillMaxWidth().height(5.dp), color = Color(0xFF8B69B5), trackColor = MaterialTheme.colorScheme.surfaceVariant)
                 }
@@ -890,7 +871,7 @@ private fun SegmentedButtonRowCompat(selected:String, options:List<String>, onSe
     Row(horizontalArrangement=Arrangement.spacedBy(3.dp)) { options.forEach { o -> FilterChip(selected==o,onClick={onSelect(o)},label={Text(if(uiLanguage.isEnglish)o else if(o=="BAR")"स्तंभ" else uiLanguage.indic("रेषा", "रेखा"),style=MaterialTheme.typography.labelSmall)}) } }
 }
 @Composable
-private fun JapaActivityChart(days:List<DayTotal>, mode:String, modifier:Modifier, ink:Color) {
+private fun JapaActivityChart(days:List<DayTotal>, mode:String, modifier:Modifier, ink:Color, uiLanguage: UiLanguage) {
     Canvas(modifier) {
         val max=days.maxOfOrNull{it.total}?.coerceAtLeast(1)?.toFloat()?:1f
         val bottom=size.height-24.dp.toPx()
@@ -904,6 +885,6 @@ private fun JapaActivityChart(days:List<DayTotal>, mode:String, modifier:Modifie
             points.zipWithNext().forEach { (a,b)->drawLine(Color(0xFF7655A5),a,b,strokeWidth=3.dp.toPx()) }
             points.forEach { drawCircle(Color(0xFF7655A5),4.dp.toPx(),it) }
         }
-        days.forEachIndexed { i,d -> drawContext.canvas.nativeCanvas.drawText(if(days.size<=7) runCatching{LocalDate.parse(d.date).format(java.time.format.DateTimeFormatter.ofPattern("EEE"))}.getOrDefault("") else runCatching{LocalDate.parse(d.date).dayOfMonth.toString()}.getOrDefault(""),i*slot+slot/2,bottom+17.dp.toPx(),android.graphics.Paint().apply{color=ink.toArgb();textSize=10.dp.toPx();textAlign=android.graphics.Paint.Align.CENTER}) }
+        days.forEachIndexed { i,d -> drawContext.canvas.nativeCanvas.drawText(if(days.size<=7) runCatching{LocalDate.parse(d.date).format(java.time.format.DateTimeFormatter.ofPattern("EEE", uiLanguage.locale))}.getOrDefault("") else runCatching{LocalDate.parse(d.date).dayOfMonth.toString()}.getOrDefault(""),i*slot+slot/2,bottom+17.dp.toPx(),android.graphics.Paint().apply{color=ink.toArgb();textSize=10.dp.toPx();textAlign=android.graphics.Paint.Align.CENTER}) }
     }
 }

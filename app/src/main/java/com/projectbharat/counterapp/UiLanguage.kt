@@ -11,6 +11,9 @@ enum class UiLanguage(val tag: String, val label: String) {
     val isEnglish: Boolean get() = this == ENGLISH
     val locale: Locale get() = Locale.forLanguageTag(tag)
 
+    fun text(english: String, marathi: String, hindi: String): String =
+        if (isEnglish) english else indic(marathi, hindi)
+
     fun indic(marathi: String, hindi: String): String = if (this == HINDI) hindi else marathi
 
     companion object {
