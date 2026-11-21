@@ -57,3 +57,8 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Added separate settings for app language (Marathi, Hindi, English) and mantra display script (Devanagari, English script). Script changes affect presentation and retain stored counting keys.
 - Voice counting uses the same existing Devanagari Vosk model with either display script. The current Devanagari model is the Hindi acoustic model already used for Marathi chanting.
 - **Build #553** passed Android compilation and unit tests. Phone review should confirm that switching either dropdown preserves the current mantra and its count, and that both scripts use the same voice model. [Build #553](https://github.com/project-bharat/japacounterapp/actions/runs/44898609742)
+
+### UI rollback after phone feedback
+
+- Restored the Build #548 header, tab bar, in-place Practice counter, voice switch, and dialogs for mantra selection and session completion.
+- Retained the Bhajame app name, independent language and mantra-script settings, the existing voice model, and image sharing.
