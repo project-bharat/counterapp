@@ -56,6 +56,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
@@ -85,6 +86,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -512,10 +514,12 @@ fun JapaReportScreen(
     onDaySelected: (LocalDate) -> Unit,
     onBack: () -> Unit
 ) {
-    var month by remember { mutableStateOf(today.withDayOfMonth(1)) }
-    var period by remember { mutableStateOf("WEEKLY") }
-    var anchor by remember { mutableStateOf(LocalDate.now()) }
-    var chartMode by remember { mutableStateOf("BAR") }
+    var monthValue by rememberSaveable { mutableStateOf(today.withDayOfMonth(1).toEpochDay()) }
+    val month = LocalDate.ofEpochDay(monthValue)
+    var period by rememberSaveable { mutableStateOf("WEEKLY") }
+    var anchorValue by rememberSaveable { mutableStateOf(today.toEpochDay()) }
+    val anchor = LocalDate.ofEpochDay(anchorValue)
+    var chartMode by rememberSaveable { mutableStateOf("BAR") }
     val totalsByDate = remember(logs) { logs.groupBy { it.date }.mapValues { (_, records) -> records.sumOf { it.count } } }
     val activeDates = remember(totalsByDate) { totalsByDate.filterValues { it > 0 }.keys.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet() }
     val total = logs.sumOf { it.count }
@@ -590,8 +594,8 @@ fun JapaReportScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(if (english) month.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")) else month.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy")), color = ink, fontWeight = FontWeight.Bold)
                     Row {
-                        TextButton(onClick = { month = month.minusMonths(1) }) { Text("‹") }
-                        TextButton(onClick = { month = month.plusMonths(1).coerceAtMost(today.withDayOfMonth(1)) }) { Text("›") }
+                        TextButton(onClick = { monthValue = month.minusMonths(1).toEpochDay() }) { Text("‹") }
+                        TextButton(onClick = { monthValue = month.plusMonths(1).coerceAtMost(today.withDayOfMonth(1)).toEpochDay() }) { Text("›") }
                     }
                 }
                 Row(Modifier.fillMaxWidth()) {
@@ -643,13 +647,13 @@ fun JapaReportScreen(
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     listOf("DAILY","WEEKLY","MONTHLY").forEach { p ->
-                        FilterChip(selected=period==p,onClick={period=p;anchor=today},label={Text(if(english)p else when(p){"DAILY"->"दैनिक";"WEEKLY"->"साप्ताहिक";else->"मासिक"})})
+                        FilterChip(selected=period==p,onClick={period=p;anchorValue=today.toEpochDay()},label={Text(if(english)p else when(p){"DAILY"->"दैनिक";"WEEKLY"->"साप्ताहिक";else->"मासिक"})})
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.SpaceBetween) {
-                    IconButton(onClick={anchor=when(period){"DAILY"->anchor.minusDays(1);"WEEKLY"->anchor.minusWeeks(1);else->anchor.minusMonths(1)}}){Text("‹")}
+                    IconButton(onClick={anchorValue=when(period){"DAILY"->anchor.minusDays(1);"WEEKLY"->anchor.minusWeeks(1);else->anchor.minusMonths(1)}.toEpochDay()}){Text("‹")}
                     Text(if(period=="DAILY") periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy")) else periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM"))+" – "+periodEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd MMM yyyy")),color=ink,fontWeight=FontWeight.Medium)
-                    IconButton(onClick={anchor=when(period){"DAILY"->anchor.plusDays(1);"WEEKLY"->anchor.plusWeeks(1);else->anchor.plusMonths(1)}.coerceAtMost(today)}){Text("›")}
+                    IconButton(onClick={anchorValue=when(period){"DAILY"->anchor.plusDays(1);"WEEKLY"->anchor.plusWeeks(1);else->anchor.plusMonths(1)}.coerceAtMost(today).toEpochDay()}){Text("›")}
                 }
                 JapaActivityChart(chartDays, chartMode, Modifier.fillMaxWidth().height(190.dp), ink)
                 Surface(color=Color(0xFFE8DDF4),shape=RoundedCornerShape(18.dp),modifier=Modifier.fillMaxWidth()) {

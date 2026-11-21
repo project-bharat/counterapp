@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -245,6 +246,7 @@ fun CounterApp(repo: CounterRepository) {
     var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
     var japaReportScreen by remember { mutableStateOf(false) }
+    val reportState = rememberSaveableStateHolder()
     var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
     var categoryScreen by remember { mutableStateOf(false) }
@@ -265,7 +267,9 @@ fun CounterApp(repo: CounterRepository) {
     var editGoalDialog by remember { mutableStateOf(false) }
     var finishedSession by remember { mutableStateOf<JapaSession?>(null) }
     var finishingSession by remember { mutableStateOf(false) }
-    BackHandler(monthlyHistory && japaReportScreen) { monthlyHistory = false }
+    BackHandler(japaReportScreen) {
+        if (monthlyHistory) monthlyHistory = false else japaReportScreen = false
+    }
     val scope = rememberCoroutineScope()
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
@@ -407,17 +411,17 @@ fun CounterApp(repo: CounterRepository) {
                                 icon = { Icon(glyph, null) },
                                 label = { Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप / मंत्र" } else if (english) cat.titleEn else cat.titleMr) },
                                 selected = selected?.id == cat.id && !remindersScreen,
-                                onClick = { selectedId = cat.id; remindersScreen = false; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } }
+                                onClick = { selectedId = cat.id; japaReportScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } }
                             )
                         }
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Add, null) }, label = { Text(if (english) "Add counter" else "नवीन मोजणी") }, selected = false, onClick = { addDialog = true; scope.launch { drawerState.close() } })
                         Divider(Modifier.padding(vertical = 8.dp))
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { japaReportScreen = false; remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { japaReportScreen = false; categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { japaReportScreen = false; backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text((if (english) "Offline voice models" else "ऑफलाइन आवाज मॉडेल") + " · " + voiceModelSummary) }, selected = voiceModelsDialog, onClick = { voiceModelsDialog = true; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { japaReportScreen = false; weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
+                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { japaReportScreen = false; monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
                         NavigationDrawerItem(
                             icon = { Icon(Icons.Default.Language, null) },
                             label = { Text(if (english) "मराठी" else "English") },
@@ -470,13 +474,15 @@ fun CounterApp(repo: CounterRepository) {
                     }
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = {
+                        japaReportScreen = false
                         remindersScreen = true; weekly = false; monthlyHistory = false
                         categoryScreen = false; backupScreen = false
                     }) {
                         Icon(Icons.Default.NotificationsActive, contentDescription = if (english) "Reminders" else "स्मरणपत्रे", tint = Color(0xFFF3EEE3))
                     }
                     IconButton(onClick = {
-                        historyDate = LocalDate.now()
+                        japaReportScreen = false
+                        historyDate = today
                         monthlyHistory = true; remindersScreen = false; weekly = false
                         categoryScreen = false; backupScreen = false
                     }) {
@@ -510,11 +516,13 @@ fun CounterApp(repo: CounterRepository) {
                         onDelete = { log -> scope.launch { vm.deleteLog(log.id) } }
                     )
                 } else if (japaReportScreen && selected?.kind == "MANTRA") {
-                    JapaReportScreen(
-                        logs = allMantraLogs, goals = goalHistory, today = today, english = english, ink = ink,
-                        onDaySelected = { date -> historyDate = date; monthlyHistory = true },
-                        onBack = { japaReportScreen = false }
-                    )
+                    reportState.SaveableStateProvider("japa-report") {
+                        JapaReportScreen(
+                            logs = allMantraLogs, goals = goalHistory, today = today, english = english, ink = ink,
+                            onDaySelected = { date -> historyDate = date; monthlyHistory = true },
+                            onBack = { japaReportScreen = false }
+                        )
+                    }
                 } else if (weekly) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
