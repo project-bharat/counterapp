@@ -75,3 +75,8 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Choose Mantra opens a full page with search, filters, favourites, and a Start Japa button. Practice places the logo, counter, and controls directly on the app gradient.
 - Physical Bluetooth verification is pending for Classic SCO and LE Audio headsets.
 - **Build #559** passed Android compilation and unit tests, including legacy Bluetooth PCM conversion. Check the microphone indicator, recognition, and routing after Stop on a physical headset. [Build #559](https://github.com/project-bharat/japacounterapp/actions/runs/44918472738)
+
+### Combined redesign review build
+
+- Build #562 includes the bundled sunrise backdrop, system light/dark palette, centered Practice navigation, local achievement milestones, one selectable progress chart, and refreshed Settings grouping and share artwork.
+- Android compilation and unit tests passed. Phone review remains open for layout, accessibility, Bluetooth, share sheets, and migration from Build #559. The remaining detailed design refinements include the full Settings child-page treatment and the agreed KPI order.
