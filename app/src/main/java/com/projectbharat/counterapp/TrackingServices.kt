@@ -59,8 +59,7 @@ private object TrackingNotifications {
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setContentTitle(title).setContentText(text).setOngoing(true)
             .setOnlyAlertOnce(true).setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .addAction(android.R.drawable.ic_media_play, "Start Japa",
-                CounterQuickActions.activityPending(context, 7104))
+            .setContentIntent(CounterQuickActions.activityPending(context, 7110, quickStart = false))
             .apply { if (stopIntent != null) addAction(android.R.drawable.ic_media_pause, "Stop", stopIntent) }
             .build()
     }
@@ -153,7 +152,7 @@ class ChantRecognitionService : Service() {
         }
         val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID, "Japa · " + mantra,
             "Voice count active · " + (if (language == "en") "Preparing offline model" else "ऑफलाइन मॉडेल तयार करत आहे"),
-            null)
+            stopAction())
         try {
             if (Build.VERSION.SDK_INT >= 30) ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else ServiceCompat.startForeground(this, TrackingNotifications.CHANT_ID, notification, 0)
@@ -169,6 +168,7 @@ class ChantRecognitionService : Service() {
             return START_NOT_STICKY
         }
         getSharedPreferences("tracking_state", MODE_PRIVATE).edit().putBoolean("chant_enabled", true).putBoolean("chant_audio_active", false).apply()
+        QuickActionsNotification.hide(this)
         scope.launch {
             val log = CounterDatabase.get(this@ChantRecognitionService).dao()
                 .findMantraLog(categoryId, LocalDate.now().toString(), "MANTRA:" + mantra)
@@ -354,9 +354,14 @@ class ChantRecognitionService : Service() {
         }
     }
 
+    private fun stopAction(): PendingIntent = PendingIntent.getService(
+        this, 7102, Intent(this, ChantRecognitionService::class.java).setAction(ACTION_PAUSE_CHANT),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
     private fun updateJapaNotification(total: Int, liveText: String) {
         val notification = TrackingNotifications.show(this, TrackingNotifications.CHANT_ID,
-            "Japa · $total", liveText.take(120), null)
+            "Japa · $total", liveText.take(120), stopAction())
         getSystemService(NotificationManager::class.java).notify(TrackingNotifications.CHANT_ID, notification)
     }
 

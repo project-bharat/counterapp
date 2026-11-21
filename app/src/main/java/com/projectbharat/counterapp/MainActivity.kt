@@ -23,12 +23,17 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.filled.SelfImprovement
@@ -125,11 +130,6 @@ class MainActivity : ComponentActivity() {
         readCounterIntent(intent)
     }
 
-    override fun onResume() {
-        super.onResume()
-        QuickActionsNotification.show(this)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         readCounterIntent(intent)
         // Use the Android SplashScreen API defaults. Android removes the splash
@@ -224,9 +224,13 @@ fun CounterApp(repo: CounterRepository) {
     var backupBusy by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var tab by rememberSaveable { mutableStateOf(0) }
+    var focusSession by rememberSaveable { mutableStateOf(false) }
+    var mantraLibrary by rememberSaveable { mutableStateOf(false) }
     var help by rememberSaveable { mutableStateOf(false) }
     fun navigate(destination: Int) {
         tab = destination
+        focusSession = false
+        mantraLibrary = false
         monthlyHistory = false
         categoryScreen = false
         remindersScreen = false
@@ -245,10 +249,17 @@ fun CounterApp(repo: CounterRepository) {
     var editGoalDialog by remember { mutableStateOf(false) }
     var finishedSession by remember { mutableStateOf<JapaSession?>(null) }
     var finishingSession by remember { mutableStateOf(false) }
-    val child = monthlyHistory || categoryScreen || remindersScreen || backupScreen || help
-    BackHandler(child || tab != 0) {
-        if (child) navigate(tab) else navigate(0)
+    val child = monthlyHistory || categoryScreen || remindersScreen || backupScreen || help || focusSession || mantraLibrary || finishedSession != null
+    fun goBack() {
+        when {
+            finishedSession != null -> { finishedSession = null; focusSession = false }
+            mantraLibrary -> mantraLibrary = false
+            focusSession -> focusSession = false
+            child -> navigate(tab)
+            else -> navigate(0)
+        }
     }
+    BackHandler(child || tab != 0) { goBack() }
     val preferences = remember { context.getSharedPreferences("practice_feedback", android.content.Context.MODE_PRIVATE) }
     var tapFeedback by remember { mutableStateOf(preferences.getBoolean("tap", true)) }
     var malaFeedback by remember { mutableStateOf(preferences.getBoolean("mala", false)) }
@@ -293,6 +304,7 @@ fun CounterApp(repo: CounterRepository) {
         val category = categories.firstOrNull { it.kind == "MANTRA" } ?: return@LaunchedEffect
         selectedId = category.id
         navigate(0)
+        focusSession = shortcutQuickStart || context.getSharedPreferences("tracking_state", android.content.Context.MODE_PRIVATE).getBoolean("chant_enabled", false)
         if (shortcutQuickStart &&
             ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
@@ -342,6 +354,10 @@ fun CounterApp(repo: CounterRepository) {
     }
     val storedSession by activeJapaFlow.collectAsStateWithLifecycle(null)
     val activeJapa = storedSession?.takeIf { it.categoryId == japaCategoryId && it.mantra == mantraTarget.trim() }
+    LaunchedEffect(focusSession, activeJapa?.id) {
+        if (focusSession || activeJapa != null) QuickActionsNotification.hide(context)
+        else QuickActionsNotification.show(context)
+    }
     val count by countFlow.collectAsStateWithLifecycle(0)
     val mantraTotal by mantraTotalFlow.collectAsStateWithLifecycle(0)
     var previousMalaCount by remember(selected?.id, mantraTarget) { mutableStateOf<Int?>(null) }
@@ -365,11 +381,21 @@ fun CounterApp(repo: CounterRepository) {
     MaterialTheme(colorScheme = scheme) {
         if (voiceModelsDialog) VoiceModelsDialog(english = english, onDismiss = { voiceModelsDialog = false })
         Scaffold(
-            containerColor = page,
+            modifier = Modifier.background(Brush.verticalGradient(
+                if (dark) listOf(Color(0xFF152921), Color(0xFF152033), page)
+                else listOf(Color(0xFFE4EDE2), Color(0xFFF7F1E4), Color(0xFFF1EAF5))
+            )),
+            containerColor = Color.Transparent,
             bottomBar = {
-                NavigationBar {
+                if (!child) NavigationBar(
+                    modifier = Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(30.dp)),
+                    containerColor = if (dark) Color(0xFF223445) else Color(0xFFFFFCF7),
+                    tonalElevation = 5.dp,
+                    windowInsets = WindowInsets(0, 0, 0, 0)
+                ) {
                     val labels = if (english) listOf("Practice", "Progress", "Settings") else listOf("जप", "प्रगती", "सेटिंग्ज")
-                    val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Edit)
+                    val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Settings)
                     labels.forEachIndexed { index, label ->
                         NavigationBarItem(selected = tab == index, onClick = { navigate(index) },
                             icon = { Icon(icons[index], null) }, label = { Text(label) })
@@ -379,24 +405,46 @@ fun CounterApp(repo: CounterRepository) {
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                        .background(Color(0xFF31413A), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (child) TextButton(onClick = { navigate(tab) }) {
-                        Text(if (english) "Back" else "मागे", color = Color.White)
+                    if (child) FilledTonalIconButton(onClick = ::goBack) {
+                        Icon(Icons.Default.ArrowBack, if (english) "Back" else "मागे")
                     }
-                    Image(painterResource(R.drawable.bilan_header_logo_light), "Bilan",
-                        Modifier.width(86.dp).height(30.dp), contentScale = ContentScale.Fit)
+                    Image(painterResource(if (dark) R.drawable.bilan_header_logo_light else R.drawable.bilan_header_logo_dark), "Bilan",
+                        Modifier.width(94.dp).height(36.dp), contentScale = ContentScale.Fit)
                     Spacer(Modifier.weight(1f))
-                    Text(when (tab) {
-                        1 -> if (english) "Progress" else "प्रगती"
-                        2 -> if (english) "Settings" else "सेटिंग्ज"
+                    Text(when {
+                        finishedSession != null -> if (english) "Session summary" else "सत्राचा सारांश"
+                        mantraLibrary -> if (english) "Mantra library" else "मंत्र संग्रह"
+                        focusSession -> if (english) "Japa session" else "जप सत्र"
+                        tab == 1 -> if (english) "Progress" else "प्रगती"
+                        tab == 2 -> if (english) "Settings" else "सेटिंग्ज"
                         else -> if (english) "Japa Practice" else "जप साधना"
-                    }, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    }, color = ink, style = MaterialTheme.typography.titleMedium)
                 }
                 Box(Modifier.weight(1f)) {
-                if (help) {
+                val summary = finishedSession
+                if (summary != null) {
+                    val title = if (english) "Japa session saved" else "जप सत्र जतन झाले"
+                    val card = JapaImageCard(title, summary.mantra, summary.count,
+                        if (english) "Today · $japaDayTotal/$dailyGoal" else "आज · $japaDayTotal/$dailyGoal", english,
+                        summary.endedAt ?: summary.startedAt)
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        JapaImagePreview(card)
+                        Button(onClick = {
+                            scope.launch { shareJapaImage(context, card) }
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Share, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (english) "Share image" else "चित्र शेअर करा")
+                        }
+                        OutlinedButton(onClick = ::goBack, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (english) "Done" else "पूर्ण")
+                        }
+                    }
+                } else if (help) {
                     JapaHelpScreen(english)
                 } else if (backupScreen) {
                     BackupSettingsScreen(english = english, ink = ink, message = backupMessage, busy = backupBusy,
@@ -438,14 +486,16 @@ fun CounterApp(repo: CounterRepository) {
                         WeeklyChart(days, Modifier.fillMaxWidth().height(210.dp))
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = {
-                            val lines = buildString {
-                                append(if (english) "Last 7 days\n" else "मागील ७ दिवसांची नोंद\n")
-                                days.forEach { append("${it.date}: ${it.total}\n") }
-                                append(if (english) "Total: " else "एकूण: "); append(days.sumOf { it.total })
-                            }
-                            val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, lines) }
-                            context.startActivity(Intent.createChooser(send, if (english) "Share summary" else "सारांश शेअर करा"))
-                        }) { Text(if (english) "Share summary" else "सारांश शेअर करा") }
+                            val title = if (english) "Weekly progress" else "साप्ताहिक प्रगती"
+                            val category = selected?.let { if (english) it.titleEn else it.titleMr }.orEmpty()
+                            val card = JapaImageCard(title, category, days.sumOf { it.total },
+                                if (english) "Last 7 days" else "मागील ७ दिवस", english)
+                            scope.launch { shareJapaImage(context, card) }
+                        }) {
+                            Icon(Icons.Default.Share, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (english) "Share image" else "चित्र शेअर करा")
+                        }
                     }
                 } else if (tab == 2) {
                     JapaSettingsScreen(
@@ -469,6 +519,10 @@ fun CounterApp(repo: CounterRepository) {
                         dailyGoal = dailyGoal,
                         dayTotal = japaDayTotal,
                         sessionCount = activeJapa?.count ?: 0,
+                        focusSession = focusSession,
+                        mantraLibrary = mantraLibrary,
+                        onFocus = { focusSession = true },
+                        onLibrary = { mantraLibrary = it },
                         onEditGoal = { editGoalDialog = true },
                         onFinish = activeJapa?.takeUnless { finishingSession }?.let { session ->
                             {
@@ -477,6 +531,7 @@ fun CounterApp(repo: CounterRepository) {
                                     try {
                                         ChantRecognitionService.stop(context)
                                         finishedSession = vm.finishJapaSession(session)
+                                        focusSession = false
                                     } finally {
                                         finishingSession = false
                                     }
@@ -486,6 +541,7 @@ fun CounterApp(repo: CounterRepository) {
                         },
                         onMantraChange = { mantra -> mantraTarget = mantra },
                         onManualCount = { mantra ->
+                            focusSession = true
                             if (tapFeedback) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             if (soundFeedback) clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
                             scope.launch { vm.addMantra(selected.id, mantra) }
@@ -513,6 +569,7 @@ fun CounterApp(repo: CounterRepository) {
         val target = input.toIntOrNull()?.takeIf { it in 1..999_999 }
         AlertDialog(
             onDismissRequest = { editGoalDialog = false },
+            icon = { Icon(Icons.Default.Edit, null) },
             title = { Text(if (english) "Daily Japa goal" else "दररोजचे जप लक्ष्य") },
             text = {
                 OutlinedTextField(
@@ -524,37 +581,13 @@ fun CounterApp(repo: CounterRepository) {
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                Button(onClick = {
                     target?.let { scope.launch { vm.saveJapaGoal(japaCategoryId, it) } }
                     editGoalDialog = false
                 }, enabled = target != null) { Text(if (english) "Save" else "जतन करा") }
             },
             dismissButton = {
                 TextButton(onClick = { editGoalDialog = false }) { Text(if (english) "Cancel" else "रद्द") }
-            }
-        )
-    }
-    finishedSession?.let { session ->
-        AlertDialog(
-            onDismissRequest = { finishedSession = null },
-            title = { Text(if (english) "Japa session saved" else "जप सत्र जतन झाले") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(session.mantra, style = MaterialTheme.typography.titleMedium)
-                    Text(if (english) "This session · ${session.count} chants" else "या सत्रात · ${session.count} जप")
-                    Text(if (english) "Today · $japaDayTotal/$dailyGoal chants" else "आज · $japaDayTotal/$dailyGoal जप")
-                    Text(if (english) "${session.count / 108} malas · ${session.count % 108}/108 toward the next"
-                        else "${session.count / 108} माळा · पुढील माळेसाठी ${session.count % 108}/108")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    shareJapaText(context, if (english) "Japa session" else "जप सत्र",
-                        "${session.mantra} · ${session.count} " + if (english) "chants" else "जप")
-                }) { Text(if (english) "Share" else "शेअर करा") }
-            },
-            confirmButton = {
-                TextButton(onClick = { finishedSession = null }) { Text(if (english) "Done" else "पूर्ण") }
             }
         )
     }

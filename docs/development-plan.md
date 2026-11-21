@@ -43,3 +43,10 @@ Build #548 combines the navigation, Practice, Progress, and Settings changes for
 - Added a searchable mantra picker with recent and favourite selections, practice feedback controls, a shareable Finish summary, a daily Progress overview, and a monthly recap.
 - Refreshed Device Backup and added debug-only Japa Plus screen states. Live Play Billing and Google Drive authorization remain in the release workstream.
 - Phone screenshots and verification of upgrade, microphone, widget, accessibility, and the complete local backup flow are pending.
+
+### Build #548 review follow-up
+
+- Reviewed the five device screenshots and the original 17-image reference set. The redesign uses a continuous gradient, floating primary navigation, a full-screen session and summary, and a full-page mantra library with details.
+- Added branded PNG sharing for saved sessions, daily progress, and monthly recaps. Session images include the selected mantra and saved time in UTC. Aggregate cards identify their scope.
+- Progress analytics now uses weekly and monthly filters, and the daily goal has a completion state. The voice notification has a Stop action and replaces the quick-start notification while active.
+- Google and Drive branding appears in the backup and Pro preview. Phone review remains pending for system Back, notification behavior, and image sharing.

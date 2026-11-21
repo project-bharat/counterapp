@@ -1,9 +1,14 @@
 package com.projectbharat.counterapp
 
-import android.content.Context
-import android.content.Intent
 import android.content.pm.ApplicationInfo
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -13,12 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
-internal fun shareJapaText(context: Context, title: String, message: String) {
-    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-        .putExtra(Intent.EXTRA_SUBJECT, title).putExtra(Intent.EXTRA_TEXT, message)
-    context.startActivity(Intent.createChooser(send, title))
-}
 
 @Composable
 internal fun JapaSettingsScreen(
@@ -109,19 +108,33 @@ internal fun DrivePreviewCard(english: Boolean) {
     var state by remember { mutableIntStateOf(0) }
     var autoSync by remember { mutableStateOf(false) }
     SettingsGroup(if (english) "Google Drive Cloud Sync · Pro" else "Google Drive क्लाउड सिंक · Pro") {
+        Image(painterResource(R.drawable.ic_drive_brand), "Google Drive", Modifier.size(28.dp))
         Text(if (english) "Private backup and restore on your Google Drive." else "तुमच्या Google Drive वर खाजगी बॅकअप व पुनर्संचयित.")
         if (debuggable) {
-            TextButton(onClick = { preview = true }) { Text(if (english) "Upgrade to Pro" else "Pro घ्या") }
+            FilledTonalButton(onClick = { preview = true }) {
+                Icon(Icons.Default.Lock, null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (english) "Upgrade to Pro" else "Pro घ्या")
+            }
         }
     }
     if (debuggable && preview) {
         val labels = if (english) listOf("Upgrade", "Link account", "Connected", "Syncing", "Error", "Conflict")
             else listOf("अपग्रेड", "खाते जोडा", "जोडले आहे", "सिंक सुरू", "त्रुटी", "विरोध")
-        AlertDialog(
-            onDismissRequest = { preview = false },
-            title = { Text(if (english) "Japa Plus · Debug preview" else "Japa Plus · चाचणी पूर्वदृश्य") },
-            text = {
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+        Dialog(onDismissRequest = { preview = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+            Surface(shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+                Column(Modifier.heightIn(max = 620.dp).verticalScroll(rememberScrollState()).padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Image(painterResource(R.drawable.ic_drive_brand), null, Modifier.size(32.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Japa Plus", style = MaterialTheme.typography.headlineSmall)
+                            Text(if (english) "Debug preview" else "चाचणी पूर्वदृश्य", style = MaterialTheme.typography.labelMedium)
+                        }
+                        FilledTonalIconButton(onClick = { preview = false }) {
+                            Icon(Icons.Default.Close, if (english) "Close" else "बंद करा")
+                        }
+                    }
                     var menu by remember { mutableStateOf(false) }
                     Box {
                         OutlinedButton(onClick = { menu = true }) { Text(labels[state]) }
@@ -136,7 +149,9 @@ internal fun DrivePreviewCard(english: Boolean) {
                             Text(if (english) "Automatic private backups, Sync Now, and cloud restore." else "स्वयंचलित खाजगी बॅकअप, सिंक व क्लाउड पुनर्संचयित.")
                             Button(onClick = { state = 1 }) { Text(if (english) "Preview account setup" else "खाते सेटअप पहा") }
                         }
-                        1 -> Button(onClick = { state = 2 }) {
+                        1 -> OutlinedButton(onClick = { state = 2 }) {
+                            Image(painterResource(R.drawable.ic_google_brand), null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text(if (english) "Connect Google Account" else "Google खाते जोडा")
                         }
                         else -> {
@@ -144,8 +159,8 @@ internal fun DrivePreviewCard(english: Boolean) {
                             TextButton(onClick = { state = 1; autoSync = false }) { Text(if (english) "Disconnect" else "खाते वेगळे करा") }
                             PreferenceSwitch(if (english) "Auto-Sync" else "स्वयंचलित सिंक", autoSync) { autoSync = it }
                             Text(if (english) "Last synced · 21 Nov 2026, 10:30" else "शेवटचा सिंक · २१ नोव्हेंबर २०२६, १०:३०")
-                            Button(onClick = { state = 3 }, enabled = state != 3) { Text(if (english) "Sync Now" else "आता सिंक करा") }
-                            OutlinedButton(onClick = { state = 4 }, enabled = state != 3) { Text(if (english) "Restore from Cloud" else "क्लाउडवरून पुनर्संचयित") }
+                            Button(onClick = { state = 3 }, enabled = state != 3) { Icon(Icons.Default.Sync, null); Spacer(Modifier.width(6.dp)); Text(if (english) "Sync Now" else "आता सिंक करा") }
+                            OutlinedButton(onClick = { state = 4 }, enabled = state != 3) { Icon(Icons.Default.CloudDownload, null); Spacer(Modifier.width(6.dp)); Text(if (english) "Restore from Cloud" else "क्लाउडवरून पुनर्संचयित") }
                             if (state == 3) {
                                 LinearProgressIndicator(Modifier.fillMaxWidth())
                                 TextButton(onClick = { state = 2 }) { Text(if (english) "Preview success" else "यशस्वी स्थिती पहा") }
@@ -155,8 +170,7 @@ internal fun DrivePreviewCard(english: Boolean) {
                         }
                     }
                 }
-            },
-            confirmButton = { TextButton(onClick = { preview = false }) { Text(if (english) "Close" else "बंद करा") } }
-        )
+            }
+        }
     }
 }

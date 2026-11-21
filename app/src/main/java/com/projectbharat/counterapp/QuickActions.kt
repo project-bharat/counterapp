@@ -35,8 +35,8 @@ object CounterQuickActions {
             .putExtra(EXTRA_COUNTER_KIND, "MANTRA").putExtra("quick_start", true)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
-    fun activityPending(context: Context, requestCode: Int): PendingIntent =
-        PendingIntent.getActivity(context, requestCode, japaIntent(context),
+    fun activityPending(context: Context, requestCode: Int, quickStart: Boolean = true): PendingIntent =
+        PendingIntent.getActivity(context, requestCode, japaIntent(context).putExtra("quick_start", quickStart),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
     fun publishShortcuts(context: Context, categories: List<com.projectbharat.counterapp.data.CounterCategory>) {
@@ -62,7 +62,15 @@ object QuickActionsNotification {
     private const val CHANNEL = "counter_quick_actions"
     private const val NOTIFICATION_ID = 7100
 
+    fun hide(context: Context) {
+        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+    }
+
     fun show(context: Context) {
+        if (context.getSharedPreferences("tracking_state", Context.MODE_PRIVATE).getBoolean("chant_enabled", false)) {
+            hide(context)
+            return
+        }
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.cancel(7105)
         if (Build.VERSION.SDK_INT >= 33 &&
