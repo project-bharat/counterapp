@@ -34,3 +34,10 @@ Development is on `japa-ui-recovery-528`. The last verified app build is **#546*
 - **Build #544** completed the Japa-only recovery cleanup and passed debug CI. The APK and ZIP were verified. [Build #544](https://github.com/project-bharat/japacounterapp/actions/runs/44873765597)
 - **Build #546** added persistent practice sessions, Finish summary, daily goals, and calendar-to-history navigation. Debug CI and artifact verification passed. [Build #546](https://github.com/project-bharat/japacounterapp/actions/runs/44876342188)
 - **21 November 2026** recorded the offline-first backup and Pro Drive sync requirements for future implementation.
+
+## UI implementation
+
+- Added the Practice, Progress, and Settings navigation shell around the original Japa counter.
+- Added a searchable mantra picker with recent and favourite selections, practice feedback controls, a shareable Finish summary, a daily Progress overview, and a monthly recap.
+- Refreshed Device Backup and added debug-only Japa Plus screen states. Live Play Billing and Google Drive authorization remain in the release workstream.
+- Phone screenshots and verification of upgrade, microphone, widget, accessibility, and the complete local backup flow are pending.

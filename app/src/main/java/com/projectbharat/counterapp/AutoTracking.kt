@@ -66,6 +66,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -178,6 +180,18 @@ fun AutoChantCounterScreen(
     var matchedCount by remember { mutableIntStateOf(0) }
     var presetMenu by remember { mutableStateOf(false) }
     var selectedDeity by remember(categoryId) { mutableStateOf("All") }
+    var query by rememberSaveable(categoryId) { mutableStateOf("") }
+    var collection by rememberSaveable(categoryId) { mutableStateOf(0) }
+    var favourites by remember(categoryId) {
+        mutableStateOf(prefs.getStringSet("favourites_$categoryId", emptySet()).orEmpty().toSet())
+    }
+    var recent by remember(categoryId) {
+        mutableStateOf(prefs.getString("recent_$categoryId", "").orEmpty().split('\u001F').filter(String::isNotBlank))
+    }
+    fun rememberMantra(mantra: String) {
+        recent = (listOf(mantra) + recent.filterNot { it == mantra }).take(8)
+        prefs.edit().putString("recent_$categoryId", recent.joinToString("\u001F")).apply()
+    }
     var addMantraDialog by remember { mutableStateOf(false) }
     var newMantraMr by remember { mutableStateOf("") }
     var newMantraEn by remember { mutableStateOf("") }
@@ -193,7 +207,7 @@ fun AutoChantCounterScreen(
         ChantRecognitionService.stop(context)
         running = false
         automatic = false
-        status = if (english) "Stopped" else "थांबवले"
+        status = if (english) "Voice paused" else "आवाज मोजणी थांबवली"
     }
     val startService = {
         if (target.isNotBlank()) {
@@ -230,7 +244,11 @@ fun AutoChantCounterScreen(
             override fun onReceive(c: Context?, intent: Intent?) {
                 if (intent?.getStringExtra(EXTRA_TRACKING_KIND) != "chant") return
                 if (intent.hasExtra("active")) running = intent.getBooleanExtra("active", false)
-                intent.getStringExtra("message")?.let { status = it
+                intent.getStringExtra("message")?.let {
+                    status = if (it == "Stopped") {
+                        automatic = false
+                        if (english) "Voice paused" else "आवाज मोजणी थांबवली"
+                    } else it
                     if (it.contains("Microphone busy", true) || it.contains("Microphone unavailable", true) ||
                         it.contains("microphone permission", true) || it.contains("मायक्रोफोन व्यस्त") ||
                         it.contains("मायक्रोफोन उपलब्ध नाही") || it.contains("परवानगी आवश्यक")) {
@@ -264,31 +282,9 @@ fun AutoChantCounterScreen(
         }
     }
 
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(if (english) "TODAY" else "आज", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                Text(if (english) "Chants" else "जप", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
-            Row(Modifier.padding(start = 8.dp, end = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (english) "Voice count" else "आवाज मोजणी", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
-                Switch(checked = automatic, onCheckedChange = { enabled ->
-                    if (!enabled) stopRecognition()
-                    else {
-                        automatic = false; matched = false; matchedCount = 0; transcript = ""
-                        status = if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…"
-                        running = false
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
-                            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-                        else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
-                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        else startService()
-                    }
-                })
-            }
-        }
-        Card(Modifier.fillMaxWidth().heightIn(min = 760.dp), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.fillMaxWidth().heightIn(min = 760.dp).padding(horizontal = 18.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 val malaProgress = if (totalCount > 0 && totalCount % 108 == 0) 108 else totalCount % 108
                 val malaFraction = malaProgress / 108f
                 val beadTint by animateColorAsState(if (malaProgress == 108) Color(0xFFB87928) else Color(0xFF7650A1), label = "beadCountTint")
@@ -296,7 +292,7 @@ fun AutoChantCounterScreen(
                     Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFEAF3F9)) {
                         Column(Modifier.padding(vertical = 10.dp, horizontal = 3.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(totalCount.toString(), color = Color(0xFF285D87), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, maxLines = 1)
-                            Text(if (english) "TOTAL JAPA" else "एकूण जप", color = Color(0xFF285D87), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(if (english) "LIFETIME" else "आजवरचे जप", color = Color(0xFF285D87), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                     Surface(Modifier.weight(1f), shape = RoundedCornerShape(14.dp), color = Color(0xFFF4EFF9)) {
@@ -312,21 +308,21 @@ fun AutoChantCounterScreen(
                         }
                     }
                 }
-                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 26.dp))
+                Text(target, color = if (MaterialTheme.colorScheme.background == Color.White) Color(0xFF38234F) else ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
                 val manualInteraction = remember { MutableInteractionSource() }
                 val manualPressed by manualInteraction.collectIsPressedAsState()
                 val manualScale by animateFloatAsState(if (manualPressed) 0.94f else 1f, label = "japaTapScale")
                 val circleAccent by animateColorAsState(if (count > 0 && count % 108 == 0) Color(0xFFD5A24B) else Color(0xFFB895D7), label = "japaCircleAccent")
-                Box(Modifier.padding(top = 16.dp).size(244.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.padding(top = 6.dp).size(226.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
                         progress = { malaFraction },
-                        modifier = Modifier.size(244.dp),
+                        modifier = Modifier.size(226.dp),
                         strokeWidth = 9.dp,
                         color = beadTint,
                         trackColor = Color(0xFFE8E1D7)
                     )
                     Box(
-                        Modifier.size(218.dp)
+                        Modifier.size(201.dp)
                             .graphicsLayer(scaleX = manualScale, scaleY = manualScale)
                             .shadow(12.dp, CircleShape)
                             .background(Brush.linearGradient(listOf(Color(0xFFEFE4FA), Color(0xFFD2B9EA))), CircleShape)
@@ -336,14 +332,34 @@ fun AutoChantCounterScreen(
                     ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.SelfImprovement, null, tint = Color(0xFF7855A6), modifier = Modifier.size(42.dp))
-                        Text("+1", color = ink, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
-                        Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = ink, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text((if (sessionCount > 0) sessionCount.toString() else "+1"), color = Color(0xFF38234F), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold)
+                        Text(if (english) "TAP TO COUNT" else "स्पर्श करून मोजा", color = Color(0xFF38234F), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
                 }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (english) "Voice count" else "आवाज मोजणी", color = ink, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                Switch(checked = automatic, onCheckedChange = { enabled ->
+                    if (!enabled) stopRecognition()
+                    else {
+                        automatic = false; matched = false; matchedCount = 0; transcript = ""
+                        status = if (english) "Starting voice recognition…" else "आवाज ओळख सुरू होत आहे…"
+                        running = false
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+                            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                        else if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        else startService()
+                    }
+                })
+            }
+                if (!automatic && status.isNotBlank()) {
+                    Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
+                }
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(if (english) "Daily goal · $dayTotal/$dailyGoal" else "दररोजचे लक्ष्य · $dayTotal/$dailyGoal",
+                        Text(if (english) "Today · $dayTotal/$dailyGoal" else "आज · $dayTotal/$dailyGoal",
                             color = ink, style = MaterialTheme.typography.labelLarge)
                         if (sessionCount > 0) Text(
                             if (english) "This session · $sessionCount" else "या सत्रात · $sessionCount",
@@ -360,47 +376,7 @@ fun AutoChantCounterScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(14.dp))
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("All", "Ram", "Krishna", "Shiva", "Ganesh", "Hanuman", "Devi", "Vishnu", "Dattatreya", "Guru", "Other").forEach { deity ->
-                        FilterChip(selected = selectedDeity == deity, onClick = { selectedDeity = deity }, label = { Text(if (english) deity else when(deity) { "All" -> "सर्व"; "Ram" -> "राम"; "Krishna" -> "कृष्ण"; "Shiva" -> "शिव"; "Ganesh" -> "गणेश"; "Hanuman" -> "हनुमान"; "Devi" -> "देवी"; "Vishnu" -> "विष्णू"; "Dattatreya" -> "दत्तात्रेय"; "Guru" -> "गुरु"; else -> "इतर" }) })
-                    }
-                }
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.weight(1f)) {
-                        OutlinedButton(
-                            onClick = { presetMenu = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Text(if (english) "Choose mantra" else "मंत्र निवडा", maxLines = 1)
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
-                        }
-                        DropdownMenu(expanded = presetMenu, onDismissRequest = { presetMenu = false }) {
-                            val visiblePresets = (chantPresets + customMantras).distinctBy { it.devanagari }
-                                .filter { selectedDeity == "All" || it.deity == selectedDeity }
-                            visiblePresets.forEach { item ->
-                                val mantra = if (language == "hi") item.devanagari else item.latin
-                                DropdownMenuItem(text = { Text(mantra, maxLines = 2) }, onClick = {
-                                    target = mantra
-                                    prefs.edit().putString("target_$categoryId", target).apply()
-                                    onMantraChange(target)
-                                    if (running) {
-                                        transcript = ""
-                                        matched = false
-                                        matchedCount = 0
-                                        status = if (english) "Preparing offline model…" else "ऑफलाइन मॉडेल तयार होत आहे…"
-                                        ChantRecognitionService.start(context, categoryId, target.trim(), language)
-                                    }
-                                    presetMenu = false
-                                })
-                            }
-                        }
-                    }
-                    Button(
-                        onClick = { newMantraMr = ""; newMantraEn = ""; addMantraDialog = true },
-                        shape = RoundedCornerShape(14.dp)
-                    ) { Text(if (english) "+ Add" else "+ जोडा", maxLines = 1) }
-                }
+                SettingsLink(if (english) "Choose mantra" else "मंत्र निवडा") { presetMenu = true }
                 if (automatic) {
                     val listeningOffline = running && (status.contains("Listening offline", true) || status.contains("Mantra matched", true) || status.contains("ऐकत आहे", true) || status.contains("मंत्र जुळला", true))
                     val micPulse = rememberInfiniteTransition(label = "offlineMicPulse")
@@ -462,6 +438,72 @@ fun AutoChantCounterScreen(
             }
         }
     }
+    if (presetMenu) {
+        val groups = listOf("All", "Ram", "Krishna", "Shiva", "Ganesh", "Hanuman", "Devi", "Vishnu", "Dattatreya", "Guru", "Other")
+        val groupsMr = listOf("सर्व", "राम", "कृष्ण", "शिव", "गणेश", "हनुमान", "देवी", "विष्णू", "दत्तात्रेय", "गुरु", "इतर")
+        val visible = (chantPresets + customMantras).distinctBy { it.devanagari }.filter { item ->
+            (selectedDeity == "All" || item.deity == selectedDeity) &&
+                listOf(item.title, item.devanagari, item.latin).any { it.contains(query.trim(), ignoreCase = true) } &&
+                when (collection) {
+                    1 -> item.devanagari in recent
+                    2 -> item.devanagari in favourites
+                    else -> true
+                }
+        }.let { items -> if (collection == 1) items.sortedBy { recent.indexOf(it.devanagari) } else items }
+        AlertDialog(
+            onDismissRequest = { presetMenu = false },
+            title = { Text(if (english) "Choose mantra" else "मंत्र निवडा") },
+            text = {
+                Column {
+                    OutlinedTextField(query, { query = it }, singleLine = true,
+                        label = { Text(if (english) "Search mantras" else "मंत्र शोधा") })
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val labels = if (english) listOf("All", "Recent", "Favourites") else listOf("सर्व", "अलीकडील", "आवडते")
+                        labels.forEachIndexed { index, label ->
+                            FilterChip(collection == index, { collection = index }, { Text(label) })
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        groups.forEachIndexed { index, group ->
+                            FilterChip(selectedDeity == group, { selectedDeity = group },
+                                { Text(if (english) group else groupsMr[index]) })
+                        }
+                    }
+                    Column(Modifier.heightIn(max = 244.dp).verticalScroll(rememberScrollState())) {
+                        if (visible.isEmpty()) Text(if (english) "No matching mantras" else "जुळणारे मंत्र नाहीत")
+                        visible.forEach { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(modifier = Modifier.weight(1f), onClick = {
+                                    target = if (language == "hi") item.devanagari else item.latin
+                                    prefs.edit().putString("target_$categoryId", target).apply()
+                                    rememberMantra(item.devanagari)
+                                    onMantraChange(target)
+                                    if (automatic) startService()
+                                    presetMenu = false
+                                }) { Text(if (language == "hi") item.devanagari else item.latin) }
+                                val favourite = item.devanagari in favourites
+                                IconButton(onClick = {
+                                    favourites = if (favourite) favourites - item.devanagari else favourites + item.devanagari
+                                    prefs.edit().putStringSet("favourites_$categoryId", favourites).apply()
+                                }) {
+                                    Icon(if (favourite) Icons.Default.Star else Icons.Default.StarBorder,
+                                        contentDescription = if (english) {
+                                            if (favourite) "Remove favourite" else "Add favourite"
+                                        } else if (favourite) "आवडीतून काढा" else "आवडीत जोडा")
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    presetMenu = false; newMantraMr = ""; newMantraEn = ""; addMantraDialog = true
+                }) { Text(if (english) "Add mantra" else "मंत्र जोडा") }
+            },
+            dismissButton = { TextButton(onClick = { presetMenu = false }) { Text(if (english) "Close" else "बंद करा") } }
+        )
+    }
     if (addMantraDialog) {
         AlertDialog(
             onDismissRequest = { addMantraDialog = false },
@@ -486,6 +528,7 @@ fun AutoChantCounterScreen(
                         prefs.edit().putStringSet("custom_mantras_$categoryId", saved)
                             .putString("target_$categoryId", selectedText).apply()
                         target = selectedText
+                        rememberMantra(devanagari)
                         onMantraChange(selectedText)
                         if (running) {
                             transcript = ""
@@ -512,7 +555,7 @@ fun JapaReportScreen(
     english: Boolean,
     ink: Color,
     onDaySelected: (LocalDate) -> Unit,
-    onBack: () -> Unit
+    onEditGoal: () -> Unit
 ) {
     var monthValue by rememberSaveable { mutableStateOf(today.withDayOfMonth(1).toEpochDay()) }
     val month = LocalDate.ofEpochDay(monthValue)
@@ -563,10 +606,40 @@ fun JapaReportScreen(
     val monthCells: List<Int?> = (0 until 42).map { cell -> (cell - offset + 1).takeIf { it in 1..monthDays } }
     val mantraBreakdown = logs.groupBy { it.note.orEmpty().removePrefix("MANTRA:") }.mapValues { (_, rows) -> rows.sumOf { it.count } }.entries.sortedByDescending { it.value }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Icon(Icons.Default.ArrowDropDown, null); Text(if (english) "Back to Japa" else "जपाकडे परत") }
-            Spacer(Modifier.weight(1f))
-            Text(if (english) "MY JAPA REPORT" else "माझा जप अहवाल", color = ink, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        val context = LocalContext.current
+        val target = japaGoalOn(goals, today)
+        val remaining = (target - todayCount).coerceAtLeast(0)
+        val recentWeek = (6 downTo 0).map { offset ->
+            val date = today.minusDays(offset.toLong()).toString()
+            DayTotal(date, totalsByDate[date] ?: 0)
+        }
+        SettingsGroup(if (english) "Today’s goal · All mantras" else "आजचे लक्ष्य · सर्व मंत्र") {
+            Text("$todayCount / $target", style = MaterialTheme.typography.headlineMedium)
+            Text(if (english) "$remaining remaining" else "$remaining बाकी")
+            LinearProgressIndicator(progress = { (todayCount.toFloat() / target).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+            TextButton(onClick = onEditGoal) { Text(if (english) "Edit goal" else "लक्ष्य बदला") }
+        }
+        SettingsGroup(if (english) "Last 7 days · All mantras" else "मागील ७ दिवस · सर्व मंत्र") {
+            JapaActivityChart(recentWeek, "BAR", Modifier.fillMaxWidth().height(124.dp), ink)
+        }
+        val milestone = if (total < 108) 108 else if (total < 1080) 1080 else ((total.toLong() / 1080) + 1) * 1080
+        val monthlyTotal = totalsByDate.filterKeys { it.startsWith(today.toString().take(7)) }.values.sum()
+        var recap by rememberSaveable { mutableStateOf(false) }
+        SettingsGroup(if (english) "Personal milestone" else "वैयक्तिक टप्पा") {
+            Text(if (english) "$total / $milestone lifetime chants" else "आजवरचे जप · $total / $milestone")
+            TextButton(onClick = { recap = true }) { Text(if (english) "Monthly recap" else "मासिक सारांश") }
+        }
+        if (recap) {
+            val title = if (english) "Monthly Japa recap" else "जपाचा मासिक सारांश"
+            val monthLabel = today.format(java.time.format.DateTimeFormatter.ofPattern("MMMM yyyy",
+                if (english) java.util.Locale.ENGLISH else java.util.Locale.forLanguageTag("mr")))
+            val message = if (english) "$monthLabel · $monthlyTotal chants · ${monthlyTotal / 108} malas"
+                else "$monthLabel · $monthlyTotal जप · ${monthlyTotal / 108} माळा"
+            AlertDialog(onDismissRequest = { recap = false }, title = { Text(title) },
+                text = { Text(message) },
+                confirmButton = { TextButton(onClick = { shareJapaText(context, title, message) }) { Text(if (english) "Share" else "शेअर करा") } },
+                dismissButton = { TextButton(onClick = { recap = false }) { Text(if (english) "Close" else "बंद करा") } })
         }
         Text(today.format(java.time.format.DateTimeFormatter.ofPattern("d MMMM yyyy")), color = ink.copy(alpha = .6f), style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -625,7 +698,7 @@ fun JapaReportScreen(
                                         }
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            Text(if (reached) "$day ✓" else day.toString(),
+                                            Text(if (reached) "$day ✓" else if (value > 0) "$day •" else day.toString(),
                                                 modifier = Modifier.clearAndSetSemantics { },
                                                 color = if (value > 0) Color(0xFF20262B) else ink,
                                                 style = MaterialTheme.typography.labelSmall)
@@ -636,7 +709,7 @@ fun JapaReportScreen(
                         }
                     }
                 }
-                Text(if (english) "✓ Goal reached · Purple = partial progress" else "✓ लक्ष्य पूर्ण · जांभळे = काही जप झाले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
+                Text(if (english) "✓ Goal reached · • Partial practice" else "✓ लक्ष्य पूर्ण · • काही जप झाले", color = ink.copy(alpha=.55f), style = MaterialTheme.typography.labelSmall)
             }
         }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

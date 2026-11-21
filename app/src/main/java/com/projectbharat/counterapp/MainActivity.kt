@@ -49,6 +49,7 @@ import androidx.compose.material3.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -201,60 +202,37 @@ fun CounterApp(repo: CounterRepository) {
     val categories by vm.categories.collectAsStateWithLifecycle()
     val archivedCategories by vm.archivedCategories.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var selectedId by remember { mutableLongStateOf(1L) }
+    var selectedId by rememberSaveable { mutableLongStateOf(1L) }
     var english by remember(context) {
         mutableStateOf(
             context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
                 .getBoolean("english_language", false)
         )
     }
-    var voiceModelSummary by remember { mutableStateOf("Checking…") }
     LaunchedEffect(english) {
         context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("english_language", english).apply()
     }
-    LaunchedEffect(context, english) {
-        while (true) {
-            voiceModelSummary = withContext(Dispatchers.IO) {
-                val languages = listOf("hi", "en")
-                val workManager = androidx.work.WorkManager.getInstance(context)
-                val worksByTag = languages.map { language ->
-                    val tag = "vosk_$language"
-                    tag to runCatching { workManager.getWorkInfosByTag(tag).get().lastOrNull() }.getOrNull()
-                }
-                val installedFlags = languages.map { VoskOfflineModelInstaller.isInstalled(context, it) }
-                val ready = installedFlags.count { it }
-                val combinedProgress = worksByTag.indices.sumOf { index ->
-                    val info = worksByTag[index].second
-                    when {
-                        installedFlags[index] -> 100
-                        info?.state == androidx.work.WorkInfo.State.SUCCEEDED -> 100
-                        info?.state == androidx.work.WorkInfo.State.RUNNING -> info.progress.getInt("progress", 0).coerceIn(0, 100)
-                        else -> 0
-                    }
-                } / languages.size
-                if (ready == languages.size) {
-                    if (english) "2/2 ready · 100%" else "2/2 तयार · 100%"
-                } else if (worksByTag.any { it.second?.state == androidx.work.WorkInfo.State.RUNNING } || combinedProgress > 0) {
-                    if (english) "Both models · $combinedProgress% downloaded" else "दोन्ही मॉडेल · $combinedProgress% डाउनलोड"
-                } else if (english) "$ready/2 ready · $combinedProgress%" else "$ready/2 तयार · $combinedProgress%"
-            }
-            delay(1800)
-        }
-    }
-
-    var weekly by remember { mutableStateOf(false) }
     var monthlyHistory by remember { mutableStateOf(false) }
-    var japaReportScreen by remember { mutableStateOf(false) }
+
     val reportState = rememberSaveableStateHolder()
-    var addDialog by remember { mutableStateOf(false) }
     var remindersScreen by remember { mutableStateOf(false) }
     var categoryScreen by remember { mutableStateOf(false) }
     var backupScreen by remember { mutableStateOf(false) }
     var voiceModelsDialog by remember { mutableStateOf(false) }
     var backupMessage by remember { mutableStateOf<String?>(null) }
+    var backupBusy by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    var tab by rememberSaveable { mutableStateOf(0) }
+    var help by rememberSaveable { mutableStateOf(false) }
+    fun navigate(destination: Int) {
+        tab = destination
+        monthlyHistory = false
+        categoryScreen = false
+        remindersScreen = false
+        backupScreen = false
+        help = false
+    }
     var resetDialog by remember { mutableStateOf(false) }
     var historyDate by remember { mutableStateOf(LocalDate.now()) }
     var today by remember { mutableStateOf(LocalDate.now()) }
@@ -267,37 +245,37 @@ fun CounterApp(repo: CounterRepository) {
     var editGoalDialog by remember { mutableStateOf(false) }
     var finishedSession by remember { mutableStateOf<JapaSession?>(null) }
     var finishingSession by remember { mutableStateOf(false) }
-    BackHandler(japaReportScreen) {
-        if (monthlyHistory) monthlyHistory = false else japaReportScreen = false
+    val child = monthlyHistory || categoryScreen || remindersScreen || backupScreen || help
+    BackHandler(child || tab != 0) {
+        if (child) navigate(tab) else navigate(0)
     }
+    val preferences = remember { context.getSharedPreferences("practice_feedback", android.content.Context.MODE_PRIVATE) }
+    var tapFeedback by remember { mutableStateOf(preferences.getBoolean("tap", true)) }
+    var malaFeedback by remember { mutableStateOf(preferences.getBoolean("mala", false)) }
+    var soundFeedback by remember { mutableStateOf(preferences.getBoolean("sound", false)) }
     val scope = rememberCoroutineScope()
     val activity = context as? MainActivity
     val shortcutKind = activity?.launchCounterKind
     val shortcutQuickStart = activity?.launchCounterQuickStart == true
     var mantraTarget by remember { mutableStateOf(context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE).getString("target_1", "राम") ?: "राम") }
-    var showPermissionIntro by remember {
-        mutableStateOf(!context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).getBoolean("permission_intro_seen", false))
-    }
-    val firstRunPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
-        showPermissionIntro = false
-        QuickActionsNotification.show(context)
-    }
-    val firstRunPermissions = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
     val jsonExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
+            backupBusy = true
             backupMessage = null
             runCatching { withContext(Dispatchers.IO) { CounterBackupManager.exportJson(context, uri) } }
                 .onSuccess { backupMessage = if (english) "Backup saved successfully." else "बॅकअप यशस्वीपणे जतन झाला." }
                 .onFailure { backupMessage = (if (english) "Backup failed: " else "बॅकअप अयशस्वी: ") + (it.message ?: "Unknown error") }
+            backupBusy = false
         }
     }
     val csvExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) scope.launch {
+            backupBusy = true
             backupMessage = null
             runCatching { withContext(Dispatchers.IO) { CounterBackupManager.exportCsv(context, uri) } }
                 .onSuccess { backupMessage = if (english) "CSV exported successfully." else "CSV निर्यात यशस्वी." }
                 .onFailure { backupMessage = (if (english) "CSV export failed: " else "CSV निर्यात अयशस्वी: ") + (it.message ?: "Unknown error") }
+            backupBusy = false
         }
     }
     val jsonImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -314,6 +292,7 @@ fun CounterApp(repo: CounterRepository) {
         if (shortcutKind == null) return@LaunchedEffect
         val category = categories.firstOrNull { it.kind == "MANTRA" } ?: return@LaunchedEffect
         selectedId = category.id
+        navigate(0)
         if (shortcutQuickStart &&
             ActivityCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             val prefs = context.getSharedPreferences("chant_settings", android.content.Context.MODE_PRIVATE)
@@ -365,6 +344,14 @@ fun CounterApp(repo: CounterRepository) {
     val activeJapa = storedSession?.takeIf { it.categoryId == japaCategoryId && it.mantra == mantraTarget.trim() }
     val count by countFlow.collectAsStateWithLifecycle(0)
     val mantraTotal by mantraTotalFlow.collectAsStateWithLifecycle(0)
+    var previousMalaCount by remember(selected?.id, mantraTarget) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(mantraTotal, malaFeedback, selected?.id, mantraTarget) {
+        val completed = mantraTotal / 108
+        if (malaFeedback && previousMalaCount?.let { completed > it } == true) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+        previousMalaCount = completed
+    }
     LaunchedEffect(count, selected?.id) { CounterHomeWidget.refresh(context) }
     val days by weekFlow.collectAsStateWithLifecycle(emptyList())
     val historyLogs by historyLogsFlow.collectAsStateWithLifecycle(emptyList())
@@ -376,126 +363,44 @@ fun CounterApp(repo: CounterRepository) {
                  else lightColorScheme(primary = Navy, secondary = Gold, background = page, surface = Color.White)
 
     MaterialTheme(colorScheme = scheme) {
-        if (showPermissionIntro) {
-            AlertDialog(
-                onDismissRequest = {
-                    context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
-                    showPermissionIntro = false
-                },
-                title = { Text(if (english) "Set up device access" else "फोन परवानग्या सेट करा") },
-                text = { Text(if (english) "Allow notifications for Japa reminders. Auto Count asks for microphone access when you start it." else "जपाच्या स्मरणपत्रांसाठी सूचना सुरू करा. ऑटो मोजणी सुरू करताना मायक्रोफोनची परवानगी विचारली जाईल.") },
-                confirmButton = {
-                    TextButton(onClick = { firstRunPermissionLauncher.launch(firstRunPermissions) }) {
-                        Text(if (english) "Continue" else "पुढे")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        context.getSharedPreferences("app_setup", android.content.Context.MODE_PRIVATE).edit().putBoolean("permission_intro_seen", true).apply()
-                        showPermissionIntro = false
-                    }) { Text(if (english) "Not now" else "आत्ता नको") }
-                }
-            )
-        }
         if (voiceModelsDialog) VoiceModelsDialog(english = english, onDismiss = { voiceModelsDialog = false })
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                ModalDrawerSheet {
-                    Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                        Text(if (english) "DAILY COUNTER" else "दैनिक मोजणी", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(14.dp))
-                        categories.forEach { cat ->
-                            val glyph = if (cat.kind == "MANTRA") Icons.Default.SelfImprovement else Icons.Default.Add
-                            NavigationDrawerItem(
-                                icon = { Icon(glyph, null) },
-                                label = { Text(if (cat.kind == "MANTRA") { if (english) "Chants" else "जप / मंत्र" } else if (english) cat.titleEn else cat.titleMr) },
-                                selected = selected?.id == cat.id && !remindersScreen,
-                                onClick = { selectedId = cat.id; japaReportScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } }
-                            )
-                        }
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Add, null) }, label = { Text(if (english) "Add counter" else "नवीन मोजणी") }, selected = false, onClick = { addDialog = true; scope.launch { drawerState.close() } })
-                        Divider(Modifier.padding(vertical = 8.dp))
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.NotificationsActive, null) }, label = { Text(if (english) "Reminders" else "स्मरणपत्रे") }, selected = remindersScreen, onClick = { japaReportScreen = false; remindersScreen = true; weekly = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Edit, null) }, label = { Text(if (english) "Manage counters" else "मोजणी व्यवस्थापन") }, selected = categoryScreen, onClick = { japaReportScreen = false; categoryScreen = true; backupScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Save, null) }, label = { Text(if (english) "Backup & export" else "बॅकअप व निर्यात") }, selected = backupScreen, onClick = { japaReportScreen = false; backupScreen = true; categoryScreen = false; remindersScreen = false; weekly = false; monthlyHistory = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.Download, null) }, label = { Text((if (english) "Offline voice models" else "ऑफलाइन आवाज मॉडेल") + " · " + voiceModelSummary) }, selected = voiceModelsDialog, onClick = { voiceModelsDialog = true; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.BarChart, null) }, label = { Text(if (english) "Weekly report" else "साप्ताहिक अहवाल") }, selected = weekly, onClick = { japaReportScreen = false; weekly = true; remindersScreen = false; monthlyHistory = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(icon = { Icon(Icons.Default.History, null) }, label = { Text(if (english) "History" else "इतिहास") }, selected = monthlyHistory, onClick = { japaReportScreen = false; monthlyHistory = true; remindersScreen = false; weekly = false; categoryScreen = false; backupScreen = false; scope.launch { drawerState.close() } })
-                        NavigationDrawerItem(
-                            icon = { Icon(Icons.Default.Language, null) },
-                            label = { Text(if (english) "मराठी" else "English") },
-                            selected = false,
-                            onClick = {
-                                val nextLanguage = !english
-                                english = nextLanguage
-                                context.getSharedPreferences("app_preferences", android.content.Context.MODE_PRIVATE)
-                                    .edit().putBoolean("english_language", nextLanguage).apply()
-                                scope.launch { drawerState.close() }
-                            }
-                        )
-                        Spacer(Modifier.weight(1f))
-                        Text(
-                            if (english) "Designed & developed by Bharat Rasave" else "निर्मिती व संकल्पना · Bharat Rasave",
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f),
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+        Scaffold(
+            containerColor = page,
+            bottomBar = {
+                NavigationBar {
+                    val labels = if (english) listOf("Practice", "Progress", "Settings") else listOf("जप", "प्रगती", "सेटिंग्ज")
+                    val icons = listOf(Icons.Default.SelfImprovement, Icons.Default.BarChart, Icons.Default.Edit)
+                    labels.forEachIndexed { index, label ->
+                        NavigationBarItem(selected = tab == index, onClick = { navigate(index) },
+                            icon = { Icon(icons[index], null) }, label = { Text(label) })
                     }
                 }
             }
-        ) {
-        Surface(Modifier.fillMaxSize(), color = page) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp)) {
+        ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp)) {
                 Row(
-                    Modifier.fillMaxWidth()
-                        .background(Color(0xFF31413A), RoundedCornerShape(22.dp))
-                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        .background(Color(0xFF31413A), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { scope.launch { drawerState.open() } }) { Icon(Icons.Default.Menu, null, tint = Color(0xFFF3EEE3)) }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.bilan_header_logo_light),
-                            contentDescription = "Bilan",
-                            modifier = Modifier.width(94.dp).height(32.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                        Text(
-                            if (english) "Daily Counter" else "दैनिक मोजणी",
-                            color = Color(0xFFF3EEE3),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium
-                        )
+                    if (child) TextButton(onClick = { navigate(tab) }) {
+                        Text(if (english) "Back" else "मागे", color = Color.White)
                     }
+                    Image(painterResource(R.drawable.bilan_header_logo_light), "Bilan",
+                        Modifier.width(86.dp).height(30.dp), contentScale = ContentScale.Fit)
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = {
-                        japaReportScreen = false
-                        remindersScreen = true; weekly = false; monthlyHistory = false
-                        categoryScreen = false; backupScreen = false
-                    }) {
-                        Icon(Icons.Default.NotificationsActive, contentDescription = if (english) "Reminders" else "स्मरणपत्रे", tint = Color(0xFFF3EEE3))
-                    }
-                    IconButton(onClick = {
-                        japaReportScreen = false
-                        historyDate = today
-                        monthlyHistory = true; remindersScreen = false; weekly = false
-                        categoryScreen = false; backupScreen = false
-                    }) {
-                        Icon(Icons.Default.History, contentDescription = if (english) "History" else "इतिहास", tint = Color(0xFFF3EEE3))
-                    }
+                    Text(when (tab) {
+                        1 -> if (english) "Progress" else "प्रगती"
+                        2 -> if (english) "Settings" else "सेटिंग्ज"
+                        else -> if (english) "Japa Practice" else "जप साधना"
+                    }, color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
-                Spacer(Modifier.height(12.dp))
-
-                Column(Modifier.weight(1f)) {
                 Box(Modifier.weight(1f)) {
-                if (backupScreen) {
-                    BackupSettingsScreen(english = english, ink = ink, message = backupMessage,
-                        onExportBackup = { jsonExportLauncher.launch("daily-counter-backup.json") },
+                if (help) {
+                    JapaHelpScreen(english)
+                } else if (backupScreen) {
+                    BackupSettingsScreen(english = english, ink = ink, message = backupMessage, busy = backupBusy,
+                        onExportBackup = { jsonExportLauncher.launch("AppBackup_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmm")) + ".json") },
                         onImportBackup = { jsonImportLauncher.launch(arrayOf("application/json", "text/*")) },
                         onExportCsv = { csvExportLauncher.launch("daily-counter-history.csv") })
                 } else if (categoryScreen) {
@@ -511,19 +416,19 @@ fun CounterApp(repo: CounterRepository) {
                         english = english, ink = ink, date = historyDate, logs = historyLogs, days = days,
                         onPrevious = { historyDate = historyDate.minusDays(1) },
                         onNext = { if (historyDate.isBefore(LocalDate.now())) historyDate = historyDate.plusDays(1) },
-                        onBack = if (japaReportScreen) ({ monthlyHistory = false }) else null,
+                        onBack = null,
                         onUpdate = { log -> scope.launch { vm.updateLog(log) } },
                         onDelete = { log -> scope.launch { vm.deleteLog(log.id) } }
                     )
-                } else if (japaReportScreen && selected?.kind == "MANTRA") {
+                } else if (tab == 1 && selected?.kind == "MANTRA") {
                     reportState.SaveableStateProvider("japa-report") {
                         JapaReportScreen(
                             logs = allMantraLogs, goals = goalHistory, today = today, english = english, ink = ink,
                             onDaySelected = { date -> historyDate = date; monthlyHistory = true },
-                            onBack = { japaReportScreen = false }
+                            onEditGoal = { editGoalDialog = true }
                         )
                     }
-                } else if (weekly) {
+                } else if (tab == 1) {
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             StatTile(if (english) "TOTAL" else "एकूण", days.sumOf { it.total }.toString(), ink, Modifier.weight(1f))
@@ -542,6 +447,22 @@ fun CounterApp(repo: CounterRepository) {
                             context.startActivity(Intent.createChooser(send, if (english) "Share summary" else "सारांश शेअर करा"))
                         }) { Text(if (english) "Share summary" else "सारांश शेअर करा") }
                     }
+                } else if (tab == 2) {
+                    JapaSettingsScreen(
+                        english, tapFeedback, malaFeedback, soundFeedback,
+                        onLanguage = { english = !english },
+                        onTap = { tapFeedback = it; preferences.edit().putBoolean("tap", it).apply() },
+                        onMala = { malaFeedback = it; preferences.edit().putBoolean("mala", it).apply() },
+                        onSound = { soundFeedback = it; preferences.edit().putBoolean("sound", it).apply() },
+                        onReminders = { remindersScreen = true },
+                        onModels = { voiceModelsDialog = true },
+                        onBackup = { backupScreen = true },
+                        onCounters = { categoryScreen = true },
+                        onHelp = { help = true },
+                        counterNames = categories.map { if (english) it.titleEn else it.titleMr },
+                        selectedCounter = categories.indexOfFirst { it.id == selected?.id },
+                        onCounter = { index -> selectedId = categories[index].id; navigate(0) }
+                    )
                 } else if (selected?.kind == "MANTRA") {
                     AutoChantCounterScreen(
                         categoryId = selected.id, count = count, totalCount = mantraTotal, english = english, ink = ink,
@@ -565,8 +486,8 @@ fun CounterApp(repo: CounterRepository) {
                         },
                         onMantraChange = { mantra -> mantraTarget = mantra },
                         onManualCount = { mantra ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
+                            if (tapFeedback) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (soundFeedback) clickTone.startTone(ToneGenerator.TONE_PROP_BEEP, 65)
                             scope.launch { vm.addMantra(selected.id, mantra) }
                         }
                     )
@@ -579,19 +500,13 @@ fun CounterApp(repo: CounterRepository) {
                     )
                 }
                 }
-                if (selected != null && !backupScreen && !categoryScreen && !remindersScreen && !weekly && !monthlyHistory && !japaReportScreen) {
-                    TextButton(onClick = {
-                        if (selected.kind == "MANTRA") japaReportScreen = true
-                        else { historyDate = LocalDate.now(); monthlyHistory = true }
-                    }) {
-                        Icon(Icons.Default.History, null); Spacer(Modifier.width(6.dp)); Text(if (selected.kind == "MANTRA") (if (english) "My Japa Report" else "माझा जप अहवाल") else (if (english) "View history & analytics" else "संपूर्ण इतिहास व विश्लेषण"))
+                if (tab == 1 && selected?.kind != "MANTRA" && !child) {
+                    TextButton(onClick = { historyDate = today; monthlyHistory = true }) {
+                        Text(if (english) "Open history" else "इतिहास उघडा")
                     }
                 }
             }
         }
-        }
-    }
-
     }
     if (editGoalDialog && japaCategoryId != null) {
         var input by remember(japaCategoryId) { mutableStateOf(dailyGoal.toString()) }
@@ -627,9 +542,16 @@ fun CounterApp(repo: CounterRepository) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(session.mantra, style = MaterialTheme.typography.titleMedium)
                     Text(if (english) "This session · ${session.count} chants" else "या सत्रात · ${session.count} जप")
+                    Text(if (english) "Today · $japaDayTotal/$dailyGoal chants" else "आज · $japaDayTotal/$dailyGoal जप")
                     Text(if (english) "${session.count / 108} malas · ${session.count % 108}/108 toward the next"
                         else "${session.count / 108} माळा · पुढील माळेसाठी ${session.count % 108}/108")
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    shareJapaText(context, if (english) "Japa session" else "जप सत्र",
+                        "${session.mantra} · ${session.count} " + if (english) "chants" else "जप")
+                }) { Text(if (english) "Share" else "शेअर करा") }
             },
             confirmButton = {
                 TextButton(onClick = { finishedSession = null }) { Text(if (english) "Done" else "पूर्ण") }
@@ -645,23 +567,17 @@ fun CounterApp(repo: CounterRepository) {
                 TextButton(onClick = {
                     pendingRestoreUri = null
                     scope.launch {
+                        backupBusy = true
                         backupMessage = null
                         runCatching { withContext(Dispatchers.IO) { CounterBackupManager.restoreJson(context, uri) } }
                             .onSuccess { backupMessage = if (english) "Backup restored successfully." else "बॅकअप यशस्वीपणे पुनर्संचयित झाला." }
                             .onFailure { backupMessage = (if (english) "Restore failed: " else "पुनर्संचयित करणे अयशस्वी: ") + (it.message ?: "Unknown error") }
+                        backupBusy = false
                     }
                 }) { Text(if (english) "Replace data" else "डेटा बदला") }
             },
             dismissButton = { TextButton(onClick = { pendingRestoreUri = null }) { Text(if (english) "Cancel" else "रद्द") } }
         )
-    }
-    if (addDialog) {
-        var mr by remember { mutableStateOf("") }
-        var en by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { addDialog = false }, title = { Text(if (english) "New category" else "नवीन प्रकार") },
-            text = { Column { OutlinedTextField(mr, { mr = it }, label = { Text("मराठी नाव") }); OutlinedTextField(en, { en = it }, label = { Text("English name") }) } },
-            confirmButton = { TextButton(onClick = { if (mr.isNotBlank() || en.isNotBlank()) scope.launch { vm.addCategory(mr.ifBlank { en }, en.ifBlank { mr }) }; addDialog = false }) { Text(if (english) "Add" else "जोडा") } },
-            dismissButton = { TextButton(onClick = { addDialog = false }) { Text(if (english) "Cancel" else "रद्द") } })
     }
     if (resetDialog) AlertDialog(onDismissRequest = { resetDialog = false }, title = { Text(if (english) "Reset today's count?" else "आजची मोजणी रीसेट करायची?") },
         confirmButton = { TextButton(onClick = { scope.launch { selected?.let { vm.reset(it.id) } }; resetDialog = false }) { Text(if (english) "Reset" else "रीसेट") } },
